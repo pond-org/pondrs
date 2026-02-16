@@ -1,0 +1,10 @@
+[package]
+name = "pondrs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+yaml-rust2 = "0.11.0"
+polars = "0.53"
+serde = "1.0.228"
+serde_yaml = "0.9.34"
