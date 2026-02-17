@@ -2,6 +2,7 @@
 
 mod memory;
 mod param;
+mod partitioned;
 mod polars;
 mod yaml;
 
