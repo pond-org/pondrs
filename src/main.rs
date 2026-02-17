@@ -1,7 +1,7 @@
 use pondrs::datasets::{MemoryDataset, Param, PolarsDataset};
 use pondrs::hooks::LoggingHook;
 use pondrs::runners::{ParallelRunner, Runner, SequentialRunner};
-use pondrs::{Node, Pipeline};
+use pondrs::{Node, Pipeline, Steps};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -18,23 +18,7 @@ struct Parameters {
     initial_value: Param<i32>,
 }
 
-fn main() {
-    let catalog = Catalog {
-        a: MemoryDataset::new(),
-        b: MemoryDataset::new(),
-        c: MemoryDataset::new(),
-        d: MemoryDataset::new(),
-        df: PolarsDataset::new("test.parquet"),
-    };
-    let params = Parameters {
-        initial_value: Param(2),
-    };
-
-    let params_yaml = serde_yaml::to_string(&params).unwrap();
-    println!("{params_yaml}");
-    let catalog_yaml = serde_yaml::to_string(&catalog).unwrap();
-    println!("{catalog_yaml}");
-
+fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
     let pipe = (
         Node {
             func: |v| (v,),
@@ -68,25 +52,10 @@ fn main() {
             output: (),
         },
     );
+    pipe
+}
 
-    println!("--- Sequential Runner ---");
-    let runner = SequentialRunner::new((LoggingHook,));
-    runner.run(&pipe);
-
-    // Reset datasets for parallel run
-    let catalog = Catalog {
-        a: MemoryDataset::new(),
-        b: MemoryDataset::new(),
-        c: MemoryDataset::new(),
-        d: MemoryDataset::new(),
-        df: PolarsDataset::new("test.parquet"),
-    };
-
-    // Pipeline with independent nodes that can run in parallel:
-    // param → a (node 1)
-    // param → b (node 2) - independent of node 1
-    // a, b → c (node 3) - waits for both
-    // c → print (node 4)
+fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps {
     let pipe = (
         Node {
             func: |v| (v,),
@@ -109,6 +78,46 @@ fn main() {
             output: (),
         },
     );
+    pipe
+}
+
+fn main() {
+    let catalog = Catalog {
+        a: MemoryDataset::new(),
+        b: MemoryDataset::new(),
+        c: MemoryDataset::new(),
+        d: MemoryDataset::new(),
+        df: PolarsDataset::new("test.parquet"),
+    };
+    let params = Parameters {
+        initial_value: Param(2),
+    };
+
+    let params_yaml = serde_yaml::to_string(&params).unwrap();
+    println!("{params_yaml}");
+    let catalog_yaml = serde_yaml::to_string(&catalog).unwrap();
+    println!("{catalog_yaml}");
+
+    println!("--- Sequential Runner ---");
+    let runner = SequentialRunner::new((LoggingHook,));
+    let pipe = construct_pipe1(&params, &catalog);
+    runner.run(&pipe);
+
+    // Reset datasets for parallel run
+    let catalog = Catalog {
+        a: MemoryDataset::new(),
+        b: MemoryDataset::new(),
+        c: MemoryDataset::new(),
+        d: MemoryDataset::new(),
+        df: PolarsDataset::new("test.parquet"),
+    };
+
+    // Pipeline with independent nodes that can run in parallel:
+    // param → a (node 1)
+    // param → b (node 2) - independent of node 1
+    // a, b → c (node 3) - waits for both
+    // c → print (node 4)
+    let pipe = construct_pipe2(&params, &catalog);
 
     println!("\n--- Parallel Runner ---");
     let runner = ParallelRunner::new((LoggingHook,));
