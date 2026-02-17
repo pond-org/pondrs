@@ -153,11 +153,13 @@ impl<T1: Dataset, T2: Dataset> NodeOutput for (&T1, &T2) {
     }
 }
 
-trait NodeSig {
+trait PipelineItem {
     // type Input: NodeInput;
     // type Output: NodeOutput;
     fn call(&self);
     fn get_name(&self) -> &'static str;
+    fn is_leaf(&self) -> bool;
+    fn for_each_child(&self, f: &mut dyn FnMut(&dyn PipelineItem));
 }
 
 struct Node<F, Input: NodeInput, Output: NodeOutput>
@@ -169,7 +171,7 @@ where
     output: Output,
 }
 
-impl<F, Input: NodeInput, Output: NodeOutput> NodeSig for Node<F, Input, Output>
+impl<F, Input: NodeInput, Output: NodeOutput> PipelineItem for Node<F, Input, Output>
 where
     F: Fn<Input::Args, Output = Output::Output>,
 {
@@ -183,17 +185,79 @@ where
     fn get_name(&self) -> &'static str {
         std::any::type_name::<F>()
     }
+
+    fn is_leaf(&self) -> bool {
+        true
+    }
+    fn for_each_child(&self, _f: &mut dyn FnMut(&dyn PipelineItem)) {
+        // No children, do nothing
+    }
 }
 
-trait Pipeline: Tuple {
-    fn for_each(&self, f: impl Fn(&dyn NodeSig));
+trait Steps: Tuple {
+    fn for_each_item(&self, f: &mut dyn FnMut(&dyn PipelineItem));
 }
 
-impl<N1: NodeSig, N2: NodeSig, N3: NodeSig> Pipeline for (N1, N2, N3) {
-    fn for_each(&self, f: impl Fn(&dyn NodeSig)) {
+struct Pipeline<S: Steps, Input: NodeInput, Output: NodeOutput> {
+    steps: S,
+    input: Input,
+    output: Output,
+}
+
+impl<S: Steps, Input: NodeInput, Output: NodeOutput> PipelineItem for Pipeline<S, Input, Output> {
+    fn call(&self) {}
+    fn get_name(&self) -> &'static str {
+        "pipeline"
+    }
+    fn is_leaf(&self) -> bool {
+        false
+    }
+    fn for_each_child(&self, f: &mut dyn FnMut(&dyn PipelineItem)) {
+        self.steps.for_each_item(f);
+    }
+}
+
+impl<N1: PipelineItem> Steps for (N1,) {
+    fn for_each_item(&self, f: &mut dyn FnMut(&dyn PipelineItem)) {
+        f(&self.0);
+    }
+}
+
+impl<N1: PipelineItem, N2: PipelineItem> Steps for (N1, N2) {
+    fn for_each_item(&self, f: &mut dyn FnMut(&dyn PipelineItem)) {
+        f(&self.0);
+        f(&self.1);
+    }
+}
+
+impl<N1: PipelineItem, N2: PipelineItem, N3: PipelineItem> Steps for (N1, N2, N3) {
+    fn for_each_item(&self, f: &mut dyn FnMut(&dyn PipelineItem)) {
         f(&self.0);
         f(&self.1);
         f(&self.2);
+    }
+}
+
+impl<N1: PipelineItem, N2: PipelineItem, N3: PipelineItem, N4: PipelineItem> Steps
+    for (N1, N2, N3, N4)
+{
+    fn for_each_item(&self, f: &mut dyn FnMut(&dyn PipelineItem)) {
+        f(&self.0);
+        f(&self.1);
+        f(&self.2);
+        f(&self.3);
+    }
+}
+
+impl<N1: PipelineItem, N2: PipelineItem, N3: PipelineItem, N4: PipelineItem, N5: PipelineItem> Steps
+    for (N1, N2, N3, N4, N5)
+{
+    fn for_each_item(&self, f: &mut dyn FnMut(&dyn PipelineItem)) {
+        f(&self.0);
+        f(&self.1);
+        f(&self.2);
+        f(&self.3);
+        f(&self.4);
     }
 }
 
@@ -201,6 +265,8 @@ impl<N1: NodeSig, N2: NodeSig, N3: NodeSig> Pipeline for (N1, N2, N3) {
 struct Catalog {
     a: MemoryDataset<i32>,
     b: MemoryDataset<i32>,
+    c: MemoryDataset<i32>,
+    d: MemoryDataset<i32>,
     df: PolarsDataset,
 }
 
@@ -210,20 +276,81 @@ struct Parameters {
 }
 
 trait Hook {
-    fn before_node_run(&mut self, _n: &impl NodeSig) {}
-    fn after_node_run(&mut self, _n: &impl NodeSig) {}
+    fn before_node_run(&mut self, _n: &dyn PipelineItem) {}
+    fn after_node_run(&mut self, _n: &dyn PipelineItem) {}
+}
+
+trait Hooks {
+    fn for_each_hook(&mut self, f: &mut dyn FnMut(&mut dyn Hook));
+}
+
+impl Hooks for () {
+    fn for_each_hook(&mut self, _f: &mut dyn FnMut(&mut dyn Hook)) {}
+}
+
+impl<H: Hook> Hooks for (H,) {
+    fn for_each_hook(&mut self, f: &mut dyn FnMut(&mut dyn Hook)) {
+        f(&mut self.0);
+    }
+}
+
+impl<H1: Hook, H2: Hook> Hooks for (H1, H2) {
+    fn for_each_hook(&mut self, f: &mut dyn FnMut(&mut dyn Hook)) {
+        f(&mut self.0);
+        f(&mut self.1);
+    }
+}
+
+impl<H1: Hook, H2: Hook, H3: Hook> Hooks for (H1, H2, H3) {
+    fn for_each_hook(&mut self, f: &mut dyn FnMut(&mut dyn Hook)) {
+        f(&mut self.0);
+        f(&mut self.1);
+        f(&mut self.2);
+    }
 }
 
 pub struct LoggingHook;
 
 impl Hook for LoggingHook {
-    fn before_node_run(&mut self, n: &impl NodeSig) {
+    fn before_node_run(&mut self, n: &dyn PipelineItem) {
         let name = n.get_name();
         println!("Starting node {name}")
     }
-    fn after_node_run(&mut self, n: &impl NodeSig) {
+    fn after_node_run(&mut self, n: &dyn PipelineItem) {
         let name = n.get_name();
         println!("Completed node {name}")
+    }
+}
+
+trait Runner {
+    fn run(&mut self, pipe: &impl Steps);
+}
+
+struct SequentialRunner<H: Hooks> {
+    hooks: H,
+}
+
+impl<H: Hooks> SequentialRunner<H> {
+    fn run_item(&mut self, item: &dyn PipelineItem) {
+        if item.is_leaf() {
+            self.hooks.for_each_hook(&mut |h| h.before_node_run(item));
+            item.call();
+            self.hooks.for_each_hook(&mut |h| h.after_node_run(item));
+        } else {
+            // Optionally: hooks.for_each_hook(&mut |h| h.before_pipeline_run(item));
+            item.for_each_child(&mut |child| {
+                self.run_item(child);
+            });
+            // Optionally: hooks.for_each_hook(&mut |h| h.after_pipeline_run(item));
+        }
+    }
+}
+
+impl<H: Hooks> Runner for SequentialRunner<H> {
+    fn run(&mut self, pipe: &impl Steps) {
+        pipe.for_each_item(&mut |item| {
+            self.run_item(item);
+        });
     }
 }
 
@@ -231,6 +358,8 @@ pub fn test() {
     let catalog = Catalog {
         a: MemoryDataset::new(),
         b: MemoryDataset::new(),
+        c: MemoryDataset::new(),
+        d: MemoryDataset::new(),
         df: PolarsDataset {
             path: "test.parquet".to_string(),
         },
@@ -248,16 +377,36 @@ pub fn test() {
             input: (&params.initial_value,),
             output: (&catalog.a,),
         },
-        Node {
-            func: |v, a| (v + a + 2,),
-            input: (&params.initial_value, &catalog.a),
-            output: (&catalog.b,),
+        Pipeline {
+            steps: (
+                Node {
+                    func: |v| (v + 2,),
+                    input: (&catalog.a,),
+                    output: (&catalog.b,),
+                },
+                Node {
+                    func: |v| (v + 2,),
+                    input: (&catalog.b,),
+                    output: (&catalog.c,),
+                },
+            ),
+            input: (&catalog.a,),
+            output: (&catalog.c,),
         },
         Node {
-            func: |b| println!("{b}"),
-            input: (&catalog.b,),
+            func: |v, a| (v + a + 2,),
+            input: (&params.initial_value, &catalog.c),
+            output: (&catalog.d,),
+        },
+        Node {
+            func: |d| println!("{d}"),
+            input: (&catalog.d,),
             output: (),
         },
     );
-    pipe.for_each(|n| n.call());
+    // pipe.for_each_item(&mut |n| n.call());
+    let mut runner = SequentialRunner {
+        hooks: (LoggingHook,),
+    };
+    runner.run(&pipe);
 }
