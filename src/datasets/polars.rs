@@ -3,9 +3,9 @@
 use polars::prelude::{CsvReadOptions, CsvWriter, DataFrame, SerReader, SerWriter};
 use serde::{Deserialize, Serialize};
 
-use super::Dataset;
+use super::{Dataset, FileDataset};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PolarsDataset {
     path: String,
 }
@@ -32,5 +32,14 @@ impl Dataset for PolarsDataset {
             .finish()
             .unwrap();
         Some(df)
+    }
+}
+
+impl FileDataset for PolarsDataset {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+    fn set_path(&mut self, path: &str) {
+        self.path = path.to_string();
     }
 }

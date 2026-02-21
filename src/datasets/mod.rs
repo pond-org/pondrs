@@ -19,3 +19,8 @@ pub trait Dataset {
     fn load(&self) -> Option<Self::LoadItem>;
     fn save(&self, output: Self::SaveItem);
 }
+
+pub trait FileDataset: Dataset + Clone {
+    fn get_path(&self) -> &str;
+    fn set_path(&mut self, path: &str);
+}

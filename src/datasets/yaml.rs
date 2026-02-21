@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 
-use super::Dataset;
+use super::{Dataset, FileDataset};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct YamlDataset {
     path: String,
 }
@@ -31,5 +31,14 @@ impl Dataset for YamlDataset {
         let contents = std::fs::read_to_string(&self.path).unwrap();
         let docs = YamlLoader::load_from_str(&contents).unwrap();
         Some(docs[0].clone())
+    }
+}
+
+impl FileDataset for YamlDataset {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+    fn set_path(&mut self, path: &str) {
+        self.path = path.to_string();
     }
 }
