@@ -8,7 +8,9 @@ mod yaml;
 
 pub use memory::MemoryDataset;
 pub use param::Param;
-pub use polars::PolarsDataset;
+pub use partitioned::Lazy;
+pub use partitioned::{LazyPartitionedDataset, PartitionedDataset};
+pub use polars::{PolarsCsvDataset, PolarsParquetDataset};
 pub use yaml::YamlDataset;
 
 /// Trait for datasets that can load and save data.

@@ -5,6 +5,6 @@ edition = "2024"
 
 [dependencies]
 yaml-rust2 = "0.11.0"
-polars = "0.53"
+polars = { version = "0.53", features = ["parquet"] }
 serde = "1.0.228"
 serde_yaml = "0.9.34"
