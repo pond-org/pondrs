@@ -27,6 +27,7 @@ struct Parameters {
 fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
     let pipe = (
         Node {
+            name: "node1",
             func: |v| (v,),
             input: (&params.initial_value,),
             output: (&catalog.a,),
@@ -34,11 +35,13 @@ fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
         Pipeline {
             steps: (
                 Node {
+                    name: "node2",
                     func: |v| (v + 2,),
                     input: (&catalog.a,),
                     output: (&catalog.b,),
                 },
                 Node {
+                    name: "node3",
                     func: |v| (v + 2,),
                     input: (&catalog.b,),
                     output: (&catalog.c,),
@@ -48,11 +51,13 @@ fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
             output: (&catalog.c,),
         },
         Node {
+            name: "node4",
             func: |v, a| (v + a + 2,),
             input: (&params.initial_value, &catalog.c),
             output: (&catalog.d,),
         },
         Node {
+            name: "node5",
             func: |d| println!("{d}"),
             input: (&catalog.d,),
             output: (),
@@ -64,21 +69,25 @@ fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
 fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps {
     let pipe = (
         Node {
+            name: "node1",
             func: |v| (v,),
             input: (&params.initial_value,),
             output: (&catalog.a,),
         },
         Node {
+            name: "node2",
             func: |v| (v * 3,),
             input: (&params.initial_value,),
             output: (&catalog.b,),
         },
         Node {
+            name: "node3",
             func: |a, b| (a + b,),
             input: (&catalog.a, &catalog.b),
             output: (&catalog.c,),
         },
         Node {
+            name: "node4",
             func: |c| println!("{c}"),
             input: (&catalog.c,),
             output: (),
@@ -137,11 +146,13 @@ fn iris_test() {
     };
     let pipe = (
         Node {
+            name: "node1",
             func: copy_iris,
             input: (&catalog.input,),
             output: (&catalog.output,),
         },
         Node {
+            name: "node2",
             func: copy_iris_to_csv,
             input: (&catalog.output,),
             output: (&catalog.output_csv,),

@@ -6,6 +6,7 @@ pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
     F: Fn<Input::Args, Output = Output::Output>,
 {
+    pub name: &'static str,
     pub func: F,
     pub input: Input,
     pub output: Output,
