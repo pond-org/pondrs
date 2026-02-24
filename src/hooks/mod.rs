@@ -8,8 +8,21 @@ use crate::core::PipelineItem;
 
 /// Trait for individual hooks that respond to pipeline events.
 pub trait Hook {
+    // Pipeline hooks
+    fn before_pipeline_run(&self, _p: &dyn PipelineItem) {}
+    fn after_pipeline_run(&self, _p: &dyn PipelineItem) {}
+    fn on_pipeline_error(&self, _p: &dyn PipelineItem, _error: &str) {}
+
+    // Node hooks
     fn before_node_run(&self, _n: &dyn PipelineItem) {}
     fn after_node_run(&self, _n: &dyn PipelineItem) {}
+    fn on_node_error(&self, _n: &dyn PipelineItem, _error: &str) {}
+
+    // Dataset hooks (wiring TBD — requires splitting PipelineItem::call())
+    fn before_dataset_load(&self, _n: &dyn PipelineItem) {}
+    fn after_dataset_load(&self, _n: &dyn PipelineItem) {}
+    fn before_dataset_save(&self, _n: &dyn PipelineItem) {}
+    fn after_dataset_save(&self, _n: &dyn PipelineItem) {}
 }
 
 /// Trait for a collection of hooks (implemented for tuples).
