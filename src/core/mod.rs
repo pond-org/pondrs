@@ -8,4 +8,4 @@ mod traits;
 pub use node::Node;
 pub use pipeline::Pipeline;
 pub use steps::Steps;
-pub use traits::{NodeInput, NodeOutput, PipelineItem};
+pub use traits::{NodeInput, NodeOutput, PipelineItem, ptr_to_id};
