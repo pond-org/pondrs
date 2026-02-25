@@ -1,6 +1,7 @@
 //! Parallel pipeline runner.
 
 use std::collections::HashSet;
+use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
@@ -90,11 +91,26 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
 
                         s.spawn(move || {
                             hooks.for_each_hook(&mut |h| h.before_node_run(*node));
-                            node.call();
-                            hooks.for_each_hook(&mut |h| h.after_node_run(*node));
-
-                            // Add outputs to produced set
-                            produced.lock().unwrap().extend(outputs);
+                            let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                                node.call();
+                            }));
+                            match result {
+                                Ok(()) => {
+                                    hooks.for_each_hook(&mut |h| h.after_node_run(*node));
+                                    produced.lock().unwrap().extend(outputs);
+                                }
+                                Err(e) => {
+                                    let msg = if let Some(s) = e.downcast_ref::<String>() {
+                                        s.as_str()
+                                    } else if let Some(s) = e.downcast_ref::<&str>() {
+                                        s
+                                    } else {
+                                        "unknown panic"
+                                    };
+                                    hooks.for_each_hook(&mut |h| h.on_node_error(*node, msg));
+                                    panic::resume_unwind(e);
+                                }
+                            }
                         });
                     }
                 }
