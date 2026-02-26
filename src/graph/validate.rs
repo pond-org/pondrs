@@ -1,5 +1,6 @@
 //! Pipeline graph validation.
 
+use std::prelude::v1::*;
 use std::collections::HashSet;
 use std::fmt;
 

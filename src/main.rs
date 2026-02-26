@@ -33,6 +33,7 @@ fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
             output: (&catalog.a,),
         },
         Pipeline {
+            name: "inner_pipeline",
             steps: (
                 Node {
                     name: "node2",
@@ -96,6 +97,7 @@ fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps {
     pipe
 }
 
+#[derive(Serialize)]
 struct IrisCatalog {
     input: LazyPartitionedDataset<PolarsParquetDataset>,
     output: PartitionedDataset<PolarsParquetDataset>,
@@ -158,8 +160,9 @@ fn iris_test() {
             output: (&catalog.output_csv,),
         },
     );
+    let params = ();
     let runner = SequentialRunner::new((LoggingHook,));
-    runner.run(&pipe);
+    runner.run(&pipe, &catalog, &params);
 }
 
 fn main() {
@@ -183,7 +186,7 @@ fn main() {
     println!("--- Sequential Runner ---");
     let runner = SequentialRunner::new((LoggingHook,));
     let pipe = construct_pipe1(&params, &catalog);
-    runner.run(&pipe);
+    runner.run(&pipe, &catalog, &params);
 
     // Reset datasets for parallel run
     let catalog = Catalog {
@@ -203,5 +206,5 @@ fn main() {
 
     println!("\n--- Parallel Runner ---");
     let runner = ParallelRunner::new((LoggingHook,));
-    runner.run(&pipe);
+    runner.run(&pipe, &catalog, &params);
 }

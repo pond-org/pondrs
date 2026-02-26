@@ -1,5 +1,6 @@
-//! Polars DataFrame dataset.
+//! Partitioned dataset types.
 
+use std::prelude::v1::*;
 use std::collections::HashMap;
 use std::fs;
 

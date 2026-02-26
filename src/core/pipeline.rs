@@ -27,11 +27,11 @@ impl<S: Steps + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput 
         self.steps.for_each_item(f);
     }
 
-    fn input_dataset_ids(&self) -> Vec<DatasetRef> {
-        self.input.input_ids()
+    fn for_each_input_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
+        self.input.for_each_input_id(f);
     }
 
-    fn output_dataset_ids(&self) -> Vec<DatasetRef> {
-        self.output.output_ids()
+    fn for_each_output_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
+        self.output.for_each_output_id(f);
     }
 }

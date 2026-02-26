@@ -1,5 +1,6 @@
 //! YAML file dataset.
 
+use std::prelude::v1::*;
 use serde::{Deserialize, Serialize};
 use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 

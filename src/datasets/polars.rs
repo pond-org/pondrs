@@ -1,5 +1,6 @@
 //! Polars DataFrame dataset.
 
+use std::prelude::v1::*;
 use polars::prelude::{CsvReadOptions, CsvWriter, DataFrame, ParquetReader, ParquetWriter, SerReader, SerWriter};
 use serde::{Deserialize, Serialize};
 

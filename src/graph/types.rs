@@ -1,6 +1,7 @@
 //! Types for the pipeline graph.
 
 use std::collections::{HashMap, HashSet};
+use std::prelude::v1::*;
 
 use crate::core::{DatasetRef, PipelineItem};
 

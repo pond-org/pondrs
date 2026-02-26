@@ -5,6 +5,7 @@
 //! store references to the same fields, the pointer addresses match — giving us
 //! a `ptr_id -> name` mapping.
 
+use std::prelude::v1::*;
 use std::collections::HashMap;
 use std::fmt;
 

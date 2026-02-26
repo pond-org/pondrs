@@ -1,5 +1,6 @@
 //! Pipeline graph construction.
 
+use std::prelude::v1::*;
 use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
@@ -74,12 +75,17 @@ fn collect_node<'a>(
 
     let is_pipe = !item.is_leaf();
 
+    let mut inputs = Vec::new();
+    item.for_each_input_id(&mut |d| inputs.push(d.clone()));
+    let mut outputs = Vec::new();
+    item.for_each_output_id(&mut |d| outputs.push(d.clone()));
+
     nodes.push(GraphNode {
         id: ptr_to_id(item),
         name: item.get_name(),
         is_pipe,
-        inputs: item.input_dataset_ids(),
-        outputs: item.output_dataset_ids(),
+        inputs,
+        outputs,
         pipe_children: Vec::new(),
         parent_pipe: parent,
         item,

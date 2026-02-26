@@ -1,12 +1,16 @@
 //! Parallel pipeline runner.
 
+use std::prelude::v1::*;
 use std::collections::HashSet;
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread;
 
-use crate::core::{PipelineItem, Steps};
+use serde::Serialize;
+
+use crate::core::Steps;
+use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;
 
 use super::Runner;
@@ -21,81 +25,51 @@ impl<H: Hooks> ParallelRunner<H> {
     }
 }
 
-/// Collect all leaf nodes from the pipeline tree.
-fn collect_leaves<'a>(pipe: &'a impl Steps) -> Vec<&'a dyn PipelineItem> {
-    let mut leaves = Vec::new();
-    pipe.for_each_item(&mut |item| {
-        collect_item_leaves(item, &mut leaves);
-    });
-    leaves
-}
-
-fn collect_item_leaves<'a>(item: &'a dyn PipelineItem, leaves: &mut Vec<&'a dyn PipelineItem>) {
-    if item.is_leaf() {
-        leaves.push(item);
-    } else {
-        item.for_each_child(&mut |child| {
-            collect_item_leaves(child, leaves);
-        });
-    }
-}
-
 impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
-    fn run(&self, pipe: &impl Steps) {
-        let leaves = collect_leaves(pipe);
+    fn run(&self, pipe: &impl Steps, catalog: &impl Serialize, params: &impl Serialize) {
+        let graph = build_pipeline_graph(pipe, catalog, params);
 
-        if leaves.is_empty() {
+        if graph.node_indices.is_empty() {
             return;
         }
 
-        // Track: node index -> (input_ids, output_ids, started)
-        let nodes: Vec<_> = leaves
-            .iter()
-            .map(|n| {
-                let input_ids: Vec<usize> = n.input_dataset_ids().iter().map(|d| d.id).collect();
-                let output_ids: Vec<usize> = n.output_dataset_ids().iter().map(|d| d.id).collect();
-                (input_ids, output_ids, AtomicBool::new(false))
-            })
-            .collect();
+        // Track whether each node has been started
+        let started: Vec<AtomicBool> = graph.node_indices.iter().map(|_| AtomicBool::new(false)).collect();
 
-        // Find source datasets: inputs that are never produced by any node
-        let all_outputs: HashSet<_> = nodes.iter().flat_map(|(_, outputs, _)| outputs.iter().copied()).collect();
-        let all_inputs: HashSet<_> = nodes.iter().flat_map(|(inputs, _, _)| inputs.iter().copied()).collect();
-        let sources: HashSet<_> = all_inputs.difference(&all_outputs).copied().collect();
-
-        // Initialize produced with source datasets (Params, pre-loaded data)
-        let produced = Mutex::new(sources);
+        // Initialize produced with source datasets (params, pre-loaded data)
+        let produced = Mutex::new(graph.source_datasets.clone());
 
         thread::scope(|s| {
             loop {
                 let produced_snapshot: HashSet<_> = produced.lock().unwrap().clone();
 
                 let mut any_started = false;
-                for (i, node) in leaves.iter().enumerate() {
-                    let (inputs, outputs, started) = &nodes[i];
-
-                    if started.load(Ordering::Acquire) {
+                for (si, &node_idx) in graph.node_indices.iter().enumerate() {
+                    if started[si].load(Ordering::Acquire) {
                         continue;
                     }
 
+                    let node = &graph.nodes[node_idx];
+
                     // Check if all inputs are produced
-                    if inputs.iter().all(|id| produced_snapshot.contains(id)) {
-                        started.store(true, Ordering::Release);
+                    if node.inputs.iter().all(|d| produced_snapshot.contains(&d.id)) {
+                        started[si].store(true, Ordering::Release);
                         any_started = true;
 
                         let produced = &produced;
-                        let outputs = outputs.clone();
+                        let output_ids: Vec<usize> = node.outputs.iter().map(|d| d.id).collect();
                         let hooks = &self.hooks;
+                        let item = node.item;
 
                         s.spawn(move || {
-                            hooks.for_each_hook(&mut |h| h.before_node_run(*node));
+                            hooks.for_each_hook(&mut |h| h.before_node_run(item));
                             let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                                node.call();
+                                item.call();
                             }));
                             match result {
                                 Ok(()) => {
-                                    hooks.for_each_hook(&mut |h| h.after_node_run(*node));
-                                    produced.lock().unwrap().extend(outputs);
+                                    hooks.for_each_hook(&mut |h| h.after_node_run(item));
+                                    produced.lock().unwrap().extend(output_ids);
                                 }
                                 Err(e) => {
                                     let msg = if let Some(s) = e.downcast_ref::<String>() {
@@ -105,7 +79,7 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                                     } else {
                                         "unknown panic"
                                     };
-                                    hooks.for_each_hook(&mut |h| h.on_node_error(*node, msg));
+                                    hooks.for_each_hook(&mut |h| h.on_node_error(item, msg));
                                     panic::resume_unwind(e);
                                 }
                             }
@@ -114,7 +88,7 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                 }
 
                 // Check if all nodes have started
-                if nodes.iter().all(|(_, _, started)| started.load(Ordering::Acquire)) {
+                if started.iter().all(|s| s.load(Ordering::Acquire)) {
                     break;
                 }
 

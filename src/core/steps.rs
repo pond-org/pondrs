@@ -1,6 +1,6 @@
 //! Steps trait and tuple implementations.
 
-use std::marker::Tuple;
+use core::marker::Tuple;
 
 use super::traits::PipelineItem;
 

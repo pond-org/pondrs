@@ -1,7 +1,9 @@
 //! Hooks for pipeline execution events.
 
+#[cfg(feature = "std")]
 mod logging;
 
+#[cfg(feature = "std")]
 pub use logging::LoggingHook;
 
 use crate::core::PipelineItem;
