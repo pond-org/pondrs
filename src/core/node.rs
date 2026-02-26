@@ -1,6 +1,6 @@
 //! Node struct - a single computation unit in the pipeline.
 
-use super::traits::{NodeInput, NodeOutput, PipelineItem};
+use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineItem};
 
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
@@ -25,7 +25,7 @@ where
     }
 
     fn get_name(&self) -> &'static str {
-        std::any::type_name::<F>()
+        self.name
     }
 
     fn is_leaf(&self) -> bool {
@@ -36,11 +36,11 @@ where
         // No children, do nothing
     }
 
-    fn input_dataset_ids(&self) -> Vec<usize> {
+    fn input_dataset_ids(&self) -> Vec<DatasetRef> {
         self.input.input_ids()
     }
 
-    fn output_dataset_ids(&self) -> Vec<usize> {
+    fn output_dataset_ids(&self) -> Vec<DatasetRef> {
         self.output.output_ids()
     }
 }

@@ -20,6 +20,7 @@ pub trait Dataset {
 
     fn load(&self) -> Option<Self::LoadItem>;
     fn save(&self, output: Self::SaveItem);
+    fn is_param(&self) -> bool { false }
 }
 
 pub trait FileDataset: Dataset + Clone {

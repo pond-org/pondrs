@@ -16,4 +16,6 @@ impl<T: Clone> Dataset for Param<T> {
     }
 
     fn save(&self, _output: Self::SaveItem) {}
+
+    fn is_param(&self) -> bool { true }
 }

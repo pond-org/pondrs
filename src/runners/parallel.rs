@@ -52,11 +52,9 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
         let nodes: Vec<_> = leaves
             .iter()
             .map(|n| {
-                (
-                    n.input_dataset_ids(),
-                    n.output_dataset_ids(),
-                    AtomicBool::new(false),
-                )
+                let input_ids: Vec<usize> = n.input_dataset_ids().iter().map(|d| d.id).collect();
+                let output_ids: Vec<usize> = n.output_dataset_ids().iter().map(|d| d.id).collect();
+                (input_ids, output_ids, AtomicBool::new(false))
             })
             .collect();
 
