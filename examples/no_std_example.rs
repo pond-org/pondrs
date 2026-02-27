@@ -10,6 +10,7 @@
 //! - SequentialRunner with () hooks (no logging, no panic catching)
 
 use pondrs::datasets::{CellDataset, Param};
+use pondrs::error::PondError;
 use pondrs::{Dataset, Node, Pipeline, SequentialRunner};
 use pondrs::runners::Runner;
 use serde::Serialize;
@@ -27,6 +28,15 @@ struct Params {
     offset: Param<i32>,
 }
 
+/// A node that returns Result with its natural error type (PondError here,
+/// since CellDataset::load returns PondError on failure).
+fn checked_square(b: i32) -> Result<(i32,), PondError> {
+    if b == 0 {
+        return Err(PondError::DatasetNotLoaded); // placeholder for a real check
+    }
+    Ok((b * b,))
+}
+
 fn main() {
     let params = Params {
         scale: Param(3),
@@ -42,7 +52,7 @@ fn main() {
     // Pipeline: scale_param -> a -> b -> c
     //   node1: a = scale * 2
     //   node2: b = a + offset
-    //   node3: c = b * b
+    //   node3: c = b * b  (returns Result — demonstrates error propagation)
     let pipe = (
         Node {
             name: "multiply",
@@ -61,7 +71,7 @@ fn main() {
                 },
                 Node {
                     name: "square",
-                    func: |b| (b * b,),
+                    func: checked_square,
                     input: (&catalog.b,),
                     output: (&catalog.c,),
                 },
@@ -73,7 +83,7 @@ fn main() {
 
     // Run with no hooks, no panic catching
     let runner = SequentialRunner::new(());
-    runner.run(&pipe, &catalog, &params);
+    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
 
     // Verify results: scale=3, so a=6, b=6+10=16, c=16*16=256
     let result = catalog.c.load().unwrap();

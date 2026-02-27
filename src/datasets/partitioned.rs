@@ -6,20 +6,21 @@ use std::fs;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
 pub struct Lazy<T> {
-    loader: Box<dyn Fn() -> Option<T>>,
+    loader: Box<dyn Fn() -> Result<T, PondError>>,
 }
 
 impl<T> Lazy<T> {
-    pub fn new(loader: impl Fn() -> Option<T> + 'static) -> Self {
+    pub fn new(loader: impl Fn() -> Result<T, PondError> + 'static) -> Self {
         Self {
             loader: Box::new(loader),
         }
     }
 
-    pub fn load(&self) -> Option<T> {
+    pub fn load(&self) -> Result<T, PondError> {
         (self.loader)()
     }
 }
@@ -34,29 +35,31 @@ pub struct LazyPartitionedDataset<D: FileDataset + Serialize + DeserializeOwned>
 
 impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset
     for LazyPartitionedDataset<D>
+where
+    PondError: From<D::Error>,
 {
     type LoadItem = HashMap<String, Lazy<D::LoadItem>>;
     type SaveItem = HashMap<String, D::SaveItem>;
+    type Error = PondError;
 
-    fn save(&self, datasets: Self::SaveItem) {
-        std::fs::create_dir_all(&self.path).unwrap();
+    fn save(&self, datasets: Self::SaveItem) -> Result<(), PondError> {
+        std::fs::create_dir_all(&self.path)?;
         let dir = std::path::Path::new(&self.path);
         for (name, data) in datasets {
             let ext = self.ext;
             let path = dir.join(format!("{name}.{ext}"));
             let mut dataset = self.dataset.clone();
             dataset.set_path(path.to_str().unwrap());
-            dataset.save(data);
+            dataset.save(data)?;
         }
+        Ok(())
     }
 
-    fn load(&self) -> Option<Self::LoadItem> {
-        let Ok(paths) = fs::read_dir(&self.path) else {
-            return None;
-        };
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        let paths = fs::read_dir(&self.path)?;
         let mut datasets = Self::LoadItem::new();
         for entry in paths {
-            let Ok(entry) = entry else { continue };
+            let entry = entry?;
             let file_name = entry.file_name();
             if !file_name.to_string_lossy().ends_with(self.ext) {
                 continue;
@@ -68,9 +71,9 @@ impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset
                 .unwrap();
             let mut dataset = self.dataset.clone();
             dataset.set_path(entry.path().to_str().unwrap());
-            datasets.insert(file_stem, Lazy::new(move || dataset.load()));
+            datasets.insert(file_stem, Lazy::new(move || Ok(dataset.load()?)));
         }
-        Some(datasets)
+        Ok(datasets)
     }
 }
 
@@ -82,29 +85,32 @@ pub struct PartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
     pub dataset: D,
 }
 
-impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset for PartitionedDataset<D> {
+impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset for PartitionedDataset<D>
+where
+    PondError: From<D::Error>,
+{
     type LoadItem = HashMap<String, D::LoadItem>;
     type SaveItem = HashMap<String, D::SaveItem>;
+    type Error = PondError;
 
-    fn save(&self, datasets: Self::SaveItem) {
-        std::fs::create_dir_all(&self.path).unwrap();
+    fn save(&self, datasets: Self::SaveItem) -> Result<(), PondError> {
+        std::fs::create_dir_all(&self.path)?;
         let dir = std::path::Path::new(&self.path);
         for (name, data) in datasets {
             let ext = self.ext;
             let path = dir.join(format!("{name}.{ext}"));
             let mut dataset = self.dataset.clone();
             dataset.set_path(path.to_str().unwrap());
-            dataset.save(data);
+            dataset.save(data)?;
         }
+        Ok(())
     }
 
-    fn load(&self) -> Option<Self::LoadItem> {
-        let Ok(paths) = fs::read_dir(&self.path) else {
-            return None;
-        };
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        let paths = fs::read_dir(&self.path)?;
         let mut datasets = Self::LoadItem::new();
         for entry in paths {
-            let Ok(entry) = entry else { continue };
+            let entry = entry?;
             let file_name = entry.file_name();
             if !file_name.to_string_lossy().ends_with(self.ext) {
                 continue;
@@ -116,10 +122,8 @@ impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset for Partit
                 .unwrap();
             let mut dataset = self.dataset.clone();
             dataset.set_path(entry.path().to_str().unwrap());
-            if let Some(loaded) = dataset.load() {
-                datasets.insert(file_stem, loaded);
-            }
+            datasets.insert(file_stem, dataset.load()?);
         }
-        Some(datasets)
+        Ok(datasets)
     }
 }

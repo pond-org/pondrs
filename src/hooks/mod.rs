@@ -6,25 +6,25 @@ mod logging;
 #[cfg(feature = "std")]
 pub use logging::LoggingHook;
 
-use crate::core::PipelineItem;
+use crate::core::PipelineInfo;
 
 /// Trait for individual hooks that respond to pipeline events.
 pub trait Hook {
     // Pipeline hooks
-    fn before_pipeline_run(&self, _p: &dyn PipelineItem) {}
-    fn after_pipeline_run(&self, _p: &dyn PipelineItem) {}
-    fn on_pipeline_error(&self, _p: &dyn PipelineItem, _error: &str) {}
+    fn before_pipeline_run(&self, _p: &dyn PipelineInfo) {}
+    fn after_pipeline_run(&self, _p: &dyn PipelineInfo) {}
+    fn on_pipeline_error(&self, _p: &dyn PipelineInfo, _error: &str) {}
 
     // Node hooks
-    fn before_node_run(&self, _n: &dyn PipelineItem) {}
-    fn after_node_run(&self, _n: &dyn PipelineItem) {}
-    fn on_node_error(&self, _n: &dyn PipelineItem, _error: &str) {}
+    fn before_node_run(&self, _n: &dyn PipelineInfo) {}
+    fn after_node_run(&self, _n: &dyn PipelineInfo) {}
+    fn on_node_error(&self, _n: &dyn PipelineInfo, _error: &str) {}
 
     // Dataset hooks (wiring TBD — requires splitting PipelineItem::call())
-    fn before_dataset_load(&self, _n: &dyn PipelineItem) {}
-    fn after_dataset_load(&self, _n: &dyn PipelineItem) {}
-    fn before_dataset_save(&self, _n: &dyn PipelineItem) {}
-    fn after_dataset_save(&self, _n: &dyn PipelineItem) {}
+    fn before_dataset_load(&self, _n: &dyn PipelineInfo) {}
+    fn after_dataset_load(&self, _n: &dyn PipelineInfo) {}
+    fn before_dataset_save(&self, _n: &dyn PipelineInfo) {}
+    fn after_dataset_save(&self, _n: &dyn PipelineInfo) {}
 }
 
 /// Trait for a collection of hooks (implemented for tuples).

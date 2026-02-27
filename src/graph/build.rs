@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use serde::Serialize;
 
 use crate::catalog_indexer::index_catalog;
-use crate::core::{PipelineItem, Steps, ptr_to_id};
+use crate::core::{PipelineInfo, StepInfo, ptr_to_id};
 
 use super::types::{Edge, GraphNode, PipelineGraph};
 
@@ -18,7 +18,7 @@ struct Context<'a, C: Serialize, P: Serialize> {
 }
 
 pub fn build_pipeline_graph<'a>(
-    pipe: &'a impl Steps,
+    pipe: &'a impl StepInfo,
     catalog: &impl Serialize,
     params: &impl Serialize,
 ) -> PipelineGraph<'a> {
@@ -29,7 +29,7 @@ pub fn build_pipeline_graph<'a>(
 
     // 2. Walk tree, collect all nodes with parent/child relationships
     let mut nodes: Vec<GraphNode<'a>> = Vec::new();
-    pipe.for_each_item(&mut |item| {
+    pipe.for_each_info(&mut |item| {
         collect_node(item, None, &mut nodes);
     });
 
@@ -67,7 +67,7 @@ pub fn build_pipeline_graph<'a>(
 }
 
 fn collect_node<'a>(
-    item: &'a dyn PipelineItem,
+    item: &'a dyn PipelineInfo,
     parent: Option<usize>,
     nodes: &mut Vec<GraphNode<'a>>,
 ) {

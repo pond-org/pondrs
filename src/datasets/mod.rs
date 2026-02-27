@@ -25,12 +25,17 @@ pub use polars::{PolarsCsvDataset, PolarsParquetDataset};
 pub use yaml::YamlDataset;
 
 /// Trait for datasets that can load and save data.
+///
+/// Each dataset declares its own `Error` type. Infallible datasets (like `Param`)
+/// use `core::convert::Infallible`. The framework converts dataset errors to the
+/// pipeline's error type via `PondError: From<Self::Error>`.
 pub trait Dataset {
     type LoadItem;
     type SaveItem;
+    type Error;
 
-    fn load(&self) -> Option<Self::LoadItem>;
-    fn save(&self, output: Self::SaveItem);
+    fn load(&self) -> Result<Self::LoadItem, Self::Error>;
+    fn save(&self, output: Self::SaveItem) -> Result<(), Self::Error>;
     fn is_param(&self) -> bool { false }
 }
 

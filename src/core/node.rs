@@ -1,10 +1,13 @@
 //! Node struct - a single computation unit in the pipeline.
 
-use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineItem};
+use crate::error::PondError;
+
+use super::into_result::IntoNodeResult;
+use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
 
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
-    F: Fn<Input::Args, Output = Output::Output>,
+    F: Fn<Input::Args>,
 {
     pub name: &'static str,
     pub func: F,
@@ -12,18 +15,12 @@ where
     pub output: Output,
 }
 
-impl<F, Input: NodeInput, Output: NodeOutput> PipelineItem for Node<F, Input, Output>
+impl<F, Input, Output> PipelineInfo for Node<F, Input, Output>
 where
-    F: Fn<Input::Args, Output = Output::Output> + Send + Sync,
-    Input: Send + Sync,
-    Output: Send + Sync,
+    Input: NodeInput + Send + Sync,
+    Output: NodeOutput + Send + Sync,
+    F: Fn<Input::Args> + Send + Sync,
 {
-    fn call(&self) {
-        let args = self.input.load_data();
-        let outputs = Fn::call(&self.func, args);
-        self.output.save_data(outputs);
-    }
-
     fn get_name(&self) -> &'static str {
         self.name
     }
@@ -32,9 +29,7 @@ where
         true
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineItem)) {
-        // No children, do nothing
-    }
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
 
     fn for_each_input_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
         self.input.for_each_input_id(f);
@@ -43,4 +38,23 @@ where
     fn for_each_output_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
         self.output.for_each_output_id(f);
     }
+}
+
+impl<F, Input, Output, E, R> PipelineItem<E> for Node<F, Input, Output>
+where
+    Input: NodeInput + Send + Sync,
+    Output: NodeOutput + Send + Sync,
+    F: Fn<Input::Args, Output = R> + Send + Sync,
+    R: IntoNodeResult<Output::Output, E>,
+    E: From<PondError>,
+{
+    fn call(&self) -> Result<(), E> {
+        let args = self.input.load_data().map_err(E::from)?;
+        let result = Fn::call(&self.func, args);
+        let output = result.into_node_result()?;
+        self.output.save_data(output).map_err(E::from)?;
+        Ok(())
+    }
+
+    fn for_each_child_item<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineItem<E>)) {}
 }

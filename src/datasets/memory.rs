@@ -1,9 +1,11 @@
 //! In-memory dataset for intermediate values.
 
+use std::prelude::v1::*;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::PondError;
 use super::Dataset;
 
 #[derive(Serialize, Deserialize)]
@@ -29,13 +31,16 @@ impl<T: Clone> Default for MemoryDataset<T> {
 impl<T: Copy> Dataset for MemoryDataset<T> {
     type LoadItem = T;
     type SaveItem = T;
+    type Error = PondError;
 
-    fn load(&self) -> Option<Self::LoadItem> {
-        *self.value.lock().unwrap()
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        let guard = self.value.lock().map_err(|e| PondError::LockPoisoned(e.to_string()))?;
+        (*guard).ok_or(PondError::DatasetNotLoaded)
     }
 
-    fn save(&self, output: Self::SaveItem) {
-        let mut value = self.value.lock().unwrap();
+    fn save(&self, output: Self::SaveItem) -> Result<(), PondError> {
+        let mut value = self.value.lock().map_err(|e| PondError::LockPoisoned(e.to_string()))?;
         *value = Some(output);
+        Ok(())
     }
 }

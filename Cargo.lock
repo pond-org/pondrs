@@ -2038,6 +2038,7 @@ dependencies = [
  "polars",
  "serde",
  "serde_yaml",
+ "thiserror",
  "yaml-rust2",
 ]
 

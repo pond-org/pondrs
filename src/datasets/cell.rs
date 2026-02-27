@@ -4,6 +4,7 @@ use core::cell::Cell;
 
 use serde::ser::{Serialize, Serializer};
 
+use crate::error::PondError;
 use super::Dataset;
 
 pub struct CellDataset<T: Copy> {
@@ -32,13 +33,15 @@ impl<T: Copy> Default for CellDataset<T> {
 impl<T: Copy> Dataset for CellDataset<T> {
     type LoadItem = T;
     type SaveItem = T;
+    type Error = PondError;
 
-    fn load(&self) -> Option<Self::LoadItem> {
-        self.value.get()
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        self.value.get().ok_or(PondError::DatasetNotLoaded)
     }
 
-    fn save(&self, output: Self::SaveItem) {
+    fn save(&self, output: Self::SaveItem) -> Result<(), PondError> {
         self.value.set(Some(output));
+        Ok(())
     }
 }
 

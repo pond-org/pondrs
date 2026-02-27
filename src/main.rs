@@ -5,6 +5,7 @@ use pondrs::datasets::{
     Lazy, LazyPartitionedDataset, MemoryDataset, Param, PartitionedDataset, PolarsCsvDataset,
     PolarsParquetDataset,
 };
+use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
 use pondrs::runners::{ParallelRunner, Runner, SequentialRunner};
 use pondrs::{Node, Pipeline, Steps};
@@ -24,7 +25,7 @@ struct Parameters {
     initial_value: Param<i32>,
 }
 
-fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
+fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps<PondError> {
     let pipe = (
         Node {
             name: "node1",
@@ -67,7 +68,7 @@ fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps {
     pipe
 }
 
-fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps {
+fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps<PondError> {
     let pipe = (
         Node {
             name: "node1",
@@ -104,13 +105,13 @@ struct IrisCatalog {
     output_csv: LazyPartitionedDataset<PolarsCsvDataset>,
 }
 
-fn copy_iris(input: HashMap<String, Lazy<DataFrame>>) -> (HashMap<String, DataFrame>,) {
+fn copy_iris(input: HashMap<String, Lazy<DataFrame>>) -> Result<(HashMap<String, DataFrame>,), PondError> {
     let mut output = HashMap::<String, DataFrame>::new();
     for (name, df) in input {
         println!("Read {name}!");
-        output.insert(name, df.load().unwrap());
+        output.insert(name, df.load()?);
     }
-    (output,)
+    Ok((output,))
 }
 
 fn copy_iris_to_csv(input: HashMap<String, DataFrame>) -> (HashMap<String, DataFrame>,) {
@@ -162,7 +163,7 @@ fn iris_test() {
     );
     let params = ();
     let runner = SequentialRunner::new((LoggingHook,));
-    runner.run(&pipe, &catalog, &params);
+    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
 }
 
 fn main() {
@@ -186,7 +187,7 @@ fn main() {
     println!("--- Sequential Runner ---");
     let runner = SequentialRunner::new((LoggingHook,));
     let pipe = construct_pipe1(&params, &catalog);
-    runner.run(&pipe, &catalog, &params);
+    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
 
     // Reset datasets for parallel run
     let catalog = Catalog {
@@ -206,5 +207,5 @@ fn main() {
 
     println!("\n--- Parallel Runner ---");
     let runner = ParallelRunner::new((LoggingHook,));
-    runner.run(&pipe, &catalog, &params);
+    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
 }

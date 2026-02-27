@@ -4,6 +4,7 @@ use std::prelude::v1::*;
 use polars::prelude::{CsvReadOptions, CsvWriter, DataFrame, ParquetReader, ParquetWriter, SerReader, SerWriter};
 use serde::{Deserialize, Serialize};
 
+use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -20,19 +21,19 @@ impl PolarsCsvDataset {
 impl Dataset for PolarsCsvDataset {
     type LoadItem = DataFrame;
     type SaveItem = DataFrame;
+    type Error = PondError;
 
-    fn save(&self, mut df: Self::SaveItem) {
-        let mut file = std::fs::File::create(&self.path).unwrap();
-        CsvWriter::new(&mut file).finish(&mut df).unwrap();
+    fn save(&self, mut df: Self::SaveItem) -> Result<(), PondError> {
+        let mut file = std::fs::File::create(&self.path)?;
+        CsvWriter::new(&mut file).finish(&mut df)?;
+        Ok(())
     }
 
-    fn load(&self) -> Option<Self::LoadItem> {
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
         let df = CsvReadOptions::default()
-            .try_into_reader_with_file_path(Some(self.path.clone().into()))
-            .unwrap()
-            .finish()
-            .unwrap();
-        Some(df)
+            .try_into_reader_with_file_path(Some(self.path.clone().into()))?
+            .finish()?;
+        Ok(df)
     }
 }
 
@@ -59,16 +60,18 @@ impl PolarsParquetDataset {
 impl Dataset for PolarsParquetDataset {
     type LoadItem = DataFrame;
     type SaveItem = DataFrame;
+    type Error = PondError;
 
-    fn save(&self, mut df: Self::SaveItem) {
-        let mut file = std::fs::File::create(&self.path).unwrap();
-        ParquetWriter::new(&mut file).finish(&mut df).unwrap();
+    fn save(&self, mut df: Self::SaveItem) -> Result<(), PondError> {
+        let mut file = std::fs::File::create(&self.path)?;
+        ParquetWriter::new(&mut file).finish(&mut df)?;
+        Ok(())
     }
 
-    fn load(&self) -> Option<Self::LoadItem> {
-        let file = std::fs::File::open(&self.path).unwrap();
-        let df = ParquetReader::new(file).finish().unwrap();
-        Some(df)
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        let file = std::fs::File::open(&self.path)?;
+        let df = ParquetReader::new(file).finish()?;
+        Ok(df)
     }
 }
 

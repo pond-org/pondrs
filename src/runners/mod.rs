@@ -11,8 +11,11 @@ pub use sequential::SequentialRunner;
 use serde::Serialize;
 
 use crate::core::Steps;
+use crate::error::PondError;
 
 /// Trait for pipeline runners.
 pub trait Runner {
-    fn run(&self, pipe: &impl Steps, catalog: &impl Serialize, params: &impl Serialize);
+    fn run<E>(&self, pipe: &impl Steps<E>, catalog: &impl Serialize, params: &impl Serialize) -> Result<(), E>
+    where
+        E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static;
 }

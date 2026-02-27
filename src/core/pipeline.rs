@@ -1,20 +1,18 @@
 //! Pipeline struct - a container for multiple steps.
 
-use super::steps::Steps;
-use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineItem};
+use super::steps::{StepInfo, Steps};
+use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
 
-pub struct Pipeline<S: Steps, Input: NodeInput, Output: NodeOutput> {
+pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
     pub name: &'static str,
     pub steps: S,
     pub input: Input,
     pub output: Output,
 }
 
-impl<S: Steps + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
-    PipelineItem for Pipeline<S, Input, Output>
+impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
+    PipelineInfo for Pipeline<S, Input, Output>
 {
-    fn call(&self) {}
-
     fn get_name(&self) -> &'static str {
         self.name
     }
@@ -23,8 +21,8 @@ impl<S: Steps + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput 
         false
     }
 
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineItem)) {
-        self.steps.for_each_item(f);
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
+        self.steps.for_each_info(f);
     }
 
     fn for_each_input_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
@@ -33,5 +31,19 @@ impl<S: Steps + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput 
 
     fn for_each_output_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
         self.output.for_each_output_id(f);
+    }
+}
+
+impl<E, S, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
+    PipelineItem<E> for Pipeline<S, Input, Output>
+where
+    S: Steps<E> + Send + Sync,
+{
+    fn call(&self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn for_each_child_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineItem<E>)) {
+        self.steps.for_each_item(f);
     }
 }
