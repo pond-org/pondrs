@@ -18,7 +18,7 @@ pub mod runners;
 // Re-export commonly used items
 #[cfg(feature = "std")]
 pub use catalog_indexer::{CatalogIndex, index_catalog};
-pub use core::{DatasetRef, IntoNodeResult, Node, Pipeline, PipelineInfo, PipelineItem, StepInfo, Steps};
+pub use core::{CheckError, DatasetRef, IntoNodeResult, Node, Pipeline, PipelineInfo, PipelineItem, StepInfo, Steps};
 pub use datasets::Dataset;
 pub use error::PondError;
 #[cfg(feature = "std")]
