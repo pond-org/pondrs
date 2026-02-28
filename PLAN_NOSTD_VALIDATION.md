@@ -402,138 +402,346 @@ This means hooks and error messages can reference `node.name` (`&'static str`) b
 
 ### What do we actually need names for?
 
-1. **Hook callbacks** — `before_node_run`, `on_node_error`, etc. already receive `&dyn PipelineInfo` which has `get_name()` for the node name. Dataset names would enrich logging.
-2. **Validation error messages** — the no_std validator in Part 1 reports `dataset_id: usize`, which is an opaque pointer address. Having a name would make errors actionable.
+1. **Hook callbacks** — `before_node_run`, `on_node_error`, etc. already receive `&dyn PipelineInfo` which has `get_name()` for the node name. But hooks might want to log _which dataset_ a node reads/writes.
+2. **Validation error messages** — the no_std validator in Part 1 reports `dataset_id: usize`, which is an opaque pointer address. Having a name makes errors actionable ("node 'add_offset' missing input 'a'" vs "node 'add_offset' missing input 0x7ffc12345678").
 3. **Debugging** — when a pipeline fails, knowing which dataset was involved helps.
 
-### Approach A: no_std catalog indexer with `heapless`
+### How the existing std catalog indexer works
 
-Port the existing serde-based approach to use `heapless::FnvIndexMap<usize, heapless::String<M>, N>`.
+The existing `catalog_indexer.rs` exploits a property of serde's `#[derive(Serialize)]`:
 
 ```rust
-use heapless::{FnvIndexMap, String as HString};
-
-pub struct NoStdCatalogIndex<const N: usize, const M: usize> {
-    names: FnvIndexMap<usize, HString<M>, N>,
+#[derive(Serialize)]
+struct Catalog {
+    a: CellDataset<i32>,
+    b: CellDataset<i32>,
 }
 ```
 
-Where `N` = max entries, `M` = max name length (e.g. 64 bytes).
-
-**Pros:**
-- Same serde-based approach, proven pattern
-- Hash lookup for ID → name
-
-**Cons:**
-- Two const generics (`N` for capacity, `M` for string length)
-- Requires `heapless` dependency
-- The serde `Serializer` implementation needs porting (the prefix tracking uses `String` concatenation, needs `heapless::String` formatting)
-- Still somewhat heavy for what it does
-
-### Approach B: Flat array of `(usize, &'static str)` via serde
-
-Same serde trick, but store `&'static str` field names directly. The key insight: serde's `serialize_field` receives `key: &'static str` — the field name is already a static string from the derived `Serialize` impl. We just can't build dotted paths ("inner.alpha") without allocation.
+The derived `Serialize` impl generates code equivalent to:
 
 ```rust
-struct NoStdCatalogIndex<const N: usize> {
+fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    let mut state = serializer.serialize_struct("Catalog", 2)?;
+    state.serialize_field("a", &self.a)?;   // key is &'static str, value is &self.a
+    state.serialize_field("b", &self.b)?;   // key is &'static str, value is &self.b
+    state.end()
+}
+```
+
+Two critical things happen in `serialize_field(key, value)`:
+- `key` is `&'static str` — the field name, baked into the binary at compile time
+- `value` is `&self.a` — a reference to the _same_ struct field that pipeline nodes hold references to
+
+Because `ptr_to_id(&self.a)` gives the same pointer address whether called from serde or from a `Node`'s input/output tuple, we get a free `pointer_id → field_name` mapping. The std version stores this in `HashMap<usize, String>`.
+
+### Approach: Flat array of `(usize, &'static str)` — the no_std serde indexer
+
+The key insight: **we don't need `String` at all for flat catalogs**. The `key` parameter in `serialize_field` is already `&'static str`. We just store it directly.
+
+#### Core data structure
+
+```rust
+/// Stack-allocated mapping from dataset pointer IDs to field names.
+/// N = maximum number of datasets (catalog fields + param fields).
+pub struct NoStdCatalogIndex<const N: usize> {
     entries: [(usize, &'static str); N],
     len: usize,
 }
-```
 
-For a flat catalog like `struct Catalog { a: ..., b: ... }`, serde gives us `key = "a"` and `key = "b"` — perfect. For nested catalogs, we'd get `key = "alpha"` for `inner.alpha`, losing the prefix. This is acceptable if catalogs are flat (which they are in all current examples), and can be documented as a limitation.
+impl<const N: usize> NoStdCatalogIndex<N> {
+    const fn new() -> Self {
+        Self {
+            entries: [(0, ""); N],
+            len: 0,
+        }
+    }
 
-**Pros:**
-- Zero allocations, zero dependencies
-- `&'static str` field names come free from serde
-- Very simple implementation
+    /// Look up the name for a dataset pointer ID.
+    fn get(&self, ptr_id: usize) -> Option<&'static str> {
+        let mut i = 0;
+        while i < self.len {
+            if self.entries[i].0 == ptr_id {
+                return Some(self.entries[i].1);
+            }
+            i += 1;
+        }
+        None
+    }
 
-**Cons:**
-- Loses dotted prefix for nested catalogs (reports "alpha" instead of "inner.alpha")
-- Const generic for capacity
-- Still requires serde (already a dependency, and works with `default-features = false`)
-
-### Approach C: Don't use serde at all — manual name registration
-
-Add a trait or method for users to register dataset names explicitly:
-
-```rust
-// Users implement this:
-impl Catalog {
-    fn register_names<const N: usize>(&self) -> NameMap<N> {
-        let mut map = NameMap::new();
-        map.insert(ptr_to_id(&self.a), "a");
-        map.insert(ptr_to_id(&self.b), "b");
-        map
+    /// Insert a mapping. Returns false if capacity exceeded.
+    fn insert(&mut self, ptr_id: usize, name: &'static str) -> bool {
+        // Overwrite if already present
+        let mut i = 0;
+        while i < self.len {
+            if self.entries[i].0 == ptr_id {
+                self.entries[i].1 = name;
+                return true;
+            }
+            i += 1;
+        }
+        if self.len >= N { return false; }
+        self.entries[self.len] = (ptr_id, name);
+        self.len += 1;
+        true
     }
 }
 ```
 
-**Pros:**
-- No serde dependency for naming
-- Full control over names (can include prefixes)
-- Simple to understand
+This is essentially the same `IdSet` pattern from Part 1 but storing `(usize, &'static str)` pairs instead of bare `usize` values. Linear scan is fine — a pipeline with 50 datasets does 50 comparisons per lookup, which is negligible.
 
-**Cons:**
-- Manual and error-prone — names can go out of sync with struct fields
-- Boilerplate for users
-- Loses the elegance of the current automatic serde-based approach
+#### The no_std serde Serializer
 
-### Approach D: Provide names only in std, accept IDs-only in no_std
-
-The simplest approach: don't try to port the catalog indexer. In no_std, validation errors and hooks report `dataset_id: usize` (the pointer address). In std, the caller can optionally enrich errors with names after the fact.
+The custom serializer is a near-copy of the existing `catalog_indexer.rs`, but stores into the flat array instead of a HashMap and skips prefix tracking (the main source of `String` allocation):
 
 ```rust
-// no_std: validate returns raw IDs
-let err = validate_sequential::<64>(&pipe);
+use serde::ser::{self, Serialize};
+use crate::core::ptr_to_id;
 
-// std: enrich with names if desired
-#[cfg(feature = "std")]
-if let Err(e) = &err {
-    let index = index_catalog(&catalog);
-    eprintln!("Validation error: {}", e.display_with(&index));
+/// Build a no_std catalog index from any struct that derives Serialize.
+pub fn index_catalog_nostd<const N: usize>(catalog: &impl Serialize) -> NoStdCatalogIndex<N> {
+    let mut indexer = NoStdIndexer {
+        index: NoStdCatalogIndex::new(),
+    };
+    catalog.serialize(&mut indexer).ok();
+    indexer.index
+}
+
+struct NoStdIndexer<const N: usize> {
+    index: NoStdCatalogIndex<N>,
 }
 ```
 
-**Pros:**
-- Zero added complexity in no_std
-- No new dependencies
-- Clean separation of concerns
-
-**Cons:**
-- In no_std, error messages show raw pointer addresses (e.g. `dataset_id: 0x7ffc12345678`)
-- Less useful for debugging in pure no_std environments
-
-### Approach E: Use node names only (already available)
-
-The sequential runner already has `node.get_name() -> &'static str`. For validation errors, the node name + dataset position ("node 'add_offset' input #1") may be sufficient without needing dataset names at all.
+The critical `SerializeStruct` implementation:
 
 ```rust
-NoStdValidationError::InputNotProduced {
-    node_name: "add_offset",
-    input_index: 1,  // "the second input of this node"
-    dataset_id: 0x...,
+impl<'a, const N: usize> ser::SerializeStruct for &'a mut NoStdIndexer<N> {
+    type Ok = ();
+    type Error = IndexerError;
+
+    fn serialize_field<T: ?Sized + Serialize>(
+        &mut self,
+        key: &'static str,    // <-- this is the field name, already &'static str!
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        let ptr_id = ptr_to_id(value);
+        self.index.insert(ptr_id, key);
+
+        // Recurse into nested structs (their fields get their own keys)
+        value.serialize(&mut **self).ok();
+        Ok(())
+    }
+
+    fn end(self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 ```
 
-Combined with the fact that the user wrote the pipeline definition and can see which input #1 of "add_offset" refers to, this may be adequate.
+Compare this to the std version's `serialize_field`:
 
-**Pros:**
-- Zero added complexity
-- No new types, traits, or dependencies
-- Node names are always available (`&'static str`)
+```rust
+// std version (existing code in catalog_indexer.rs:134-147)
+fn serialize_field<T: ?Sized + Serialize>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error> {
+    let ptr_id = ptr_to_id(value);
+    let name = self.full_name(key);          // <-- allocates String: "prefix.key"
+    self.names.insert(ptr_id, name.clone()); // <-- inserts into HashMap
+    let prev_prefix = std::mem::replace(&mut self.prefix, name); // <-- swaps String
+    value.serialize(&mut **self).ok();
+    self.prefix = prev_prefix;               // <-- restores String
+    Ok(())
+}
+```
 
-**Cons:**
-- Requires the user to mentally map "input #1" → dataset name
-- Less friendly for large pipelines
+The no_std version is _simpler_: no prefix tracking, no `String` allocation, no `mem::replace`. The trade-off is that nested struct fields lose their parent prefix.
+
+The remaining serializer methods are all no-ops (identical to the existing std version — `serialize_bool`, `serialize_i32`, etc. all return `Ok(())`). The `Serializer` trait's `serialize_struct` method returns `Ok(self)`, and `serialize_newtype_struct` recurses via `value.serialize(self)`. Everything else is a no-op. This is the same pattern as the existing code — the no-op impls can even be shared or copy-pasted.
+
+#### serde dependency: already no_std compatible
+
+The `Cargo.toml` already has:
+
+```toml
+serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+```
+
+`serde` with `default-features = false` works in no_std. The `Serialize` derive and `ser::Serializer` trait are all available. The `ser::Error` trait requires `core::fmt::Display`, which is available in no_std via `core::fmt`. No additional dependencies are needed.
+
+#### Full example: indexing a flat catalog
+
+```rust
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Catalog {
+    a: CellDataset<i32>,
+    b: CellDataset<i32>,
+    c: CellDataset<i32>,
+}
+
+#[derive(Serialize)]
+struct Params {
+    scale: Param<i32>,
+    offset: Param<i32>,
+}
+
+let catalog = Catalog { a: CellDataset::new(), b: CellDataset::new(), c: CellDataset::new() };
+let params = Params { scale: Param(3), offset: Param(10) };
+
+// Index both catalog and params (N=8 is plenty for 5 fields)
+let cat_index = index_catalog_nostd::<8>(&catalog);
+let par_index = index_catalog_nostd::<8>(&params);
+
+assert_eq!(cat_index.get(ptr_to_id(&catalog.a)), Some("a"));
+assert_eq!(cat_index.get(ptr_to_id(&catalog.b)), Some("b"));
+assert_eq!(cat_index.get(ptr_to_id(&catalog.c)), Some("c"));
+assert_eq!(par_index.get(ptr_to_id(&params.scale)), Some("scale"));
+assert_eq!(par_index.get(ptr_to_id(&params.offset)), Some("offset"));
+```
+
+#### Handling nested catalogs
+
+For a nested catalog:
+
+```rust
+#[derive(Serialize)]
+struct Inner {
+    alpha: CellDataset<i32>,
+    beta: CellDataset<i32>,
+}
+
+#[derive(Serialize)]
+struct Catalog {
+    inner: Inner,
+    gamma: CellDataset<i32>,
+}
+```
+
+The std indexer produces: `"inner.alpha"`, `"inner.beta"`, `"gamma"`.
+
+The no_std flat-array indexer produces: `"alpha"`, `"beta"`, `"gamma"` — because there's no prefix tracking. Additionally, the entry for the `inner` field itself gets recorded (with the pointer to the `Inner` struct), but that's harmless — it just won't match any dataset ID since nodes reference `inner.alpha`, not `inner`.
+
+**Is this a problem?** Only if two nested structs have fields with the same name:
+
+```rust
+#[derive(Serialize)]
+struct Catalog {
+    prices: Inner,    // has field "value"
+    volumes: Inner,   // has field "value" — same &'static str!
+}
+```
+
+In this case both `prices.value` and `volumes.value` would be recorded as just `"value"`. But they'd have _different_ pointer IDs, so both entries would exist in the flat array — `(ptr_of_prices_value, "value")` and `(ptr_of_volumes_value, "value")`. The lookup by pointer ID would still return the correct entry. The only downside is that the _name_ doesn't disambiguate which `"value"` it is. This is acceptable for error messages ("missing input 'value' in node 'foo'" is still useful) and can be documented.
+
+**If disambiguation is needed later**: a prefix-tracking scheme can be added using a `&'static str` stack (array of `&'static str` segments) instead of `String` concatenation. But this adds complexity and isn't needed for the typical flat-catalog case.
+
+#### Nested prefix tracking without allocation (optional extension)
+
+If nested catalogs become common, here's how prefix tracking could work without `String`:
+
+```rust
+struct NoStdIndexer<const N: usize, const D: usize> {
+    index: NoStdCatalogIndex<N>,
+    prefix_stack: [&'static str; D],  // D = max nesting depth (e.g. 4)
+    depth: usize,
+}
+
+impl<const N: usize, const D: usize> NoStdIndexer<N, D> {
+    /// Build the dotted name by joining prefix segments.
+    /// Returns only the leaf key if no nesting, or formats "a.b.c" style.
+    ///
+    /// Problem: we can't return a &'static str for "inner.alpha" because
+    /// that string doesn't exist in the binary. We'd need to either:
+    ///   (a) store the segments alongside each entry, or
+    ///   (b) use heapless::String to build it, or
+    ///   (c) accept leaf-only names
+    fn current_prefix(&self) -> ??? { ... }
+}
+```
+
+This shows why the simple approach (leaf-only names) is the right default: building dotted paths requires _some_ form of string concatenation, which in no_std means either `heapless::String` or a fixed-size buffer with `core::fmt::Write`. It's doable but adds complexity for a corner case. The leaf-only approach handles the common case cleanly.
+
+#### Integration with validation errors
+
+The `NoStdCatalogIndex` can enrich validation errors:
+
+```rust
+// After validation:
+let index = index_catalog_nostd::<32>(&catalog);
+
+match validate_sequential::<32>(&pipe) {
+    Ok(()) => {},
+    Err(e) => {
+        // e.dataset_id is a usize — look up the name
+        let name = index.get(e.dataset_id()).unwrap_or("<unknown>");
+        // In no_std with a UART or debug probe:
+        // "Validation error: node 'add_offset' missing input 'a'"
+    }
+}
+```
+
+#### Integration with hooks
+
+A hook implementation that has access to a `NoStdCatalogIndex` can look up dataset names:
+
+```rust
+struct DebugHook<'a, const N: usize> {
+    catalog_index: &'a NoStdCatalogIndex<N>,
+}
+
+impl<const N: usize> Hook for DebugHook<'_, N> {
+    fn before_node_run(&self, n: &dyn PipelineInfo) {
+        // Log node name (always available)
+        // Node name: n.get_name() -> &'static str
+
+        // Log input dataset names
+        n.for_each_input_id(&mut |d: &DatasetRef| {
+            let name = self.catalog_index.get(d.id).unwrap_or("?");
+            // write to UART, defmt, etc.: "node 'add_offset' reads 'a'"
+        });
+    }
+}
+```
+
+This is the same pattern the std `LoggingHook` would use, but with the no_std index type.
+
+#### Integration with the sequential runner
+
+The `SequentialRunner` currently receives `catalog` and `params` but ignores them in no_std. With the no_std indexer, it could optionally build the index and pass it to hooks:
+
+```rust
+// Option 1: user builds index externally (recommended — keeps Runner simple)
+let index = index_catalog_nostd::<32>(&catalog);
+let hook = DebugHook { catalog_index: &index };
+let runner = SequentialRunner::new((hook,));
+runner.run::<PondError>(&pipe, &catalog, &params)?;
+
+// Option 2: runner builds index internally (adds const generic to Runner)
+// Not recommended — pollutes the Runner type signature
+```
+
+Option 1 is recommended: the user builds the index and passes it into their hook. The runner doesn't need to know about the index at all. This keeps the `Runner` trait unchanged.
+
+### Comparison of all approaches
+
+| Approach | Dependencies | Nesting support | Complexity | Allocation |
+|----------|-------------|----------------|------------|------------|
+| A: heapless `FnvIndexMap` | heapless | Full (with `heapless::String`) | Medium | None (stack) |
+| **B: Flat `(usize, &'static str)` array** | **none** | **Leaf names only** | **Low** | **None (stack)** |
+| C: Manual registration | none | Full (user provides) | Low (user burden) | None (stack) |
+| D: Names only in std | none | N/A | Zero | N/A |
+| E: Node names only | none | N/A | Zero | N/A |
 
 ### Recommendation for Part 2
 
-**Start with Approach D + E**: don't port the catalog indexer. Use node names (already available) plus dataset IDs in no_std errors. If std is enabled, offer an optional `.display_with(index)` to enrich errors with dataset names.
+**Approach B (flat array)** is the right choice for no_std dataset names. It:
 
-If experience shows that no_std users genuinely need dataset names (embedded systems with logging, etc.), then **Approach B** (flat array of `(usize, &'static str)`) is the right next step — it's zero-dependency and works for flat catalogs.
-
-Approach A (heapless maps) is overkill for this problem given the alternatives.
+- Adds zero dependencies (serde is already present with `default-features = false`)
+- Requires ~80 lines of code (the `NoStdCatalogIndex` struct + no_std `Serializer` impl)
+- Reuses the exact same serde trick as the existing std indexer
+- Works perfectly for flat catalogs (all current examples)
+- Degrades gracefully for nested catalogs (leaf-only names, still usable)
+- Can be upgraded to handle nesting later if needed
 
 ---
 
