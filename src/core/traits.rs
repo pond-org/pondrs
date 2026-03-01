@@ -105,6 +105,35 @@ where
     }
 }
 
+impl<T1: Dataset, T2: Dataset, T3: Dataset> NodeInput for (&T1, &T2, &T3)
+where
+    PondError: From<T1::Error>,
+    PondError: From<T2::Error>,
+    PondError: From<T3::Error>,
+{
+    type Args = (T1::LoadItem, T2::LoadItem, T3::LoadItem);
+    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef, DatasetEvent)) -> Result<Self::Args, PondError> {
+        let ds0 = DatasetRef { id: ptr_to_id(self.0), is_param: self.0.is_param() };
+        on_event(&ds0, DatasetEvent::BeforeLoad);
+        let val0 = self.0.load()?;
+        on_event(&ds0, DatasetEvent::AfterLoad);
+        let ds1 = DatasetRef { id: ptr_to_id(self.1), is_param: self.1.is_param() };
+        on_event(&ds1, DatasetEvent::BeforeLoad);
+        let val1 = self.1.load()?;
+        on_event(&ds1, DatasetEvent::AfterLoad);
+        let ds2 = DatasetRef { id: ptr_to_id(self.2), is_param: self.2.is_param() };
+        on_event(&ds2, DatasetEvent::BeforeLoad);
+        let val2 = self.2.load()?;
+        on_event(&ds2, DatasetEvent::AfterLoad);
+        Ok((val0, val1, val2))
+    }
+    fn for_each_input_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
+        f(&DatasetRef { id: ptr_to_id(self.0), is_param: self.0.is_param() });
+        f(&DatasetRef { id: ptr_to_id(self.1), is_param: self.1.is_param() });
+        f(&DatasetRef { id: ptr_to_id(self.2), is_param: self.2.is_param() });
+    }
+}
+
 /// Trait for saving data to output datasets.
 pub trait NodeOutput: Tuple {
     type Output: Tuple;
@@ -157,5 +186,34 @@ where
     fn for_each_output_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
         f(&DatasetRef { id: ptr_to_id(self.0), is_param: self.0.is_param() });
         f(&DatasetRef { id: ptr_to_id(self.1), is_param: self.1.is_param() });
+    }
+}
+
+impl<T1: Dataset, T2: Dataset, T3: Dataset> NodeOutput for (&T1, &T2, &T3)
+where
+    PondError: From<T1::Error>,
+    PondError: From<T2::Error>,
+    PondError: From<T3::Error>,
+{
+    type Output = (T1::SaveItem, T2::SaveItem, T3::SaveItem);
+    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef, DatasetEvent)) -> Result<(), PondError> {
+        let ds0 = DatasetRef { id: ptr_to_id(self.0), is_param: self.0.is_param() };
+        on_event(&ds0, DatasetEvent::BeforeSave);
+        self.0.save(output.0)?;
+        on_event(&ds0, DatasetEvent::AfterSave);
+        let ds1 = DatasetRef { id: ptr_to_id(self.1), is_param: self.1.is_param() };
+        on_event(&ds1, DatasetEvent::BeforeSave);
+        self.1.save(output.1)?;
+        on_event(&ds1, DatasetEvent::AfterSave);
+        let ds2 = DatasetRef { id: ptr_to_id(self.2), is_param: self.2.is_param() };
+        on_event(&ds2, DatasetEvent::BeforeSave);
+        self.2.save(output.2)?;
+        on_event(&ds2, DatasetEvent::AfterSave);
+        Ok(())
+    }
+    fn for_each_output_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
+        f(&DatasetRef { id: ptr_to_id(self.0), is_param: self.0.is_param() });
+        f(&DatasetRef { id: ptr_to_id(self.1), is_param: self.1.is_param() });
+        f(&DatasetRef { id: ptr_to_id(self.2), is_param: self.2.is_param() });
     }
 }
