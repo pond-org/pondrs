@@ -1,7 +1,7 @@
 //! Pipeline struct - a container for multiple steps.
 
 use super::steps::{StepInfo, Steps};
-use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
 
 pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
     pub name: &'static str,
@@ -39,7 +39,7 @@ impl<E, S, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
 where
     S: Steps<E> + Send + Sync,
 {
-    fn call(&self) -> Result<(), E> {
+    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef, DatasetEvent)) -> Result<(), E> {
         Ok(())
     }
 

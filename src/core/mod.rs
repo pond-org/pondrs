@@ -13,4 +13,4 @@ pub use into_result::IntoNodeResult;
 pub use node::Node;
 pub use pipeline::Pipeline;
 pub use steps::{StepInfo, Steps};
-pub use traits::{DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem, ptr_to_id};
+pub use traits::{DatasetEvent, DatasetInfo, DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem, ptr_to_id};

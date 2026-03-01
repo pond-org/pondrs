@@ -3,7 +3,7 @@
 use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
-use super::traits::{DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
 
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
@@ -48,11 +48,11 @@ where
     R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,
 {
-    fn call(&self) -> Result<(), E> {
-        let args = self.input.load_data().map_err(E::from)?;
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef, DatasetEvent)) -> Result<(), E> {
+        let args = self.input.load_data(on_event).map_err(E::from)?;
         let result = Fn::call(&self.func, args);
         let output = result.into_node_result()?;
-        self.output.save_data(output).map_err(E::from)?;
+        self.output.save_data(output, on_event).map_err(E::from)?;
         Ok(())
     }
 

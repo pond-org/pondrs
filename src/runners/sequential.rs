@@ -1,9 +1,11 @@
 //! Sequential pipeline runner.
 
 #[cfg(feature = "std")]
-use std::string::ToString;
+use std::prelude::v1::*;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 
-use crate::core::{PipelineItem, Steps};
+use crate::core::{DatasetEvent, DatasetInfo, DatasetRef, PipelineItem, Steps};
 use crate::error::PondError;
 use crate::hooks::Hooks;
 
@@ -19,13 +21,55 @@ impl<H: Hooks> SequentialRunner<H> {
     }
 
     #[cfg(feature = "std")]
-    fn run_item<E>(&self, item: &dyn PipelineItem<E>) -> Result<(), E>
+    fn make_dataset_callback<'a, E>(
+        &'a self,
+        item: &'a dyn PipelineItem<E>,
+        names: &'a HashMap<usize, String>,
+    ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
+        move |ds: &DatasetRef, event: DatasetEvent| {
+            let info = DatasetInfo {
+                id: ds.id,
+                is_param: ds.is_param,
+                name: names.get(&ds.id).map(|s| s.as_str()),
+            };
+            match event {
+                DatasetEvent::BeforeLoad => self.hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &info)),
+                DatasetEvent::AfterLoad => self.hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &info)),
+                DatasetEvent::BeforeSave => self.hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &info)),
+                DatasetEvent::AfterSave => self.hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &info)),
+            }
+        }
+    }
+
+    #[cfg(not(feature = "std"))]
+    fn make_dataset_callback<'a, E>(
+        &'a self,
+        item: &'a dyn PipelineItem<E>,
+    ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
+        move |ds: &DatasetRef, event: DatasetEvent| {
+            let info = DatasetInfo {
+                id: ds.id,
+                is_param: ds.is_param,
+                name: None,
+            };
+            match event {
+                DatasetEvent::BeforeLoad => self.hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &info)),
+                DatasetEvent::AfterLoad => self.hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &info)),
+                DatasetEvent::BeforeSave => self.hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &info)),
+                DatasetEvent::AfterSave => self.hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &info)),
+            }
+        }
+    }
+
+    #[cfg(feature = "std")]
+    fn run_item<E>(&self, item: &dyn PipelineItem<E>, names: &HashMap<usize, String>) -> Result<(), E>
     where
         E: From<PondError> + core::fmt::Display + core::fmt::Debug,
     {
         if item.is_leaf() {
             self.hooks.for_each_hook(&mut |h| h.before_node_run(item));
-            match item.call() {
+            let mut on_event = self.make_dataset_callback(item, names);
+            match item.call(&mut on_event) {
                 Ok(()) => {
                     self.hooks.for_each_hook(&mut |h| h.after_node_run(item));
                     Ok(())
@@ -41,7 +85,7 @@ impl<H: Hooks> SequentialRunner<H> {
             let mut result = Ok(());
             item.for_each_child_item(&mut |child| {
                 if result.is_ok() {
-                    result = self.run_item(child);
+                    result = self.run_item(child, names);
                 }
             });
             match &result {
@@ -64,7 +108,8 @@ impl<H: Hooks> SequentialRunner<H> {
     {
         if item.is_leaf() {
             self.hooks.for_each_hook(&mut |h| h.before_node_run(item));
-            item.call()?;
+            let mut on_event = self.make_dataset_callback(item);
+            item.call(&mut on_event)?;
             self.hooks.for_each_hook(&mut |h| h.after_node_run(item));
             Ok(())
         } else {
@@ -81,6 +126,22 @@ impl<H: Hooks> SequentialRunner<H> {
 }
 
 impl<H: Hooks> Runner for SequentialRunner<H> {
+    #[cfg(feature = "std")]
+    fn run<E>(&self, pipe: &impl Steps<E>, catalog: &impl serde::Serialize, params: &impl serde::Serialize) -> Result<(), E>
+    where
+        E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
+    {
+        let names = crate::catalog_indexer::index_catalog_with_params(catalog, params).into_inner();
+        let mut result = Ok(());
+        pipe.for_each_item(&mut |item| {
+            if result.is_ok() {
+                result = self.run_item(item, &names);
+            }
+        });
+        result
+    }
+
+    #[cfg(not(feature = "std"))]
     fn run<E>(&self, pipe: &impl Steps<E>, _catalog: &impl serde::Serialize, _params: &impl serde::Serialize) -> Result<(), E>
     where
         E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,

@@ -5,17 +5,10 @@ use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 
-use crate::catalog_indexer::index_catalog;
+use crate::catalog_indexer::index_catalog_with_params;
 use crate::core::{PipelineInfo, StepInfo, ptr_to_id};
 
 use super::types::{Edge, GraphNode, PipelineGraph};
-
-/// Internal wrapper to index both catalog and params in one pass.
-#[derive(Serialize)]
-struct Context<'a, C: Serialize, P: Serialize> {
-    catalog: &'a C,
-    params: &'a P,
-}
 
 pub fn build_pipeline_graph<'a>(
     pipe: &'a impl StepInfo,
@@ -23,8 +16,7 @@ pub fn build_pipeline_graph<'a>(
     params: &impl Serialize,
 ) -> PipelineGraph<'a> {
     // 1. Build dataset name index from catalog + params
-    let context = Context { catalog, params };
-    let catalog_index = index_catalog(&context);
+    let catalog_index = index_catalog_with_params(catalog, params);
     let dataset_names = catalog_index.into_inner();
 
     // 2. Walk tree, collect all nodes with parent/child relationships

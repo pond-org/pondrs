@@ -8,7 +8,7 @@ use std::thread;
 
 use serde::Serialize;
 
-use crate::core::{PipelineItem, Steps};
+use crate::core::{DatasetEvent, DatasetInfo, DatasetRef, PipelineItem, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;
@@ -53,8 +53,16 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
             collect_items(&mut callable_items, item);
         });
 
-        // Track whether each node has been started
+        // Track whether each leaf node has been started
         let started: Vec<AtomicBool> = graph.node_indices.iter().map(|_| AtomicBool::new(false)).collect();
+
+        // Track pipeline lifecycle: indices into graph.nodes for pipe nodes
+        let pipe_indices: Vec<usize> = graph.nodes.iter().enumerate()
+            .filter(|(_, n)| n.is_pipe)
+            .map(|(i, _)| i)
+            .collect();
+        let pipe_started: Vec<AtomicBool> = pipe_indices.iter().map(|_| AtomicBool::new(false)).collect();
+        let pipe_completed: Vec<AtomicBool> = pipe_indices.iter().map(|_| AtomicBool::new(false)).collect();
 
         // Initialize produced with source datasets (params, pre-loaded data)
         let produced = Mutex::new(graph.source_datasets.clone());
@@ -71,6 +79,28 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                 }
 
                 let produced_snapshot: HashSet<_> = produced.lock().unwrap().clone();
+
+                // Fire pipeline hooks based on produced datasets
+                for (pi, &pipe_idx) in pipe_indices.iter().enumerate() {
+                    let pipe_node = &graph.nodes[pipe_idx];
+
+                    // before_pipeline_run: all inputs produced
+                    if !pipe_started[pi].load(Ordering::Acquire)
+                        && pipe_node.inputs.iter().all(|d| produced_snapshot.contains(&d.id))
+                    {
+                        pipe_started[pi].store(true, Ordering::Release);
+                        self.hooks.for_each_hook(&mut |h| h.before_pipeline_run(pipe_node.item));
+                    }
+
+                    // after_pipeline_run: all outputs produced
+                    if pipe_started[pi].load(Ordering::Acquire)
+                        && !pipe_completed[pi].load(Ordering::Acquire)
+                        && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
+                    {
+                        pipe_completed[pi].store(true, Ordering::Release);
+                        self.hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item));
+                    }
+                }
 
                 let mut any_started = false;
                 for (si, &node_idx) in graph.node_indices.iter().enumerate() {
@@ -91,10 +121,25 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                         let item = callable_items[node_idx];
                         let first_error = &first_error;
                         let has_error = &has_error;
+                        let graph_nodes = &graph.nodes;
 
+                        let names = &graph.dataset_names;
                         s.spawn(move || {
                             hooks.for_each_hook(&mut |h| h.before_node_run(item));
-                            match item.call() {
+                            let mut on_event = |ds: &DatasetRef, event: DatasetEvent| {
+                                let info = DatasetInfo {
+                                    id: ds.id,
+                                    is_param: ds.is_param,
+                                    name: names.get(&ds.id).map(|s| s.as_str()),
+                                };
+                                match event {
+                                    DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &info)),
+                                    DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &info)),
+                                    DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &info)),
+                                    DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &info)),
+                                }
+                            };
+                            match item.call(&mut on_event) {
                                 Ok(()) => {
                                     hooks.for_each_hook(&mut |h| h.after_node_run(item));
                                     produced.lock().unwrap().extend(output_ids);
@@ -102,6 +147,13 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                                 Err(e) => {
                                     let msg = e.to_string();
                                     hooks.for_each_hook(&mut |h| h.on_node_error(item, &msg));
+                                    // Fire on_pipeline_error for ancestor pipelines
+                                    let mut parent = graph_nodes[node_idx].parent_pipe;
+                                    while let Some(pipe_idx) = parent {
+                                        let pipe = &graph_nodes[pipe_idx];
+                                        hooks.for_each_hook(&mut |h| h.on_pipeline_error(pipe.item, &msg));
+                                        parent = pipe.parent_pipe;
+                                    }
                                     let mut guard = first_error.lock().unwrap();
                                     if guard.is_none() {
                                         *guard = Some(e);
@@ -124,6 +176,20 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                 }
             }
         });
+
+        // Fire any remaining pipeline completions after all threads have joined
+        {
+            let produced_snapshot = produced.lock().unwrap();
+            for (pi, &pipe_idx) in pipe_indices.iter().enumerate() {
+                let pipe_node = &graph.nodes[pipe_idx];
+                if pipe_started[pi].load(Ordering::Acquire)
+                    && !pipe_completed[pi].load(Ordering::Acquire)
+                    && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
+                {
+                    self.hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item));
+                }
+            }
+        }
 
         // Return the first error if any occurred
         match first_error.into_inner().unwrap() {

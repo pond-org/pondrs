@@ -34,6 +34,20 @@ impl CatalogIndex {
 ///
 /// Must be called on the same catalog instance whose fields are referenced
 /// by pipeline nodes — pointer addresses must match.
+/// Build a `CatalogIndex` from both catalog and params structs.
+///
+/// Wraps them in a single serializable context so all dataset fields
+/// from both are indexed in one pass.
+pub fn index_catalog_with_params(catalog: &impl Serialize, params: &impl Serialize) -> CatalogIndex {
+    #[derive(serde::Serialize)]
+    struct Context<'a, C: Serialize, P: Serialize> {
+        catalog: &'a C,
+        params: &'a P,
+    }
+    let context = Context { catalog, params };
+    index_catalog(&context)
+}
+
 pub fn index_catalog(catalog: &impl Serialize) -> CatalogIndex {
     let mut indexer = CatalogIndexer {
         names: HashMap::new(),
