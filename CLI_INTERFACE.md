@@ -59,9 +59,9 @@ pub trait PondApp {
     /// Required. Return `()` for no hooks.
     fn hooks() -> impl Hooks;
 
-    /// Optionally force a specific runner. If `None`, the CLI `--runner` flag
-    /// is used (defaulting to sequential).
-    fn runner() -> Option<RunnerChoice> { None }
+    /// Optionally provide a custom runner. If `None`, the CLI `--runner` flag
+    /// selects from the built-in runners (defaulting to sequential).
+    fn runner() -> Option<impl Runner> { None::<SequentialRunner> }
 
     /// Path to the catalog YAML config file.
     fn catalog_path() -> &'static str { "conf/catalog.yml" }
@@ -174,18 +174,17 @@ pub struct ParallelRunner;
 - The no\_std `SequentialRunner::run` variant (the `#[cfg(not(feature = "std"))]` branch) gets the
   same signature change.
 
-### `RunnerChoice` Enum
+### `RunnerChoice` Enum (CLI-Internal)
 
 ```rust
-pub enum RunnerChoice {
+enum RunnerChoice {
     Sequential,
     Parallel,
 }
 ```
 
-Used by `PondApp::runner()` and the CLI `--runner` flag. The framework matches on this enum and
-constructs the appropriate concrete runner. This is a single branch — no dynamic dispatch on the
-runner itself.
+This is a CLI-internal enum, not part of the `PondApp` trait. It maps the `--runner` flag to a
+built-in runner. The framework only uses it when `PondApp::runner()` returns `None`.
 
 ---
 
@@ -193,19 +192,38 @@ runner itself.
 
 ### No Type Erasure Needed
 
-Since the app framework uses `RunnerChoice` enum dispatch (not `dyn Runner`), the hooks type is
-always known at the call site:
+The hooks type is always known at the call site. The runner dispatch has two paths — user-provided
+runner or CLI-selected built-in runner — but both are fully monomorphized:
 
 ```rust
 let hooks = Self::hooks();  // concrete type, known at compile time
 
-match runner_choice {
-    RunnerChoice::Sequential => SequentialRunner.run(&pipeline, &catalog, &params, &hooks),
-    RunnerChoice::Parallel => ParallelRunner.run(&pipeline, &catalog, &params, &hooks),
+fn run_with<R: Runner, E>(
+    runner: R,
+    pipeline: &impl Steps<E>,
+    catalog: &impl Serialize,
+    params: &impl Serialize,
+    hooks: &impl Hooks,
+) -> Result<(), E>
+where
+    E: From<PondError> + Send + Sync + Display + Debug + 'static,
+{
+    runner.run(pipeline, catalog, params, hooks)
+}
+
+if let Some(runner) = Self::runner() {
+    // User-provided runner — monomorphized with the concrete runner type
+    run_with(runner, &pipeline, &catalog, &params, &hooks)?;
+} else {
+    // CLI-selected built-in runner
+    match cli_runner_choice {
+        RunnerChoice::Sequential => SequentialRunner.run(&pipeline, &catalog, &params, &hooks)?,
+        RunnerChoice::Parallel => ParallelRunner.run(&pipeline, &catalog, &params, &hooks)?,
+    }
 }
 ```
 
-Both arms monomorphize `run()` with the concrete hooks type. No boxing, no vtable dispatch at the
+All arms monomorphize `run()` with the concrete hooks type. No boxing, no vtable dispatch at the
 `Hooks` level.
 
 ### How It Flows
@@ -269,7 +287,8 @@ clap = { version = "4", features = ["derive"], optional = true }
 ```
 
 Gated on `std` feature. The `clap` types do not leak into the `PondApp` trait — the trait uses
-`RunnerChoice` and `&'static str` for paths, keeping the public API decoupled from the arg parser.
+`&'static str` for paths and `impl Runner` for custom runners, keeping the public API decoupled
+from the arg parser. `RunnerChoice` is an internal enum used only for CLI flag mapping.
 
 ---
 
@@ -334,12 +353,17 @@ this is not required for the initial implementation.
 3. Load params YAML → apply `--params` overrides → deserialize into `Self::Params`.
 4. Build pipeline: `Self::pipeline(&catalog, &params)`.
 5. Build hooks: `Self::hooks()`.
-6. Determine runner: `Self::runner().unwrap_or(cli_runner_arg)`, default `Sequential`.
+6. Determine runner: if `Self::runner()` returns `Some(runner)`, use it. Otherwise, use the CLI
+   `--runner` flag (defaulting to sequential).
 7. Execute:
    ```rust
-   match runner_choice {
-       RunnerChoice::Sequential => SequentialRunner.run(&pipeline, &catalog, &params, &hooks)?,
-       RunnerChoice::Parallel => ParallelRunner.run(&pipeline, &catalog, &params, &hooks)?,
+   if let Some(runner) = Self::runner() {
+       runner.run(&pipeline, &catalog, &params, &hooks)?;
+   } else {
+       match cli_runner_choice {
+           RunnerChoice::Sequential => SequentialRunner.run(&pipeline, &catalog, &params, &hooks)?,
+           RunnerChoice::Parallel => ParallelRunner.run(&pipeline, &catalog, &params, &hooks)?,
+       }
    }
    ```
 8. Exit 0 on success, print error and exit 1 on failure.
@@ -401,7 +425,7 @@ Added to `lib.rs` alongside the existing `unboxed_closures`, `fn_traits`, `tuple
 ```
 src/
   app/
-    mod.rs          — PondApp trait, RunnerChoice, re-exports
+    mod.rs          — PondApp trait, re-exports
     cli.rs          — clap arg definitions (CliArgs, Subcommand enums)
     config.rs       — YAML loading, param patching (apply_overrides)
   lib.rs            — add `pub mod app;` gated on std
@@ -453,7 +477,7 @@ The `app` module is `#[cfg(feature = "std")]` and does not affect no\_std compil
 
 ```rust
 use pondrs::prelude::*;  // or individual imports
-use pondrs::app::{PondApp, RunnerChoice};
+use pondrs::app::PondApp;
 
 // --- Catalog: dataset definitions ---
 #[derive(Serialize, Deserialize)]
@@ -521,7 +545,7 @@ impl PondApp for MyApp {
     }
 
     // Optional: force parallel runner (otherwise CLI --runner flag is used)
-    // fn runner() -> Option<RunnerChoice> { Some(RunnerChoice::Parallel) }
+    // fn runner() -> Option<impl Runner> { Some(ParallelRunner) }
 }
 
 fn main() {
