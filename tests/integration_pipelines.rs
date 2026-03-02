@@ -78,8 +78,8 @@ fn test_csv_pipeline_with_params() {
 
     assert!(pipe.check().is_ok());
 
-    let runner = SequentialRunner::new((LoggingHook::new(),));
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    let hooks = (LoggingHook::new(),);
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 
     // original scores: 80, 90, 70 → scaled: 120, 135, 105 → mean = 120
     let mean = catalog.summary.load().unwrap();
@@ -166,8 +166,8 @@ fn test_yaml_pipeline_with_params() {
 
     assert!(pipe.check().is_ok());
 
-    let runner = SequentialRunner::new((LoggingHook::new(),));
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    let hooks = (LoggingHook::new(),);
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 
     // Verify intermediate
     assert_eq!(catalog.threshold.load().unwrap(), 42);
@@ -266,8 +266,8 @@ fn test_mixed_csv_yaml_pipeline() {
 
     assert!(pipe.check().is_ok());
 
-    let runner = SequentialRunner::new((LoggingHook::new(),));
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    let hooks = (LoggingHook::new(),);
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 
     // threshold = 70, passing: alice(90), charlie(80), eve(95)
     assert_eq!(catalog.row_count.load().unwrap(), 3);

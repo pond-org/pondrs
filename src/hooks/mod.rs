@@ -9,7 +9,7 @@ pub use logging::LoggingHook;
 use crate::core::{DatasetInfo, PipelineInfo};
 
 /// Trait for individual hooks that respond to pipeline events.
-pub trait Hook {
+pub trait Hook: Sync {
     // Pipeline hooks
     fn before_pipeline_run(&self, _p: &dyn PipelineInfo) {}
     fn after_pipeline_run(&self, _p: &dyn PipelineInfo) {}
@@ -28,7 +28,7 @@ pub trait Hook {
 }
 
 /// Trait for a collection of hooks (implemented for tuples).
-pub trait Hooks {
+pub trait Hooks: Sync {
     fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook));
 }
 

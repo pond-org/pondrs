@@ -82,8 +82,8 @@ fn main() {
     );
 
     // Run with no hooks, no panic catching
-    let runner = SequentialRunner::new(());
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    let hooks = ();
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 
     // Verify results: scale=3, so a=6, b=6+10=16, c=16*16=256
     let result = catalog.c.load().unwrap();

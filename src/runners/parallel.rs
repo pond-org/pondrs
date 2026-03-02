@@ -15,15 +15,7 @@ use crate::hooks::Hooks;
 
 use super::Runner;
 
-pub struct ParallelRunner<H: Hooks> {
-    pub hooks: H,
-}
-
-impl<H: Hooks> ParallelRunner<H> {
-    pub fn new(hooks: H) -> Self {
-        Self { hooks }
-    }
-}
+pub struct ParallelRunner;
 
 /// Collect callable items by walking the tree in the same order as graph building.
 fn collect_items<'a, E>(items: &mut Vec<&'a dyn PipelineItem<E>>, item: &'a dyn PipelineItem<E>) {
@@ -35,8 +27,8 @@ fn collect_items<'a, E>(items: &mut Vec<&'a dyn PipelineItem<E>>, item: &'a dyn 
     }
 }
 
-impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
-    fn run<E>(&self, pipe: &impl Steps<E>, catalog: &impl Serialize, params: &impl Serialize) -> Result<(), E>
+impl Runner for ParallelRunner {
+    fn run<E>(&self, pipe: &impl Steps<E>, catalog: &impl Serialize, params: &impl Serialize, hooks: &impl Hooks) -> Result<(), E>
     where
         E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
     {
@@ -89,7 +81,7 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                         && pipe_node.inputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_started[pi].store(true, Ordering::Release);
-                        self.hooks.for_each_hook(&mut |h| h.before_pipeline_run(pipe_node.item));
+                        hooks.for_each_hook(&mut |h| h.before_pipeline_run(pipe_node.item));
                     }
 
                     // after_pipeline_run: all outputs produced
@@ -98,7 +90,7 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                         && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_completed[pi].store(true, Ordering::Release);
-                        self.hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item));
+                        hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item));
                     }
                 }
 
@@ -117,7 +109,6 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
 
                         let produced = &produced;
                         let output_ids: Vec<usize> = node.outputs.iter().map(|d| d.id).collect();
-                        let hooks = &self.hooks;
                         let item = callable_items[node_idx];
                         let first_error = &first_error;
                         let has_error = &has_error;
@@ -186,7 +177,7 @@ impl<H: Hooks + Sync> Runner for ParallelRunner<H> {
                     && !pipe_completed[pi].load(Ordering::Acquire)
                     && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
                 {
-                    self.hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item));
+                    hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item));
                 }
             }
         }

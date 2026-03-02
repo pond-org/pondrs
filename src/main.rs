@@ -162,8 +162,8 @@ fn iris_test() {
         },
     );
     let params = ();
-    let runner = SequentialRunner::new((LoggingHook::new(),));
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    let hooks = (LoggingHook::new(),);
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 }
 
 fn main() {
@@ -186,9 +186,9 @@ fn main() {
     println!("{catalog_yaml}");
 
     println!("--- Sequential Runner ---");
-    let runner = SequentialRunner::new((LoggingHook::new(),));
+    let hooks = (LoggingHook::new(),);
     let pipe = construct_pipe1(&params, &catalog);
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 
     // Reset datasets for parallel run
     let catalog = Catalog {
@@ -207,6 +207,6 @@ fn main() {
     let pipe = construct_pipe2(&params, &catalog);
 
     println!("\n--- Parallel Runner ---");
-    let runner = ParallelRunner::new((LoggingHook::new(),));
-    runner.run::<PondError>(&pipe, &catalog, &params).unwrap();
+    let hooks = (LoggingHook::new(),);
+    ParallelRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 }
