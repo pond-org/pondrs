@@ -11,8 +11,8 @@ method that handles CLI parsing, YAML config loading, param overrides, and subco
 ### Goals
 
 - **Minimal boilerplate**: the user implements one trait, calls one function.
-- **Minimal overhead**: no unnecessary allocations, monomorphized pipeline execution, type-erased
-  hooks only at the `&dyn` level (no boxing unless the user opts in).
+- **Minimal overhead**: no unnecessary allocations, fully monomorphized pipeline and hook dispatch,
+  zero dynamic dispatch.
 - **No macros**: the interface is a plain trait. The only nightly feature needed beyond what already
   exists is `impl_trait_in_assoc_type` for the pipeline GAT.
 - **std-only**: the app module is gated on `#[cfg(feature = "std")]`. Existing no\_std code is
@@ -57,7 +57,7 @@ pub trait PondApp {
 
     /// Provide hooks for pipeline execution.
     /// Required. Return `()` for no hooks.
-    fn hooks() -> impl Hooks + Sync;
+    fn hooks() -> impl Hooks;
 
     /// Optionally force a specific runner. If `None`, the CLI `--runner` flag
     /// is used (defaulting to sequential).
@@ -102,7 +102,23 @@ Currently, runners carry hooks as a generic parameter (`SequentialRunner<H: Hook
 runner construction to hook types and prevents the app framework from independently selecting a
 runner via CLI while injecting user-provided hooks.
 
-### Change: `Runner::run` Accepts `&(dyn Hooks + Sync)`
+### Change: `Hooks` Gets a `Sync` Supertrait
+
+```rust
+pub trait Hooks: Sync {
+    fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook));
+}
+```
+
+Adding `Sync` as a supertrait means any type implementing `Hooks` is safe to share across threads.
+This is necessary for `ParallelRunner` (which shares hooks across `thread::scope` threads) and
+harmless for `SequentialRunner`. In practice, hook types are almost always `Sync` — they're
+stateless or use `Mutex` for interior mutability. The existing tuple impls (`()`, `(H1,)`,
+`(H1, H2)`, ...) automatically satisfy `Sync` when all elements are `Sync`.
+
+`Sync` is in `core`, not `std`, so this does not affect no\_std compatibility.
+
+### Change: `Runner::run` Accepts `&impl Hooks`
 
 ```rust
 pub trait Runner {
@@ -111,12 +127,16 @@ pub trait Runner {
         pipe: &impl Steps<E>,
         catalog: &impl Serialize,
         params: &impl Serialize,
-        hooks: &(dyn Hooks + Sync),
+        hooks: &impl Hooks,
     ) -> Result<(), E>
     where
         E: From<PondError> + Send + Sync + Display + Debug + 'static;
 }
 ```
+
+This is consistent with how `pipe`, `catalog`, and `params` are already passed (all `&impl Trait`).
+Hooks are fully monomorphized — no vtable dispatch at the `Hooks` level. The `Sync` bound comes
+from the `Hooks` supertrait, so it doesn't need to appear separately here.
 
 ### `SequentialRunner` Becomes a Unit Struct
 
@@ -129,7 +149,7 @@ impl Runner for SequentialRunner {
         pipe: &impl Steps<E>,
         catalog: &impl Serialize,
         params: &impl Serialize,
-        hooks: &(dyn Hooks + Sync),
+        hooks: &impl Hooks,
     ) -> Result<(), E> { /* ... */ }
 }
 ```
@@ -140,8 +160,8 @@ reference moves from `self` to the parameter.
 
 ### `ParallelRunner` Becomes a Unit Struct
 
-Same transformation. The `Sync` bound on `&(dyn Hooks + Sync)` ensures hooks can be shared
-across threads in `thread::scope`. `ParallelRunner` no longer needs a generic parameter.
+Same transformation. The `Sync` supertrait on `Hooks` ensures hooks can be shared across threads
+in `thread::scope`. `ParallelRunner` no longer needs a generic parameter.
 
 ```rust
 pub struct ParallelRunner;
@@ -149,9 +169,8 @@ pub struct ParallelRunner;
 
 ### no\_std Compatibility
 
-- `&(dyn Hooks + Sync)` is a fat pointer — works in no\_std without allocation.
+- `&impl Hooks` is monomorphized — no fat pointer, no allocation, works in no\_std.
 - `Sync` is in `core`, not `std`.
-- Callers in no\_std pass `&(my_hooks_tuple,)` which coerces to `&(dyn Hooks + Sync)` automatically.
 - The no\_std `SequentialRunner::run` variant (the `#[cfg(not(feature = "std"))]` branch) gets the
   same signature change.
 
@@ -170,37 +189,42 @@ runner itself.
 
 ---
 
-## Hook Type Erasure
+## Hooks: Fully Monomorphized
 
-### Why It Works Zero-Cost
+### No Type Erasure Needed
 
-The `Hook` trait is already object-safe: every method takes `&self` and `&dyn PipelineInfo`, no
-generics, no `Self` in return position.
+Since the app framework uses `RunnerChoice` enum dispatch (not `dyn Runner`), the hooks type is
+always known at the call site:
 
-The `Hooks` trait is also object-safe:
 ```rust
-pub trait Hooks {
-    fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook));
+let hooks = Self::hooks();  // concrete type, known at compile time
+
+match runner_choice {
+    RunnerChoice::Sequential => SequentialRunner.run(&pipeline, &catalog, &params, &hooks),
+    RunnerChoice::Parallel => ParallelRunner.run(&pipeline, &catalog, &params, &hooks),
 }
 ```
 
-So `&dyn Hooks` works today. No wrapper types, no `Vec<Box<dyn Hook>>`, no heap allocation.
+Both arms monomorphize `run()` with the concrete hooks type. No boxing, no vtable dispatch at the
+`Hooks` level.
 
 ### How It Flows
 
-1. User implements `fn hooks() -> impl Hooks + Sync { (LoggingHook::new(),) }`
+1. User implements `fn hooks() -> impl Hooks { (LoggingHook::new(),) }`
 2. The provided `main()` calls `let hooks = Self::hooks();`
 3. Hooks live on the stack as their concrete tuple type.
-4. Passed to the runner as `&hooks` which coerces to `&(dyn Hooks + Sync)`.
-5. Runner calls `hooks.for_each_hook(...)` — one vtable dispatch into the tuple's
-   `for_each_hook`, then direct calls to each hook method.
+4. Passed to the runner as `&hooks` — fully monomorphized, the compiler inlines through
+   `for_each_hook` into direct calls to each hook method.
 
 ### Cost
 
-One vtable dispatch per `for_each_hook` call (to enter the tuple impl). Each individual hook call
-inside `for_each_hook` is already a `&dyn Hook` dispatch in the current code. No change in the hot
-path cost. Hook events fire at I/O boundaries (before/after node runs, dataset loads), so even the
-existing vtable cost is invisible.
+Zero overhead beyond what the hook methods themselves do. Each individual hook call inside
+`for_each_hook` dispatches through `&dyn Hook` (this is the existing behavior from the `Hooks`
+tuple impls and is unchanged). Hook events fire at I/O boundaries (before/after node runs,
+dataset loads), so even this existing vtable cost is invisible.
+
+The only compile-time cost is one extra monomorphization axis per distinct hooks tuple type. In
+practice there's one hooks combination per binary, so this is a single copy.
 
 ---
 
@@ -391,7 +415,8 @@ The `app` module is `#[cfg(feature = "std")]` and does not affect no\_std compil
 
 ### Phase 1: Runner Refactor
 
-- Change `Runner::run` signature to accept `hooks: &(dyn Hooks + Sync)`.
+- Add `Sync` supertrait to `Hooks`.
+- Change `Runner::run` signature to accept `hooks: &impl Hooks`.
 - Convert `SequentialRunner` to unit struct, move hook calls to use the parameter.
 - Convert `ParallelRunner` to unit struct, same transformation.
 - Update `main.rs` example and all tests to pass hooks to `run()`.
@@ -491,7 +516,7 @@ impl PondApp for MyApp {
         build_pipeline(cat, params)
     }
 
-    fn hooks() -> impl Hooks + Sync {
+    fn hooks() -> impl Hooks {
         (LoggingHook::new(),)
     }
 
