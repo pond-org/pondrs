@@ -64,10 +64,10 @@ pub trait PondApp {
     fn runner() -> Option<impl Runner> { None::<SequentialRunner> }
 
     /// Path to the catalog YAML config file.
-    fn catalog_path() -> &'static str { "conf/catalog.yml" }
+    fn catalog_path() -> &'static str { "conf/base/catalog.yml" }
 
     /// Path to the parameters YAML config file.
-    fn params_path() -> &'static str { "conf/parameters.yml" }
+    fn params_path() -> &'static str { "conf/base/parameters.yml" }
 
     /// Provided method: full CLI entrypoint.
     /// Parses args, loads config, dispatches subcommand.
@@ -259,12 +259,13 @@ Subcommands:
     viz     Build pipeline graph and serve visualization
 
 Global options:
-    --catalog-path <PATH>    Path to catalog YAML [default: conf/catalog.yml]
-    --params-path <PATH>     Path to parameters YAML [default: conf/parameters.yml]
+    --catalog-path <PATH>    Path to catalog YAML [default: conf/base/catalog.yml]
+    --params-path <PATH>     Path to parameters YAML [default: conf/base/parameters.yml]
 
 Run options:
     --runner <sequential|parallel>   Runner to use [default: sequential]
     --params <KEY=VALUE>...          Override parameter values (dot notation for nesting)
+    --catalog <KEY=VALUE>...         Override catalog values (dot notation for nesting)
 
 Viz options:
     --port <PORT>                    Port for the visualization server [default: 8080]
@@ -297,7 +298,8 @@ from the arg parser. `RunnerChoice` is an internal enum used only for CLI flag m
 ### Loading Strategy
 
 1. Read YAML file into `serde_yaml::Value` (a generic tree).
-2. For params: apply CLI `--params` overrides by walking the `Value` tree with dot-split keys.
+2. Apply CLI overrides (`--params` for params, `--catalog` for catalog) by walking the `Value`
+   tree with dot-split keys. Both use the same `apply_overrides` function.
 3. Deserialize the (possibly patched) `Value` into the concrete `Self::Catalog` / `Self::Params`.
 
 ### Param Patching
@@ -349,7 +351,7 @@ this is not required for the initial implementation.
 ### `run`
 
 1. Parse CLI args.
-2. Load catalog YAML → deserialize into `Self::Catalog`.
+2. Load catalog YAML → apply `--catalog` overrides → deserialize into `Self::Catalog`.
 3. Load params YAML → apply `--params` overrides → deserialize into `Self::Params`.
 4. Build pipeline: `Self::pipeline(&catalog, &params)`.
 5. Build hooks: `Self::hooks()`.
@@ -370,7 +372,7 @@ this is not required for the initial implementation.
 
 ### `check`
 
-1. Load catalog and params (same as `run`, including any `--params` overrides).
+1. Load catalog and params (same as `run`, including any `--catalog` / `--params` overrides).
 2. Build pipeline.
 3. Call `pipeline.check()`.
 4. On success: print validation summary (number of nodes, datasets, etc.), exit 0.
@@ -562,6 +564,12 @@ myapp run
 # Run with param overrides
 myapp run --params model.learning_rate=0.01 --params threshold=0.5
 
+# Run with catalog overrides (e.g. redirect output dataset path)
+myapp run --catalog output.path=/tmp/out.csv
+
+# Combine both
+myapp run --params threshold=0.5 --catalog output.path=/tmp/out.csv
+
 # Run with parallel runner
 myapp run --runner parallel
 
@@ -572,24 +580,23 @@ myapp check
 myapp viz --output pipeline.json
 
 # Custom config paths
-myapp run --catalog-path conf/production/catalog.yml --params-path conf/production/parameters.yml
+myapp run --catalog-path conf/staging/catalog.yml --params-path conf/staging/parameters.yml
 ```
 
 ---
 
-## Open Questions
+## Resolved Design Decisions
 
-1. **`check` without YAML files**: Should we support `Default` as a fallback for catalog/params
-   when YAML files are missing? This would let `check` work before config files exist. Adds a
-   `Default` bound to the trait.
+1. **`check` without YAML files**: No `Default` fallback for now. Catalog and params YAML files
+   must exist for all subcommands. This keeps the trait simpler (no `Default` bound).
 
-2. **Catalog overrides**: Should `--catalog <key=value>` be supported for overriding dataset paths
-   from the CLI, using the same serde patching mechanism as params? This is useful but adds surface
-   area.
+2. **Catalog overrides**: Yes — `--catalog <KEY=VALUE>` is supported using the same
+   `apply_overrides` serde patching mechanism as `--params`. This lets users override dataset
+   paths from the CLI (e.g. `--catalog output.path=/tmp/out.csv`).
 
-3. **Environment-based config**: Kedro-style `conf/base/` + `conf/local/` layering. Worth
-   designing for but probably not implementing in the first pass.
+3. **Environment-based config**: Deferred. Default paths use `conf/base/` (`conf/base/catalog.yml`,
+   `conf/base/parameters.yml`) to prepare for future `conf/local/` layering, but no layering
+   logic is implemented in the first pass.
 
-4. **`viz` web framework**: When we implement the actual web server for `viz`, should it be a
-   separate optional dependency (e.g. `axum`, `warp`) gated on a `viz` feature, or a minimal
-   hand-rolled HTTP server?
+4. **`viz` web framework**: Deferred. The `viz` subcommand builds the pipeline graph and writes
+   JSON (`--output`). The actual web server is a future step.
