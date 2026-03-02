@@ -1,10 +1,12 @@
 #![no_std]
-#![feature(unboxed_closures, fn_traits, tuple_trait)]
+#![feature(unboxed_closures, fn_traits, tuple_trait, impl_trait_in_assoc_type)]
 
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
 
+#[cfg(feature = "std")]
+pub mod app;
 #[cfg(feature = "std")]
 pub mod catalog_indexer;
 pub mod core;
@@ -16,6 +18,8 @@ pub mod hooks;
 pub mod runners;
 
 // Re-export commonly used items
+#[cfg(feature = "std")]
+pub use app::PondApp;
 #[cfg(feature = "std")]
 pub use catalog_indexer::{CatalogIndex, index_catalog, index_catalog_with_params};
 pub use core::{CheckError, DatasetEvent, DatasetInfo, DatasetRef, IntoNodeResult, Node, Pipeline, PipelineInfo, PipelineItem, StepInfo, Steps};
