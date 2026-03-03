@@ -118,6 +118,10 @@ impl SequentialRunner {
 }
 
 impl Runner for SequentialRunner {
+    fn name(&self) -> &'static str {
+        "sequential"
+    }
+
     #[cfg(feature = "std")]
     fn run<E>(&self, pipe: &impl Steps<E>, catalog: &impl serde::Serialize, params: &impl serde::Serialize, hooks: &impl Hooks) -> Result<(), E>
     where

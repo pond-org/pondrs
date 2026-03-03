@@ -24,6 +24,10 @@ pub enum PondError {
     #[error("Serde YAML error: {0}")]
     SerdeYaml(#[from] serde_yaml::Error),
 
+    #[cfg(feature = "plotly")]
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
     #[error("Dataset not loaded: no data available")]
     DatasetNotLoaded,
 

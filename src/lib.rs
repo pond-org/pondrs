@@ -28,6 +28,6 @@ pub use error::PondError;
 #[cfg(feature = "std")]
 pub use graph::{PipelineGraph, build_pipeline_graph};
 pub use hooks::{Hook, Hooks};
-pub use runners::{NoRunner, Runner, SequentialRunner};
+pub use runners::{Runner, Runners, SequentialRunner};
 #[cfg(feature = "std")]
 pub use runners::ParallelRunner;

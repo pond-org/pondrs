@@ -28,6 +28,10 @@ fn collect_items<'a, E>(items: &mut Vec<&'a dyn PipelineItem<E>>, item: &'a dyn 
 }
 
 impl Runner for ParallelRunner {
+    fn name(&self) -> &'static str {
+        "parallel"
+    }
+
     fn run<E>(&self, pipe: &impl Steps<E>, catalog: &impl Serialize, params: &impl Serialize, hooks: &impl Hooks) -> Result<(), E>
     where
         E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,

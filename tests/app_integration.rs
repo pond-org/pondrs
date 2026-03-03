@@ -13,8 +13,8 @@ use pondrs::datasets::{MemoryDataset, Param};
 use pondrs::error::PondError;
 use pondrs::graph::build_pipeline_graph;
 use pondrs::hooks::LoggingHook;
-use pondrs::runners::{NoRunner, Runner, SequentialRunner, ParallelRunner};
-use pondrs::{Dataset, Hooks, Node, Pipeline, StepInfo, Steps};
+use pondrs::runners::{Runner, SequentialRunner, ParallelRunner};
+use pondrs::{Dataset, Hooks, Node, Pipeline, Steps};
 
 // ---------------------------------------------------------------------------
 // Shared test types
@@ -150,7 +150,7 @@ impl PondApp for SeqApp {
     type Catalog = TestCatalog;
     type Params = TestParams;
     type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error> + StepInfo;
+    type Pipeline<'a> = impl Steps<Self::Error>;
 
     fn pipeline<'a>(cat: &'a TestCatalog, params: &'a TestParams) -> Self::Pipeline<'a> {
         (
@@ -179,8 +179,8 @@ impl PondApp for SeqApp {
         (LoggingHook::new(),)
     }
 
-    fn parallel_runner() -> Option<impl Runner> {
-        None::<NoRunner>
+    fn runners() -> impl pondrs::Runners {
+        (SequentialRunner,)
     }
 }
 
@@ -231,7 +231,7 @@ impl PondApp for ParApp {
     type Catalog = TestCatalog;
     type Params = TestParams;
     type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error> + StepInfo;
+    type Pipeline<'a> = impl Steps<Self::Error>;
 
     fn pipeline<'a>(cat: &'a TestCatalog, params: &'a TestParams) -> Self::Pipeline<'a> {
         (
@@ -309,7 +309,7 @@ impl PondApp for BadApp {
     type Catalog = TestCatalog;
     type Params = TestParams;
     type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error> + StepInfo;
+    type Pipeline<'a> = impl Steps<Self::Error>;
 
     fn pipeline<'a>(cat: &'a TestCatalog, _params: &'a TestParams) -> Self::Pipeline<'a> {
         (
@@ -356,7 +356,7 @@ impl PondApp for NestedApp {
     type Catalog = TestCatalog;
     type Params = TestParams;
     type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error> + StepInfo;
+    type Pipeline<'a> = impl Steps<Self::Error>;
 
     fn pipeline<'a>(cat: &'a TestCatalog, params: &'a TestParams) -> Self::Pipeline<'a> {
         (
@@ -442,7 +442,7 @@ impl PondApp for ErrorApp {
     type Catalog = TestCatalog;
     type Params = TestParams;
     type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error> + StepInfo;
+    type Pipeline<'a> = impl Steps<Self::Error>;
 
     fn pipeline<'a>(cat: &'a TestCatalog, params: &'a TestParams) -> Self::Pipeline<'a> {
         (

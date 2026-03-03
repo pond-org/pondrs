@@ -10,13 +10,13 @@ use clap::Parser;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::core::{StepInfo, Steps};
+use crate::core::Steps;
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;
-use crate::runners::{NoRunner, ParallelRunner, Runner, SequentialRunner};
+use crate::runners::{ParallelRunner, Runners, SequentialRunner};
 
-use cli::{CliArgs, Command, RunnerChoice};
+use cli::{CliArgs, Command};
 use config::{apply_overrides, deserialize_config, load_yaml};
 
 /// Load a YAML config file, apply overrides, and deserialize into concrete type.
@@ -49,8 +49,8 @@ pub trait PondApp {
     type Error: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static;
 
     /// The pipeline type, parameterized by the borrow lifetime into catalog/params.
-    /// Users write: `type Pipeline<'a> = impl Steps<Self::Error> + StepInfo;`
-    type Pipeline<'a>: Steps<Self::Error> + StepInfo
+    /// Users write: `type Pipeline<'a> = impl Steps<Self::Error>;`
+    type Pipeline<'a>: Steps<Self::Error>
     where
         Self::Catalog: 'a,
         Self::Params: 'a;
@@ -65,19 +65,10 @@ pub trait PondApp {
     /// Return `()` for no hooks.
     fn hooks() -> impl Hooks;
 
-    /// Built-in sequential runner. Override to return `None::<NoRunner>` to disable.
-    fn sequential_runner() -> Option<impl Runner> {
-        Some(SequentialRunner)
-    }
-
-    /// Built-in parallel runner. Override to return `None::<NoRunner>` to disable.
-    fn parallel_runner() -> Option<impl Runner> {
-        Some(ParallelRunner)
-    }
-
-    /// Optional custom runner. When `Some`, this becomes the default runner.
-    fn custom_runner() -> Option<impl Runner> {
-        None::<NoRunner>
+    /// Provide the available runners as a tuple. The default runner is `"sequential"`.
+    /// Override to customize which runners are available.
+    fn runners() -> impl Runners {
+        (SequentialRunner, ParallelRunner)
     }
 
     /// Path to the catalog YAML config file.
@@ -92,7 +83,22 @@ pub trait PondApp {
 
     /// Full CLI entrypoint. Parses args, loads config, dispatches subcommand.
     fn main() {
-        let args = CliArgs::parse();
+        Self::main_from(std::env::args_os());
+    }
+
+    /// Like `main()`, but parses CLI args from `iter` instead of `std::env::args`.
+    /// Useful for examples and integration tests that need to supply paths at runtime.
+    ///
+    /// ```no_run
+    /// SalesApp::main_from(["sales-app", "--catalog-path", "cat.yml",
+    ///                      "--params-path", "params.yml", "run"]);
+    /// ```
+    fn main_from<I, T>(iter: I)
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        let args = CliArgs::parse_from(iter);
 
         let catalog_path = args.catalog_path.as_deref().unwrap_or(Self::catalog_path());
         let params_path = args.params_path.as_deref().unwrap_or(Self::params_path());
@@ -113,27 +119,23 @@ pub trait PondApp {
                 };
                 let pipeline = Self::pipeline(&catalog, &params);
                 let hooks = Self::hooks();
+                let runners = Self::runners();
 
-                let has_custom = Self::custom_runner().is_some();
-                let choice = runner.unwrap_or(if has_custom {
-                    RunnerChoice::Custom
-                } else {
-                    RunnerChoice::Sequential
-                });
+                let name = runner.as_deref().unwrap_or("sequential");
 
-                match choice {
-                    RunnerChoice::Sequential => match Self::sequential_runner() {
-                        Some(r) => r.run(&pipeline, &catalog, &params, &hooks),
-                        None => { eprintln!("Error: sequential runner is disabled."); process::exit(1); }
-                    },
-                    RunnerChoice::Parallel => match Self::parallel_runner() {
-                        Some(r) => r.run(&pipeline, &catalog, &params, &hooks),
-                        None => { eprintln!("Error: parallel runner is disabled."); process::exit(1); }
-                    },
-                    RunnerChoice::Custom => match Self::custom_runner() {
-                        Some(r) => r.run(&pipeline, &catalog, &params, &hooks),
-                        None => { eprintln!("Error: no custom runner configured."); process::exit(1); }
-                    },
+                match runners.run_by_name(name, &pipeline, &catalog, &params, &hooks) {
+                    Some(result) => result,
+                    None => {
+                        eprint!("Error: unknown runner '{name}'. Available runners: ");
+                        let mut first = true;
+                        runners.for_each_name(&mut |n| {
+                            if !first { eprint!(", "); }
+                            eprint!("{n}");
+                            first = false;
+                        });
+                        eprintln!();
+                        process::exit(1);
+                    }
                 }
             }
             Command::Check => {

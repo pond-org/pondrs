@@ -10,6 +10,8 @@ mod partitioned;
 mod polars;
 #[cfg(feature = "yaml")]
 mod yaml;
+#[cfg(feature = "plotly")]
+mod plotly_dataset;
 
 pub use cell::CellDataset;
 #[cfg(feature = "std")]
@@ -23,6 +25,8 @@ pub use partitioned::{LazyPartitionedDataset, PartitionedDataset};
 pub use polars::{PolarsCsvDataset, PolarsParquetDataset};
 #[cfg(feature = "yaml")]
 pub use yaml::YamlDataset;
+#[cfg(feature = "plotly")]
+pub use plotly_dataset::PlotlyDataset;
 
 /// Trait for datasets that can load and save data.
 ///

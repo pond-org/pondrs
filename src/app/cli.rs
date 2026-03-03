@@ -2,7 +2,7 @@
 
 use std::prelude::v1::*;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -23,9 +23,9 @@ pub struct CliArgs {
 pub enum Command {
     /// Execute the pipeline.
     Run {
-        /// Runner to use.
+        /// Runner to use (by name).
         #[arg(long)]
-        runner: Option<RunnerChoice>,
+        runner: Option<String>,
 
         /// Override parameter values (dot notation for nesting, e.g. model.learning_rate=0.01).
         #[arg(long = "params", value_name = "KEY=VALUE")]
@@ -49,11 +49,4 @@ pub enum Command {
         #[arg(long)]
         output: Option<String>,
     },
-}
-
-#[derive(Clone, ValueEnum)]
-pub enum RunnerChoice {
-    Sequential,
-    Parallel,
-    Custom,
 }
