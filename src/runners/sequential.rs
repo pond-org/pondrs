@@ -20,10 +20,10 @@ impl SequentialRunner {
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
     ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
-        move |ds: &DatasetRef, event: DatasetEvent| {
+        move |ds: &DatasetRef<'_>, event: DatasetEvent| {
             let info = DatasetInfo {
                 id: ds.id,
-                is_param: ds.is_param,
+                is_param: ds.meta.is_param(),
                 name: names.get(&ds.id).map(|s| s.as_str()),
             };
             match event {
@@ -40,10 +40,10 @@ impl SequentialRunner {
         item: &'a dyn PipelineItem<E>,
         hooks: &'a impl Hooks,
     ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
-        move |ds: &DatasetRef, event: DatasetEvent| {
+        move |ds: &DatasetRef<'_>, event: DatasetEvent| {
             let info = DatasetInfo {
                 id: ds.id,
-                is_param: ds.is_param,
+                is_param: ds.meta.is_param(),
                 name: None,
             };
             match event {

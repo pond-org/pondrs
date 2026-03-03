@@ -117,7 +117,7 @@ fn check_leaf<const N: usize>(
             input_err = Err(CheckError::CapacityExceeded);
             return;
         }
-        if !d.is_param && all_produced.contains(d.id) && !produced.contains(d.id) {
+        if !d.meta.is_param() && all_produced.contains(d.id) && !produced.contains(d.id) {
             input_err = Err(CheckError::InputNotProduced {
                 node_name: name,
                 dataset_id: d.id,
@@ -132,7 +132,7 @@ fn check_leaf<const N: usize>(
         if output_err.is_err() {
             return;
         }
-        if d.is_param {
+        if d.meta.is_param() {
             output_err = Err(CheckError::ParamWritten {
                 node_name: name,
                 dataset_id: d.id,
@@ -192,7 +192,7 @@ fn check_pipeline<const N: usize>(
         if output_err.is_err() {
             return;
         }
-        if !d.is_param && !inner_produced.contains(d.id) {
+        if !d.meta.is_param() && !inner_produced.contains(d.id) {
             output_err = Err(CheckError::UnproducedPipelineOutput {
                 pipeline_name: name,
                 dataset_id: d.id,

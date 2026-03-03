@@ -23,7 +23,7 @@ pub use app::PondApp;
 #[cfg(feature = "std")]
 pub use catalog_indexer::{CatalogIndex, index_catalog, index_catalog_with_params};
 pub use core::{CheckError, DatasetEvent, DatasetInfo, DatasetRef, IntoNodeResult, Node, Pipeline, PipelineInfo, PipelineItem, StepInfo, Steps};
-pub use datasets::Dataset;
+pub use datasets::{Dataset, DatasetMeta};
 pub use error::PondError;
 #[cfg(feature = "std")]
 pub use graph::{PipelineGraph, build_pipeline_graph};

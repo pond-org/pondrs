@@ -89,7 +89,7 @@ pub trait PondApp {
     /// Like `main()`, but parses CLI args from `iter` instead of `std::env::args`.
     /// Useful for examples and integration tests that need to supply paths at runtime.
     ///
-    /// ```no_run
+    /// ```ignore
     /// SalesApp::main_from(["sales-app", "--catalog-path", "cat.yml",
     ///                      "--params-path", "params.yml", "run"]);
     /// ```

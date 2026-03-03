@@ -96,7 +96,7 @@ fn collect_node<'a>(
     }
 }
 
-fn build_edges(nodes: &[GraphNode]) -> Vec<Edge> {
+fn build_edges<'a>(nodes: &'_ [GraphNode<'a>]) -> Vec<Edge<'a>> {
     // Build a map: dataset_id -> producer node index (for leaves only)
     let mut producers: HashMap<usize, usize> = HashMap::new();
     for (i, node) in nodes.iter().enumerate() {
@@ -210,9 +210,9 @@ mod tests {
         assert!(graph.dataset_names.values().any(|n| n == "catalog.c"));
 
         // n1's input is a param
-        assert!(graph.nodes[0].inputs[0].is_param);
+        assert!(graph.nodes[0].inputs[0].meta.is_param());
         // n2's input is not a param
-        assert!(!graph.nodes[1].inputs[0].is_param);
+        assert!(!graph.nodes[1].inputs[0].meta.is_param());
     }
 
     #[test]

@@ -25,11 +25,11 @@ impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutp
         self.steps.for_each_info(f);
     }
 
-    fn for_each_input_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
+    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         self.input.for_each_input_id(f);
     }
 
-    fn for_each_output_id(&self, f: &mut dyn FnMut(&DatasetRef)) {
+    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         self.output.for_each_output_id(f);
     }
 }
@@ -39,7 +39,7 @@ impl<E, S, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
 where
     S: Steps<E> + Send + Sync,
 {
-    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
         Ok(())
     }
 

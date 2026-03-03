@@ -46,6 +46,10 @@ impl Dataset for PlotlyDataset {
         std::fs::write(self.html_path(), plot.to_html())?;
         Ok(())
     }
+
+    fn html(&self) -> Option<String> {
+        std::fs::read_to_string(self.html_path()).ok()
+    }
 }
 
 impl FileDataset for PlotlyDataset {
@@ -55,5 +59,37 @@ impl FileDataset for PlotlyDataset {
 
     fn set_path(&mut self, path: &str) {
         self.path = path.to_string();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datasets::DatasetMeta;
+    use tempfile::tempdir;
+
+    #[test]
+    fn html_is_none_before_save() {
+        let dir = tempdir().unwrap();
+        let json_path = dir.path().join("chart.json");
+        let ds = PlotlyDataset::new(json_path.to_str().unwrap());
+        let meta: &dyn DatasetMeta = &ds;
+        assert!(meta.html().is_none());
+    }
+
+    #[test]
+    fn html_is_some_after_save() {
+        let dir = tempdir().unwrap();
+        let json_path = dir.path().join("chart.json");
+        let ds = PlotlyDataset::new(json_path.to_str().unwrap());
+
+        let plot = ::plotly::Plot::new();
+        ds.save(plot).unwrap();
+
+        let meta: &dyn DatasetMeta = &ds;
+        let html = meta.html();
+        assert!(html.is_some());
+        let content = html.unwrap();
+        assert!(content.contains("<html") || content.contains("<!DOCTYPE"));
     }
 }

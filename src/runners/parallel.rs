@@ -121,10 +121,10 @@ impl Runner for ParallelRunner {
                         let names = &graph.dataset_names;
                         s.spawn(move || {
                             hooks.for_each_hook(&mut |h| h.before_node_run(item));
-                            let mut on_event = |ds: &DatasetRef, event: DatasetEvent| {
+                            let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent| {
                                 let info = DatasetInfo {
                                     id: ds.id,
-                                    is_param: ds.is_param,
+                                    is_param: ds.meta.is_param(),
                                     name: names.get(&ds.id).map(|s| s.as_str()),
                                 };
                                 match event {

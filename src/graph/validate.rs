@@ -99,7 +99,7 @@ impl PipelineGraph<'_> {
 
         for node in self.nodes.iter().filter(|n| !n.is_pipe) {
             for input in &node.inputs {
-                if !input.is_param && !produced.contains(&input.id) {
+                if !input.meta.is_param() && !produced.contains(&input.id) {
                     errors.push(ValidationError::MissingInput {
                         node_name: node.name,
                         dataset_name: self.dataset_name(input.id),
@@ -136,7 +136,7 @@ impl PipelineGraph<'_> {
     fn check_param_writes(&self, errors: &mut Vec<ValidationError>) {
         for node in self.nodes.iter().filter(|n| !n.is_pipe) {
             for output in &node.outputs {
-                if output.is_param {
+                if output.meta.is_param() {
                     errors.push(ValidationError::ParamWritten {
                         node_name: node.name,
                         dataset_name: self.dataset_name(output.id),
@@ -181,7 +181,7 @@ impl PipelineGraph<'_> {
 
     fn collect_descendant_datasets(
         &self,
-        node: &super::types::GraphNode,
+        node: &super::types::GraphNode<'_>,
         inputs: &mut HashSet<usize>,
         outputs: &mut HashSet<usize>,
     ) {
