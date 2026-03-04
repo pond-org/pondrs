@@ -28,9 +28,10 @@ interface Props {
   datasetActivity: Record<string, DatasetActivity>;
   onDatasetSelect: (id: number) => void;
   onNodeSelect: (name: string) => void;
+  isDark: boolean;
 }
 
-export function GraphView({ graph, nodeStatuses, datasetActivity, onDatasetSelect, onNodeSelect }: Props) {
+export function GraphView({ graph, nodeStatuses, datasetActivity, onDatasetSelect, onNodeSelect, isDark }: Props) {
   const stableOnDatasetSelect = useCallback(onDatasetSelect, [onDatasetSelect]);
   const stableOnNodeSelect = useCallback(onNodeSelect, [onNodeSelect]);
   const { nodes: layoutedNodes, edges: layoutedEdges } = useGraph(
@@ -41,15 +42,30 @@ export function GraphView({ graph, nodeStatuses, datasetActivity, onDatasetSelec
     stableOnNodeSelect,
   );
 
-  const [nodes, , onNodesChange] = useNodesState(layoutedNodes);
-  const [edges, , onEdgesChange] = useEdgesState(layoutedEdges);
+  const [, , onNodesChange] = useNodesState(layoutedNodes);
+  const [, , onEdgesChange] = useEdgesState(layoutedEdges);
 
-  // Sync layout changes from memo into RF state.
   const syncedNodes = useMemo(() => layoutedNodes, [layoutedNodes]);
   const syncedEdges = useMemo(() => layoutedEdges, [layoutedEdges]);
 
+  const minimapNodeColor = useCallback((node: { type?: string; data?: Record<string, unknown> }) => {
+    if (node.type === 'dataset') {
+      return node.data?.is_param
+        ? (isDark ? '#6366f1' : '#4f46e5')
+        : (isDark ? '#4ade80' : '#16a34a');
+    }
+    if (node.type === 'leaf') return isDark ? '#6a6a6a' : '#888888';
+    return 'transparent';
+  }, [isDark]);
+
+  const minimapStyle = {
+    background: isDark ? '#1a1a1a' : '#e8e8e8',
+    border: `1px solid ${isDark ? '#333' : '#cccccc'}`,
+    borderRadius: 6,
+  };
+
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0f0f0f' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--bg-canvas)' }}>
       <ReactFlow
         nodes={syncedNodes}
         edges={syncedEdges}
@@ -59,11 +75,16 @@ export function GraphView({ graph, nodeStatuses, datasetActivity, onDatasetSelec
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.2}
-        colorMode="dark"
+        colorMode={isDark ? 'dark' : 'light'}
       >
-        <Background color="#222" gap={20} />
+        <Background color="var(--grid-color)" gap={20} />
         <Controls />
-        <MiniMap nodeColor={() => '#333'} maskColor="rgba(0,0,0,0.6)" />
+        <MiniMap
+          nodeColor={minimapNodeColor as never}
+          nodeStrokeWidth={0}
+          maskColor={isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.5)'}
+          style={minimapStyle}
+        />
       </ReactFlow>
     </div>
   );

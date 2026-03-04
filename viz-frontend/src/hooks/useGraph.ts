@@ -94,7 +94,7 @@ export function useGraph(
           source: `ds-${dsId}`,
           target: `node-${node.id}`,
           type: 'smoothstep',
-          style: { stroke: '#444' },
+          style: { stroke: 'var(--edge-color)' },
         });
       }
       for (const dsId of node.output_dataset_ids) {
@@ -103,7 +103,7 @@ export function useGraph(
           source: `node-${node.id}`,
           target: `ds-${dsId}`,
           type: 'smoothstep',
-          style: { stroke: '#444' },
+          style: { stroke: 'var(--edge-color)' },
         });
       }
     }

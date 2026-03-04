@@ -13,22 +13,31 @@ export type LeafNodeData = {
 export type LeafNodeType = Node<LeafNodeData, 'leaf'>;
 
 const BORDER: Record<StatusKind, string> = {
-  pending: '#4a4a4a',
-  running: '#3b82f6',
-  completed: '#22c55e',
-  error: '#ef4444',
+  pending: 'var(--border-node)',
+  running: 'var(--color-running)',
+  completed: 'var(--color-done)',
+  error: 'var(--color-error)',
 };
 
 const BG: Record<StatusKind, string> = {
-  pending: '#1e1e1e',
-  running: '#1e2a3a',
-  completed: '#162716',
-  error: '#2a1616',
+  pending: 'var(--bg-node)',
+  running: 'var(--bg-node-run)',
+  completed: 'var(--bg-node-done)',
+  error: 'var(--bg-node-err)',
+};
+
+// For box-shadow we need concrete color values, so we use a separate map
+const SHADOW_COLOR: Record<StatusKind, string> = {
+  pending: 'transparent',
+  running: '#3b82f666',
+  completed: 'transparent',
+  error: 'transparent',
 };
 
 export function LeafNode({ data }: NodeProps<LeafNodeType>) {
   const border = BORDER[data.status];
   const bg = BG[data.status];
+  const shadow = SHADOW_COLOR[data.status];
 
   return (
     <div
@@ -36,25 +45,26 @@ export function LeafNode({ data }: NodeProps<LeafNodeType>) {
       style={{
         background: bg,
         border: `2px solid ${border}`,
-        borderRadius: 8,
-        padding: '6px 12px',
-        minWidth: 140,
-        maxWidth: 180,
-        color: '#e5e5e5',
-        fontSize: 13,
+        borderRadius: 10,
+        padding: '9px 18px',
+        minWidth: 160,
+        maxWidth: 220,
+        color: 'var(--text)',
+        fontSize: 20,
         cursor: 'pointer',
-        boxShadow: data.status === 'running' ? `0 0 8px ${border}66` : 'none',
+        boxShadow: `0 0 12px ${shadow}`,
         transition: 'border-color 0.3s, background 0.3s, box-shadow 0.3s',
+        fontFamily: 'Inter, system-ui, sans-serif',
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ background: '#555' }} />
+      <Handle type="target" position={Position.Left} style={{ background: 'var(--handle-color)' }} />
 
       <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {data.label}
       </div>
 
       {data.status !== 'pending' && (
-        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+        <div style={{ fontSize: 16, color: 'var(--text-muted)', marginTop: 3 }}>
           {data.status === 'running' && '⏳ running…'}
           {data.status === 'completed' && data.duration_ms != null && `✓ ${data.duration_ms.toFixed(1)}ms`}
           {data.status === 'completed' && data.duration_ms == null && '✓ done'}
@@ -62,7 +72,7 @@ export function LeafNode({ data }: NodeProps<LeafNodeType>) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} style={{ background: '#555' }} />
+      <Handle type="source" position={Position.Right} style={{ background: 'var(--handle-color)' }} />
     </div>
   );
 }

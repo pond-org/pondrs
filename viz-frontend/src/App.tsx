@@ -10,8 +10,13 @@ export function App() {
   const [graph, setGraph] = useState<VizGraph | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<PanelSelection | null>(null);
+  const [isDark, setIsDark] = useState(true);
 
   const { nodes: nodeStatuses, datasets: datasetActivity, connected, lastEvent } = useWebSocket();
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+  }, [isDark]);
 
   useEffect(() => {
     fetchGraph()
@@ -49,10 +54,10 @@ export function App() {
 
   if (error) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0f0f0f', color: '#ef4444', fontFamily: 'sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', color: 'var(--color-error)', fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Failed to load pipeline graph</div>
-          <div style={{ fontSize: 13, color: '#888' }}>{error}</div>
+          <div style={{ fontSize: 24, fontWeight: 600, marginBottom: 10 }}>Failed to load pipeline graph</div>
+          <div style={{ fontSize: 18, color: 'var(--text-muted)' }}>{error}</div>
         </div>
       </div>
     );
@@ -61,41 +66,60 @@ export function App() {
   const panelOpen = selection != null;
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#0f0f0f', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: '100vw', height: '100vh', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
-        height: 40,
-        background: '#111',
-        borderBottom: '1px solid #222',
+        height: 56,
+        background: 'var(--bg-header)',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 16px',
+        padding: '0 20px',
         zIndex: 5,
-        gap: 12,
+        gap: 14,
       }}>
-        <span style={{ color: '#e5e5e5', fontWeight: 700, fontSize: 14, letterSpacing: '0.05em' }}>pondrs viz</span>
+        <span style={{ color: 'var(--text)', fontWeight: 700, fontSize: 21, letterSpacing: '0.04em' }}>pondrs viz</span>
         {graph && (
-          <span style={{ color: '#555', fontSize: 12 }}>
+          <span style={{ color: 'var(--text-dim)', fontSize: 17 }}>
             {graph.nodes.filter(n => !n.is_pipe).length} nodes · {graph.datasets.length} datasets
           </span>
         )}
+        <div style={{ marginLeft: 'auto' }}>
+          <button
+            onClick={() => setIsDark(d => !d)}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{
+              background: 'var(--bg-tag)',
+              border: '1px solid var(--border-tag)',
+              borderRadius: 8,
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              fontSize: 18,
+              lineHeight: 1,
+              padding: '4px 10px',
+              transition: 'color 0.2s',
+            }}
+          >
+            {isDark ? '☀' : '☾'}
+          </button>
+        </div>
       </div>
 
       {/* Main canvas */}
       <div style={{
         position: 'absolute',
-        top: 40,
+        top: 56,
         left: 0,
-        right: panelOpen ? 480 : 0,
-        bottom: 32,
+        right: panelOpen ? 520 : 0,
+        bottom: 48,
         transition: 'right 0.2s ease',
       }}>
         {!graph && !error && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#555', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-dim)', fontSize: 20 }}>
             Loading…
           </div>
         )}
@@ -106,13 +130,14 @@ export function App() {
             datasetActivity={datasetActivity}
             onDatasetSelect={handleDatasetSelect}
             onNodeSelect={handleNodeSelect}
+            isDark={isDark}
           />
         )}
       </div>
 
       {/* Info panel */}
-      <div style={{ position: 'absolute', top: 40, right: 0, bottom: 32, width: 480, pointerEvents: 'none' }}>
-        <DatasetPanel selection={selection} onClose={handleClose} />
+      <div style={{ position: 'absolute', top: 56, right: 0, bottom: 48, width: 520, pointerEvents: 'none' }}>
+        <DatasetPanel selection={selection} onClose={handleClose} isDark={isDark} />
       </div>
 
       {/* Status bar */}

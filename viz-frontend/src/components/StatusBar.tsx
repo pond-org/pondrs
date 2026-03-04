@@ -12,41 +12,41 @@ export function StatusBar({ connected, lastEvent }: Props) {
       bottom: 0,
       left: 0,
       right: 0,
-      height: 32,
-      background: '#111',
-      borderTop: '1px solid #222',
+      height: 48,
+      background: 'var(--bg-header)',
+      borderTop: '1px solid var(--border)',
       display: 'flex',
       alignItems: 'center',
-      gap: 16,
-      padding: '0 14px',
-      fontSize: 12,
-      color: '#666',
+      gap: 20,
+      padding: '0 18px',
+      fontSize: 17,
+      color: 'var(--text-dim)',
       zIndex: 5,
     }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          width: 8,
-          height: 8,
+          width: 10,
+          height: 10,
           borderRadius: '50%',
-          background: connected ? '#22c55e' : '#ef4444',
+          background: connected ? 'var(--color-done)' : 'var(--color-error)',
           display: 'inline-block',
         }} />
         {connected ? 'Live' : 'Disconnected'}
       </span>
 
       {lastEvent && (
-        <span style={{ color: '#555' }}>
+        <span style={{ color: 'var(--text-dimmer)' }}>
           {lastEvent.event_type.replace(/_/g, ' ')}
           {' — '}
-          <span style={{ color: '#888' }}>{lastEvent.node_name}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{lastEvent.node_name}</span>
           {lastEvent.dataset_name && (
-            <span style={{ color: '#555' }}> / {lastEvent.dataset_name}</span>
+            <span style={{ color: 'var(--text-dimmer)' }}> / {lastEvent.dataset_name}</span>
           )}
           {lastEvent.duration_ms != null && (
-            <span style={{ color: '#4ade80' }}> {lastEvent.duration_ms.toFixed(1)}ms</span>
+            <span style={{ color: 'var(--color-done)' }}> {lastEvent.duration_ms.toFixed(1)}ms</span>
           )}
           {lastEvent.error && (
-            <span style={{ color: '#ef4444' }}> {lastEvent.error}</span>
+            <span style={{ color: 'var(--color-error)' }}> {lastEvent.error}</span>
           )}
         </span>
       )}

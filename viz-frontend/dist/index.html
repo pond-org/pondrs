@@ -1,10 +1,100 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pondrs viz</title>
-    <script type="module" crossorigin src="/assets/index-CSybZQZF.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+      body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+
+      /* ── Dark theme (default) ───────────────────────────────────── */
+      :root, html[data-theme="dark"] {
+        --bg:           #0f0f0f;
+        --bg-panel:     #141414;
+        --bg-header:    #111111;
+        --bg-tag:       #222222;
+        --bg-node:      #1e1e1e;
+        --bg-node-run:  #1e2a3a;
+        --bg-node-done: #162716;
+        --bg-node-err:  #2a1616;
+        --bg-dataset:   #1a2a1a;
+        --bg-param:     #1a1a2e;
+        --bg-err-panel: #2a1616;
+        --bg-canvas:    #0f0f0f;
+
+        --border:       #222222;
+        --border-sub:   #2a2a2a;
+        --border-tag:   #333333;
+        --border-node:  #4a4a4a;
+        --border-err:   #442222;
+
+        --text:         #e5e5e5;
+        --text-sub:     #cccccc;
+        --text-muted:   #888888;
+        --text-dim:     #555555;
+        --text-dimmer:  #444444;
+
+        --color-running: #3b82f6;
+        --color-done:    #22c55e;
+        --color-error:   #ef4444;
+        --color-dataset: #4ade80;
+        --color-param:   #6366f1;
+
+        --handle-color:    #555555;
+        --edge-color:      #444444;
+        --grid-color:      #222222;
+        --pipeline-bg:     rgba(255,255,255,0.03);
+        --pipeline-border: #444444;
+        --pipeline-text:   #555555;
+      }
+
+      /* ── Light theme ────────────────────────────────────────────── */
+      html[data-theme="light"] {
+        --bg:           #f0f2f5;
+        --bg-panel:     #ffffff;
+        --bg-header:    #f8f9fa;
+        --bg-tag:       #e8e8e8;
+        --bg-node:      #ffffff;
+        --bg-node-run:  #dbeafe;
+        --bg-node-done: #dcfce7;
+        --bg-node-err:  #fee2e2;
+        --bg-dataset:   #dcfce7;
+        --bg-param:     #ede9fe;
+        --bg-err-panel: #fee2e2;
+        --bg-canvas:    #f0f2f5;
+
+        --border:       #e0e0e0;
+        --border-sub:   #d0d0d0;
+        --border-tag:   #cccccc;
+        --border-node:  #aaaaaa;
+        --border-err:   #fca5a5;
+
+        --text:         #111111;
+        --text-sub:     #333333;
+        --text-muted:   #555555;
+        --text-dim:     #888888;
+        --text-dimmer:  #aaaaaa;
+
+        --color-running: #1a73e8;
+        --color-done:    #15803d;
+        --color-error:   #dc2626;
+        --color-dataset: #16a34a;
+        --color-param:   #4f46e5;
+
+        --handle-color:    #aaaaaa;
+        --edge-color:      #bbbbbb;
+        --grid-color:      #d0d0d0;
+        --pipeline-bg:     rgba(0,0,0,0.02);
+        --pipeline-border: #aaaaaa;
+        --pipeline-text:   #999999;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BWm3t67L.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-BZV40eAE.css">
   </head>
   <body>

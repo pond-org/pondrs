@@ -9,25 +9,26 @@ export type PipelineNodeType = Node<PipelineNodeData, 'pipeline'>;
 export function PipelineNode({ data }: NodeProps<PipelineNodeType>) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px dashed #444',
-      borderRadius: 10,
-      padding: '24px 12px 8px',
+      background: 'var(--pipeline-bg)',
+      border: '1px dashed var(--pipeline-border)',
+      borderRadius: 12,
+      padding: '30px 16px 10px',
       minWidth: 200,
       minHeight: 80,
-      color: '#666',
-      fontSize: 11,
+      color: 'var(--pipeline-text)',
+      fontSize: 16,
       pointerEvents: 'none',
+      fontFamily: 'Inter, system-ui, sans-serif',
     }}>
       <div style={{
         position: 'absolute',
-        top: 6,
-        left: 10,
+        top: 8,
+        left: 12,
         fontWeight: 600,
-        letterSpacing: '0.05em',
+        letterSpacing: '0.06em',
         textTransform: 'uppercase',
-        fontSize: 10,
-        color: '#555',
+        fontSize: 15,
+        color: 'var(--pipeline-text)',
       }}>
         {data.label}
       </div>

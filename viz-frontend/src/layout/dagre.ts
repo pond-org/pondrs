@@ -34,6 +34,8 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
     return {
       ...node,
       position: { x: pos.x - w / 2, y: pos.y - h / 2 },
+      width: w,
+      height: h,
     };
   });
 }
