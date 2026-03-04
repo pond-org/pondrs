@@ -10,6 +10,7 @@ use crate::graph::PipelineGraph;
 /// Owned, serializable representation of the full pipeline graph.
 #[derive(Serialize, Clone)]
 pub struct VizGraph {
+    pub name: String,
     pub nodes: Vec<VizNode>,
     pub edges: Vec<VizEdge>,
     pub datasets: Vec<VizDataset>,
@@ -103,7 +104,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
         })
         .collect();
 
-    VizGraph { nodes, edges, datasets }
+    VizGraph { name: String::new(), nodes, edges, datasets }
 }
 
 /// Collect `DatasetMeta` references for all datasets in the graph, erasing

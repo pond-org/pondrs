@@ -115,12 +115,21 @@ export function App() {
         </button>
 
         <span style={{ color: 'var(--text)', fontWeight: 700, fontSize: 21, letterSpacing: '0.04em' }}>🤔 pondrs viz</span>
+
+        <div style={{ flex: 1 }} />
+
         {graph && (
-          <span style={{ color: 'var(--text-dim)', fontSize: 17 }}>
-            {graph.nodes.filter(n => !n.is_pipe).length} nodes · {graph.datasets.length} datasets
+          <span style={{ color: 'var(--text-sub)', fontWeight: 600, fontSize: 19 }}>
+            {graph.name || 'pipeline'}
+            <span style={{ color: 'var(--text-dim)', fontWeight: 400, fontSize: 15, marginLeft: 10 }}>
+              {graph.nodes.filter(n => !n.is_pipe).length} nodes · {graph.datasets.length} datasets
+            </span>
           </span>
         )}
-        <div style={{ marginLeft: 'auto' }}>
+
+        <div style={{ flex: 1 }} />
+
+        <div>
           <button
             onClick={() => setIsDark(d => !d)}
             title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}

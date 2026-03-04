@@ -98,7 +98,18 @@ pub trait PondApp {
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
     {
-        let args = CliArgs::parse_from(iter);
+        let raw_args: Vec<T> = iter.into_iter().collect();
+        let program_name: String = raw_args
+            .first()
+            .map(|a| {
+                let os: std::ffi::OsString = a.clone().into();
+                std::path::Path::new(&os)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| os.to_string_lossy().into_owned())
+            })
+            .unwrap_or_default();
+        let args = CliArgs::parse_from(raw_args);
 
         let catalog_path = args.catalog_path.as_deref().unwrap_or(Self::catalog_path());
         let params_path = args.params_path.as_deref().unwrap_or(Self::params_path());
@@ -180,7 +191,7 @@ pub trait PondApp {
 
                 #[cfg(not(feature = "viz"))]
                 {
-                    let _ = (port, output, graph);
+                    let _ = (port, output, graph, &program_name);
                     eprintln!("Error: viz subcommand requires the 'viz' feature (cargo build --features viz).");
                     process::exit(1);
                 }
@@ -192,7 +203,8 @@ pub trait PondApp {
                     use std::sync::Mutex;
                     use tokio::sync::broadcast;
 
-                    let viz_graph = viz_graph_from(&graph);
+                    let mut viz_graph = viz_graph_from(&graph);
+                    viz_graph.name = program_name.clone();
                     let dataset_meta = collect_dataset_meta(&graph);
 
                     if let Some(ref path) = output {

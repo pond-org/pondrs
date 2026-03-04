@@ -26,6 +26,7 @@ export interface VizEdge {
 }
 
 export interface VizGraph {
+  name: string;
   nodes: VizNode[];
   edges: VizEdge[];
   datasets: VizDataset[];
