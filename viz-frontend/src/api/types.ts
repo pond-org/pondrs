@@ -3,6 +3,7 @@
 export interface VizDataset {
   id: number;
   name: string;
+  type_string: string;
   is_param: boolean;
   has_html: boolean;
 }
@@ -10,6 +11,7 @@ export interface VizDataset {
 export interface VizNode {
   id: number;
   name: string;
+  type_string: string;
   is_pipe: boolean;
   parent_pipe: number | null;
   pipe_children: number[];

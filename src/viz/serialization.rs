@@ -20,6 +20,7 @@ pub struct VizNode {
     /// Index into `VizGraph::nodes`.
     pub id: usize,
     pub name: String,
+    pub type_string: String,
     pub is_pipe: bool,
     pub parent_pipe: Option<usize>,
     pub pipe_children: Vec<usize>,
@@ -34,6 +35,7 @@ pub struct VizDataset {
     /// Dataset ptr ID (from `ptr_to_id`).
     pub id: usize,
     pub name: String,
+    pub type_string: String,
     pub is_param: bool,
     pub has_html: bool,
 }
@@ -67,6 +69,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
             datasets.push(VizDataset {
                 id: ds.id,
                 name,
+                type_string: ds.meta.get_type_string().to_string(),
                 is_param: ds.meta.is_param(),
                 has_html: ds.meta.html().is_some(),
             });
@@ -81,6 +84,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
         .map(|(i, n)| VizNode {
             id: i,
             name: n.name.to_string(),
+            type_string: n.item.get_type_string().to_string(),
             is_pipe: n.is_pipe,
             parent_pipe: n.parent_pipe,
             pipe_children: n.pipe_children.clone(),

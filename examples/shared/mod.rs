@@ -33,6 +33,33 @@ pub struct SalesParams {
 }
 
 // ---------------------------------------------------------------------------
+// Node functions
+// ---------------------------------------------------------------------------
+
+fn build_chart(df: DataFrame, total: i64) -> (Plot,) {
+    let months: Vec<String> = df
+        .column("month").unwrap()
+        .str().unwrap()
+        .into_no_null_iter()
+        .map(|s| s.to_string())
+        .collect();
+    let sales: Vec<i64> = df
+        .column("sales").unwrap()
+        .i64().unwrap()
+        .into_no_null_iter()
+        .collect();
+
+    let mut plot = Plot::new();
+    plot.add_trace(Bar::new(months, sales).name("Monthly Sales"));
+    plot.set_layout(
+        Layout::new()
+            .title(format!("Months with sales ≥ 1000  (total: {total})"))
+            .y_axis(plotly::layout::Axis::new().title("Sales")),
+    );
+    (plot,)
+}
+
+// ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
@@ -70,28 +97,7 @@ impl PondApp for SalesApp {
             // Node 3: build a bar chart of the filtered monthly sales
             Node {
                 name: "build_chart",
-                func: |df: DataFrame, total: i64| {
-                    let months: Vec<String> = df
-                        .column("month").unwrap()
-                        .str().unwrap()
-                        .into_no_null_iter()
-                        .map(|s| s.to_string())
-                        .collect();
-                    let sales: Vec<i64> = df
-                        .column("sales").unwrap()
-                        .i64().unwrap()
-                        .into_no_null_iter()
-                        .collect();
-
-                    let mut plot = Plot::new();
-                    plot.add_trace(Bar::new(months, sales).name("Monthly Sales"));
-                    plot.set_layout(
-                        Layout::new()
-                            .title(format!("Months with sales ≥ 1000  (total: {total})"))
-                            .y_axis(plotly::layout::Axis::new().title("Sales")),
-                    );
-                    (plot,)
-                },
+                func: build_chart,
                 input: (&cat.filtered_sales, &cat.total_sales),
                 output: (&cat.chart,),
             },

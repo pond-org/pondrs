@@ -29,6 +29,10 @@ where
         true
     }
 
+    fn get_type_string(&self) -> &'static str {
+        core::any::type_name::<F>()
+    }
+
     fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
 
     fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {

@@ -21,6 +21,10 @@ impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutp
         false
     }
 
+    fn get_type_string(&self) -> &'static str {
+        "pipeline"
+    }
+
     fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
         self.steps.for_each_info(f);
     }

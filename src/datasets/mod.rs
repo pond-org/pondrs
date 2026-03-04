@@ -55,6 +55,7 @@ pub trait Dataset {
 /// Enables collecting `&dyn DatasetMeta` references without knowing concrete types.
 pub trait DatasetMeta: Send + Sync {
     fn is_param(&self) -> bool;
+    fn get_type_string(&self) -> &'static str;
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String>;
@@ -62,6 +63,7 @@ pub trait DatasetMeta: Send + Sync {
 
 impl<T: Dataset + Send + Sync> DatasetMeta for T {
     fn is_param(&self) -> bool { <T as Dataset>::is_param(self) }
+    fn get_type_string(&self) -> &'static str { core::any::type_name::<T>() }
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> { <T as Dataset>::html(self) }

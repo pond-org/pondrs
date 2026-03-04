@@ -3,8 +3,8 @@ import { fetchDatasetHtml } from '../api/client';
 import type { NodeStatus, DatasetActivity } from '../api/types';
 
 export type PanelSelection =
-  | { kind: 'dataset'; id: number; name: string; is_param: boolean; activity: DatasetActivity | null }
-  | { kind: 'node'; name: string; status: NodeStatus | null };
+  | { kind: 'dataset'; id: number; name: string; type_string: string; is_param: boolean; activity: DatasetActivity | null }
+  | { kind: 'node'; name: string; type_string: string; status: NodeStatus | null };
 
 interface Props {
   selection: PanelSelection | null;
@@ -242,6 +242,24 @@ export function DatasetPanel({ selection, onClose, isDark }: Props) {
           ×
         </button>
       </div>
+
+      {/* Type string row */}
+      {selection && (
+        <div style={{
+          padding: '6px 18px',
+          borderBottom: '1px solid var(--border-sub)',
+          flexShrink: 0,
+        }}>
+          <span style={{
+            fontSize: 12,
+            color: 'var(--text-dim)',
+            fontFamily: 'Fira Mono, Consolas, monospace',
+            wordBreak: 'break-all',
+          }}>
+            {selection.type_string}
+          </span>
+        </div>
+      )}
 
       {/* Node body */}
       {selection?.kind === 'node' && (

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { MarkerType } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { VizGraph, NodeStatus, DatasetActivity } from '../api/types';
 import { layoutNodes } from '../layout/dagre';
@@ -12,17 +13,17 @@ export function useGraph(
   datasetActivity: Record<string, DatasetActivity>,
   onDatasetSelect: (id: number) => void,
   onNodeSelect: (name: string) => void,
+  isDark: boolean,
 ): { nodes: Node[]; edges: Edge[] } {
   return useMemo(() => {
     if (!graph) return { nodes: [], edges: [] };
 
+    const markerColor = isDark ? '#777' : '#999';
     const rfNodes: Node[] = [];
     const rfEdges: Edge[] = [];
 
-    // Build a set of dataset IDs that appear in edges (i.e. produced by a node).
     const producedIds = new Set(graph.edges.map(e => e.dataset_id));
 
-    // Add all unique datasets as their own React Flow nodes.
     const addedDatasets = new Set<number>();
     for (const ds of graph.datasets) {
       if (addedDatasets.has(ds.id)) continue;
@@ -42,12 +43,10 @@ export function useGraph(
         type: 'dataset',
         position: { x: 0, y: 0 },
         data,
-        // Source datasets (never produced) are styled slightly differently
         style: producedIds.has(ds.id) ? {} : { opacity: 0.9 },
       });
     }
 
-    // Add pipeline and leaf nodes.
     for (const node of graph.nodes) {
       const parentId = node.parent_pipe != null ? `node-${node.parent_pipe}` : undefined;
 
@@ -83,9 +82,6 @@ export function useGraph(
       }
     }
 
-    // Edges: build from each node's declared inputs/outputs so that source
-    // datasets (never produced) and sink datasets (never consumed) are also
-    // connected — not just the "pass-through" datasets covered by graph.edges.
     for (const node of graph.nodes) {
       if (node.is_pipe) continue;
       for (const dsId of node.input_dataset_ids) {
@@ -95,6 +91,7 @@ export function useGraph(
           target: `node-${node.id}`,
           type: 'smoothstep',
           style: { stroke: 'var(--edge-color)' },
+          markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 14, height: 14 },
         });
       }
       for (const dsId of node.output_dataset_ids) {
@@ -104,11 +101,12 @@ export function useGraph(
           target: `ds-${dsId}`,
           type: 'smoothstep',
           style: { stroke: 'var(--edge-color)' },
+          markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 14, height: 14 },
         });
       }
     }
 
     const laid = layoutNodes(rfNodes, rfEdges);
     return { nodes: laid, edges: rfEdges };
-  }, [graph, nodeStatuses, datasetActivity, onDatasetSelect, onNodeSelect]);
+  }, [graph, nodeStatuses, datasetActivity, onDatasetSelect, onNodeSelect, isDark]);
 }

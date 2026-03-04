@@ -62,6 +62,7 @@ pub struct DatasetInfo<'a> {
 pub trait PipelineInfo: Send + Sync {
     fn get_name(&self) -> &'static str;
     fn is_leaf(&self) -> bool;
+    fn get_type_string(&self) -> &'static str;
     fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
     fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
     fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
