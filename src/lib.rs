@@ -9,6 +9,8 @@ extern crate std;
 pub mod app;
 #[cfg(feature = "std")]
 pub mod catalog_indexer;
+#[cfg(feature = "viz")]
+pub mod viz;
 pub mod core;
 pub mod datasets;
 pub mod error;

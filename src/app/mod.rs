@@ -166,9 +166,59 @@ pub trait PondApp {
                     }
                 }
             }
-            Command::Viz { .. } => {
-                eprintln!("Error: viz subcommand is not yet implemented.");
-                process::exit(1);
+            Command::Viz { port, output } => {
+                let catalog: Self::Catalog = match load_config::<Self::Catalog, Self::Error>(catalog_path, &[]) {
+                    Ok(c) => c,
+                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
+                };
+                let params: Self::Params = match load_config::<Self::Params, Self::Error>(params_path, &[]) {
+                    Ok(p) => p,
+                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
+                };
+                let pipeline = Self::pipeline(&catalog, &params);
+                let graph = build_pipeline_graph(&pipeline, &catalog, &params);
+
+                #[cfg(not(feature = "viz"))]
+                {
+                    let _ = (port, output, graph);
+                    eprintln!("Error: viz subcommand requires the 'viz' feature (cargo build --features viz).");
+                    process::exit(1);
+                }
+
+                #[cfg(feature = "viz")]
+                {
+                    use crate::viz::serialization::{collect_dataset_meta, viz_graph_from};
+                    use crate::viz::server::VizState;
+                    use std::sync::Mutex;
+                    use tokio::sync::broadcast;
+
+                    let viz_graph = viz_graph_from(&graph);
+                    let dataset_meta = collect_dataset_meta(&graph);
+
+                    if let Some(ref path) = output {
+                        let json = match serde_json::to_string_pretty(&viz_graph) {
+                            Ok(j) => j,
+                            Err(e) => { eprintln!("Error serializing graph: {e}"); process::exit(1); }
+                        };
+                        if let Err(e) = std::fs::write(path, &json) {
+                            eprintln!("Error writing to {path}: {e}");
+                            process::exit(1);
+                        }
+                        println!("Graph written to {path}");
+                        Ok(())
+                    } else {
+                        let (tx, _rx) = broadcast::channel(64);
+                        let state = VizState {
+                            graph: viz_graph,
+                            dataset_meta,
+                            node_statuses: Mutex::new(std::collections::HashMap::new()),
+                            dataset_activity: Mutex::new(std::collections::HashMap::new()),
+                            tx,
+                        };
+                        crate::viz::server::start_server(state, port);
+                        Ok(())
+                    }
+                }
             }
         };
 

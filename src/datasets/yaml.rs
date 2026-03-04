@@ -9,6 +9,7 @@ use super::{Dataset, FileDataset};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct YamlDataset {
+    #[serde(skip_serializing)]
     path: String,
 }
 

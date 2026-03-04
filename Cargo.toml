@@ -9,7 +9,8 @@ std = ["serde/std", "dep:serde_yaml", "dep:log", "dep:clap", "dep:env_logger"]
 polars = ["std", "dep:polars"]
 yaml = ["std", "dep:yaml-rust2"]
 plotly = ["std", "dep:plotly", "dep:serde_json"]
-all = ["std", "polars", "yaml", "plotly"]
+viz = ["std", "dep:axum", "dep:tokio", "dep:rust-embed", "dep:serde_json", "dep:ureq"]
+all = ["std", "polars", "yaml", "plotly", "viz"]
 
 [dependencies]
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
@@ -22,6 +23,10 @@ serde_yaml = { version = "0.9.34", optional = true }
 log = { version = "0.4", optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 env_logger = { version = "0.11.9", optional = true }
+axum = { version = "0.8", features = ["ws"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"], optional = true }
+rust-embed = { version = "8", optional = true }
+ureq = { version = "3", features = ["json"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

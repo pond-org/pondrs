@@ -24,7 +24,7 @@ pub enum PondError {
     #[error("Serde YAML error: {0}")]
     SerdeYaml(#[from] serde_yaml::Error),
 
-    #[cfg(feature = "plotly")]
+    #[cfg(any(feature = "plotly", feature = "viz"))]
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
