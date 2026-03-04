@@ -1,14 +1,14 @@
 import Dagre from '@dagrejs/dagre';
 import type { Node, Edge } from '@xyflow/react';
 
-const NODE_W = 180;
-const NODE_H = 50;
-const DS_W = 140;
-const DS_H = 36;
+const NODE_W = 200;
+const NODE_H = 70;
+const DS_W = 160;
+const DS_H = 56;
 
 export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   const g = new Dagre.graphlib.Graph({ compound: true });
-  g.setGraph({ rankdir: 'LR', nodesep: 40, ranksep: 80, marginx: 24, marginy: 24 });
+  g.setGraph({ rankdir: 'LR', nodesep: 50, ranksep: 100, marginx: 24, marginy: 24 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const node of nodes) {

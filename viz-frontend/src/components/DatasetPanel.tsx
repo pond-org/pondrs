@@ -10,6 +10,7 @@ interface Props {
   selection: PanelSelection | null;
   onClose: () => void;
   isDark: boolean;
+  reconnectCount: number;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -164,7 +165,7 @@ function injectTheme(html: string, isDark: boolean): string {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">${styleTag}</head><body>${html}</body></html>`;
 }
 
-export function DatasetPanel({ selection, onClose, isDark }: Props) {
+export function DatasetPanel({ selection, onClose, isDark, reconnectCount }: Props) {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -176,7 +177,7 @@ export function DatasetPanel({ selection, onClose, isDark }: Props) {
     fetchDatasetHtml(datasetId)
       .then(h => { setHtml(h); setLoading(false); })
       .catch(() => { setHtml(''); setLoading(false); });
-  }, [datasetId]);
+  }, [datasetId, reconnectCount]);
 
   const themedHtml = html ? injectTheme(html, isDark) : '';
 
@@ -281,12 +282,30 @@ export function DatasetPanel({ selection, onClose, isDark }: Props) {
               )}
             </div>
           )}
-          <div style={{ flex: 1, overflow: 'hidden' }}>
+          {/* Preview section */}
+          <div style={{
+            padding: '10px 18px 0',
+            flexShrink: 0,
+          }}>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: 'var(--text-dim)',
+            }}>
+              Preview
+            </span>
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', margin: '8px 18px 18px', borderRadius: 8, border: '1px solid var(--border-sub)', background: isDark ? '#141414' : '#ffffff' }}>
             {loading && (
-              <div style={{ color: 'var(--text-dim)', fontSize: 20, padding: 20 }}>Loading…</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                <div className="spinner" />
+                <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>Loading preview...</span>
+              </div>
             )}
             {!loading && !html && (
-              <div style={{ color: 'var(--text-dim)', fontSize: 20, padding: 20 }}>No preview available.</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 14, padding: 20, textAlign: 'center' }}>No preview available.</div>
             )}
             {!loading && html && (
               <iframe

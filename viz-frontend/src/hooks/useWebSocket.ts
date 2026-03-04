@@ -6,6 +6,8 @@ export interface LiveStatus {
   datasets: Record<string, DatasetActivity>;
   connected: boolean;
   lastEvent: VizEvent | null;
+  runCount: number;
+  reconnectCount: number;
 }
 
 export function useWebSocket(): LiveStatus {
@@ -14,6 +16,8 @@ export function useWebSocket(): LiveStatus {
     datasets: {},
     connected: false,
     lastEvent: null,
+    runCount: 0,
+    reconnectCount: 0,
   });
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -24,7 +28,7 @@ export function useWebSocket(): LiveStatus {
     wsRef.current = ws;
 
     ws.onopen = () =>
-      setStatus(prev => ({ ...prev, connected: true }));
+      setStatus(prev => ({ ...prev, connected: true, reconnectCount: prev.reconnectCount + 1 }));
 
     ws.onclose = () => {
       setStatus(prev => ({ ...prev, connected: false }));
@@ -40,10 +44,22 @@ export function useWebSocket(): LiveStatus {
           const nodes = { ...prev.nodes };
           const datasets = { ...prev.datasets };
 
+          let runCount = prev.runCount;
+
           switch (event.event_type) {
-            case 'node_start':
+            case 'node_start': {
+              // Detect new run: either first-ever node_start (empty tracking)
+              // or a node that already ran before (re-run of the pipeline)
+              const isFirst = Object.keys(nodes).length === 0;
+              const isRerun = event.node_name in nodes;
+              if (isFirst || isRerun) {
+                for (const key of Object.keys(nodes)) delete nodes[key];
+                for (const key of Object.keys(datasets)) delete datasets[key];
+                runCount++;
+              }
               nodes[event.node_name] = { status: 'running', duration_ms: null, error: null };
               break;
+            }
             case 'node_end':
               nodes[event.node_name] = { status: 'completed', duration_ms: event.duration_ms, error: null };
               break;
@@ -64,7 +80,7 @@ export function useWebSocket(): LiveStatus {
               break;
           }
 
-          return { nodes, datasets, connected: true, lastEvent: event };
+          return { nodes, datasets, connected: true, lastEvent: event, runCount, reconnectCount: prev.reconnectCount };
         });
       } catch {
         // ignore malformed messages

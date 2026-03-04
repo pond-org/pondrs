@@ -90,8 +90,8 @@ export function useGraph(
           source: `ds-${dsId}`,
           target: `node-${node.id}`,
           type: 'smoothstep',
-          style: { stroke: 'var(--edge-color)' },
-          markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 14, height: 14 },
+          style: { stroke: 'var(--edge-color)', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 10, height: 10 },
         });
       }
       for (const dsId of node.output_dataset_ids) {
@@ -100,8 +100,8 @@ export function useGraph(
           source: `node-${node.id}`,
           target: `ds-${dsId}`,
           type: 'smoothstep',
-          style: { stroke: 'var(--edge-color)' },
-          markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 14, height: 14 },
+          style: { stroke: 'var(--edge-color)', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 10, height: 10 },
         });
       }
     }

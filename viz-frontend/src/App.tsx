@@ -17,17 +17,18 @@ export function App() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [centerRequest, setCenterRequest] = useState<CenterRequest | null>(null);
 
-  const { nodes: nodeStatuses, datasets: datasetActivity, connected, lastEvent } = useWebSocket();
+  const { nodes: nodeStatuses, datasets: datasetActivity, connected, lastEvent, runCount, reconnectCount } = useWebSocket();
 
   useEffect(() => {
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
   }, [isDark]);
 
+  // Fetch (or re-fetch) graph on initial load and on every reconnection
   useEffect(() => {
     fetchGraph()
       .then(setGraph)
       .catch(e => setError(String(e)));
-  }, []);
+  }, [reconnectCount]);
 
   const handleDatasetSelect = useCallback((id: number) => {
     setSelection(prev => {
@@ -113,7 +114,7 @@ export function App() {
           ☰
         </button>
 
-        <span style={{ color: 'var(--text)', fontWeight: 700, fontSize: 21, letterSpacing: '0.04em' }}>pondrs viz</span>
+        <span style={{ color: 'var(--text)', fontWeight: 700, fontSize: 21, letterSpacing: '0.04em' }}>🤔 pondrs viz</span>
         {graph && (
           <span style={{ color: 'var(--text-dim)', fontSize: 17 }}>
             {graph.nodes.filter(n => !n.is_pipe).length} nodes · {graph.datasets.length} datasets
@@ -187,10 +188,10 @@ export function App() {
 
       {/* Right info panel */}
       <div style={{ position: 'absolute', top: 56, right: 0, bottom: 48, width: 520, pointerEvents: 'none' }}>
-        <DatasetPanel selection={selection} onClose={handleClose} isDark={isDark} />
+        <DatasetPanel selection={selection} onClose={handleClose} isDark={isDark} reconnectCount={reconnectCount} />
       </div>
 
-      <StatusBar connected={connected} lastEvent={lastEvent} />
+      <StatusBar connected={connected} lastEvent={lastEvent} graph={graph} nodeStatuses={nodeStatuses} runCount={runCount} />
     </div>
   );
 }

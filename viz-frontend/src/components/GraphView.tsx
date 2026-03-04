@@ -2,6 +2,7 @@ import { useCallback, useMemo, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
@@ -106,7 +107,7 @@ export function GraphView({
         colorMode={isDark ? 'dark' : 'light'}
         onPaneClick={onPaneClick}
       >
-        <Background color="var(--grid-color)" gap={20} />
+        <Background variant={BackgroundVariant.Dots} color="var(--grid-color)" gap={24} size={3} />
         <Controls />
         <MiniMap
           nodeColor={minimapNodeColor as never}
