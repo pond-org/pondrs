@@ -36,7 +36,10 @@ pub use plotly_dataset::PlotlyDataset;
 /// Each dataset declares its own `Error` type. Infallible datasets (like `Param`)
 /// use `core::convert::Infallible`. The framework converts dataset errors to the
 /// pipeline's error type via `PondError: From<Self::Error>`.
-pub trait Dataset {
+///
+/// `Serialize` is a supertrait so that `DatasetMeta::yaml()` can automatically
+/// serialize any dataset's configuration to YAML.
+pub trait Dataset: serde::Serialize {
     type LoadItem;
     type SaveItem;
     type Error;
@@ -59,6 +62,9 @@ pub trait DatasetMeta: Send + Sync {
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String>;
+
+    #[cfg(feature = "std")]
+    fn yaml(&self) -> Option<String>;
 }
 
 impl<T: Dataset + Send + Sync> DatasetMeta for T {
@@ -67,6 +73,9 @@ impl<T: Dataset + Send + Sync> DatasetMeta for T {
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> { <T as Dataset>::html(self) }
+
+    #[cfg(feature = "std")]
+    fn yaml(&self) -> Option<String> { serde_yaml::to_string(self).ok() }
 }
 
 #[cfg(feature = "std")]
@@ -116,10 +125,10 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
-    fn param_html_is_none() {
+    fn param_html_is_some() {
         let p = Param(1i32);
         let meta: &dyn DatasetMeta = &p;
-        assert!(meta.html().is_none());
+        assert!(meta.html().is_some());
     }
 
     #[cfg(feature = "std")]

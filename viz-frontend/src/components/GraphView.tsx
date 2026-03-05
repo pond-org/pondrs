@@ -32,6 +32,8 @@ interface Props {
   datasetActivity: Record<string, DatasetActivity>;
   onDatasetSelect: (id: number) => void;
   onNodeSelect: (name: string) => void;
+  onTogglePipeline: (id: number) => void;
+  expandedPipelines: Set<number>;
   isDark: boolean;
   centerRequest: CenterRequest | null;
   onPaneClick: () => void;
@@ -59,15 +61,17 @@ function CenterController({ centerRequest }: { centerRequest: CenterRequest | nu
 
 export function GraphView({
   graph, nodeStatuses, datasetActivity,
-  onDatasetSelect, onNodeSelect,
+  onDatasetSelect, onNodeSelect, onTogglePipeline, expandedPipelines,
   isDark, centerRequest, onPaneClick,
 }: Props) {
   const stableOnDatasetSelect = useCallback(onDatasetSelect, [onDatasetSelect]);
   const stableOnNodeSelect = useCallback(onNodeSelect, [onNodeSelect]);
+  const stableOnTogglePipeline = useCallback(onTogglePipeline, [onTogglePipeline]);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useGraph(
     graph, nodeStatuses, datasetActivity,
     stableOnDatasetSelect, stableOnNodeSelect,
+    stableOnTogglePipeline, expandedPipelines,
     isDark,
   );
 
@@ -84,6 +88,7 @@ export function GraphView({
         : (isDark ? '#4ade80' : '#16a34a');
     }
     if (node.type === 'leaf') return isDark ? '#6a6a6a' : '#888888';
+    if (node.type === 'pipeline') return isDark ? '#8b5cf6' : '#7c3aed';
     return 'transparent';
   }, [isDark]);
 

@@ -4,6 +4,11 @@
 //! generated code passes `&self.field` to `serialize_field`, and pipeline nodes
 //! store references to the same fields, the pointer addresses match — giving us
 //! a `ptr_id -> name` mapping.
+//!
+//! The indexer stops recursing at Dataset/Param boundaries to avoid
+//! first-field address collisions (`ptr_to_id(&s) == ptr_to_id(&s.first_field)`).
+//! Detection uses the serde struct name: types ending with `"Dataset"` or
+//! named `"Param"` are treated as leaves.
 
 use std::prelude::v1::*;
 use std::collections::HashMap;
@@ -90,6 +95,17 @@ impl ser::Error for IndexerError {
     }
 }
 
+/// Returns true if the serde struct name indicates a Dataset or Param leaf type.
+fn is_leaf_type(name: &str) -> bool {
+    name.ends_with("Dataset") || name == "Param"
+}
+
+/// Struct serializer that either recurses into fields or acts as a no-op leaf.
+enum StructSerializer<'a> {
+    Recurse(&'a mut CatalogIndexer),
+    Leaf,
+}
+
 // The Serializer implementation. We only care about serialize_struct;
 // everything else is a no-op.
 impl<'a> ser::Serializer for &'a mut CatalogIndexer {
@@ -101,11 +117,15 @@ impl<'a> ser::Serializer for &'a mut CatalogIndexer {
     type SerializeTupleStruct = Self;
     type SerializeTupleVariant = Self;
     type SerializeMap = Self;
-    type SerializeStruct = Self;
+    type SerializeStruct = StructSerializer<'a>;
     type SerializeStructVariant = Self;
 
-    fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct, Self::Error> {
-        Ok(self)
+    fn serialize_struct(self, name: &'static str, _len: usize) -> Result<Self::SerializeStruct, Self::Error> {
+        if is_leaf_type(name) {
+            Ok(StructSerializer::Leaf)
+        } else {
+            Ok(StructSerializer::Recurse(self))
+        }
     }
 
     // All other serializer methods are no-ops.
@@ -128,7 +148,10 @@ impl<'a> ser::Serializer for &'a mut CatalogIndexer {
     fn serialize_unit(self) -> Result<(), Self::Error> { Ok(()) }
     fn serialize_unit_struct(self, _name: &'static str) -> Result<(), Self::Error> { Ok(()) }
     fn serialize_unit_variant(self, _name: &'static str, _idx: u32, _variant: &'static str) -> Result<(), Self::Error> { Ok(()) }
-    fn serialize_newtype_struct<T: ?Sized + Serialize>(self, _name: &'static str, value: &T) -> Result<(), Self::Error> {
+    fn serialize_newtype_struct<T: ?Sized + Serialize>(self, name: &'static str, value: &T) -> Result<(), Self::Error> {
+        if is_leaf_type(name) {
+            return Ok(());
+        }
         value.serialize(self)
     }
     fn serialize_newtype_variant<T: ?Sized + Serialize>(self, _name: &'static str, _idx: u32, _variant: &'static str, _value: &T) -> Result<(), Self::Error> { Ok(()) }
@@ -140,22 +163,27 @@ impl<'a> ser::Serializer for &'a mut CatalogIndexer {
     fn serialize_struct_variant(self, _name: &'static str, _idx: u32, _variant: &'static str, _len: usize) -> Result<Self::SerializeStructVariant, Self::Error> { Ok(self) }
 }
 
-// SerializeStruct — the important one. Captures field pointers.
-impl<'a> ser::SerializeStruct for &'a mut CatalogIndexer {
+// SerializeStruct — captures field pointers, with leaf detection.
+impl<'a> ser::SerializeStruct for StructSerializer<'a> {
     type Ok = ();
     type Error = IndexerError;
 
     fn serialize_field<T: ?Sized + Serialize>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error> {
+        let indexer = match self {
+            StructSerializer::Leaf => return Ok(()),
+            StructSerializer::Recurse(indexer) => indexer,
+        };
+
         let ptr_id = ptr_to_id(value);
-        let name = self.full_name(key);
+        let name = indexer.full_name(key);
 
         // Record this field's pointer ID and name.
-        self.names.insert(ptr_id, name.clone());
+        indexer.names.insert(ptr_id, name.clone());
 
         // Recurse into nested structs: temporarily set prefix, serialize, restore.
-        let prev_prefix = std::mem::replace(&mut self.prefix, name);
-        value.serialize(&mut **self).ok();
-        self.prefix = prev_prefix;
+        let prev_prefix = std::mem::replace(&mut indexer.prefix, name);
+        value.serialize(&mut **indexer).ok();
+        indexer.prefix = prev_prefix;
 
         Ok(())
     }
@@ -212,7 +240,7 @@ impl<'a> ser::SerializeStructVariant for &'a mut CatalogIndexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datasets::MemoryDataset;
+    use crate::datasets::{MemoryDataset, Param};
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -255,5 +283,97 @@ mod tests {
         assert_eq!(index.get(ptr_to_id(&catalog.inner.alpha)), Some("inner.alpha"));
         assert_eq!(index.get(ptr_to_id(&catalog.inner.beta)), Some("inner.beta"));
         assert_eq!(index.get(ptr_to_id(&catalog.gamma)), Some("gamma"));
+    }
+
+    // A dataset whose first field (path) shares the struct's address.
+    // The indexer must stop at the "Dataset" boundary and NOT record "ds.path".
+    #[derive(Serialize)]
+    struct PathDataset {
+        path: String,
+    }
+
+    #[derive(Serialize)]
+    struct PathCatalog {
+        ds: PathDataset,
+        other: MemoryDataset<i32>,
+    }
+
+    #[test]
+    fn test_dataset_first_field_collision() {
+        let catalog = PathCatalog {
+            ds: PathDataset { path: "data.csv".into() },
+            other: MemoryDataset::new(),
+        };
+
+        // Verify the collision exists: struct and first field share an address.
+        assert_eq!(ptr_to_id(&catalog.ds), ptr_to_id(&catalog.ds.path));
+
+        let index = index_catalog(&catalog);
+
+        // The indexer must choose "ds" (the dataset), not "ds.path" (internal field).
+        assert_eq!(index.get(ptr_to_id(&catalog.ds)), Some("ds"));
+        assert_eq!(index.get(ptr_to_id(&catalog.other)), Some("other"));
+    }
+
+    // Container struct whose first field is a dataset — both share the same address.
+    // The indexer must recurse into the container and record the deeper dataset name.
+    #[derive(Serialize)]
+    struct InnerCatalog {
+        first: MemoryDataset<i32>,
+        second: MemoryDataset<i32>,
+    }
+
+    #[derive(Serialize)]
+    struct OuterCatalog {
+        inner: InnerCatalog,
+    }
+
+    #[test]
+    fn test_container_first_field_collision() {
+        let catalog = OuterCatalog {
+            inner: InnerCatalog {
+                first: MemoryDataset::new(),
+                second: MemoryDataset::new(),
+            },
+        };
+
+        // Verify the collision exists: container and its first dataset share an address.
+        assert_eq!(ptr_to_id(&catalog.inner), ptr_to_id(&catalog.inner.first));
+
+        let index = index_catalog(&catalog);
+
+        // The deeper name "inner.first" must win over the container name "inner".
+        assert_eq!(index.get(ptr_to_id(&catalog.inner.first)), Some("inner.first"));
+        assert_eq!(index.get(ptr_to_id(&catalog.inner.second)), Some("inner.second"));
+    }
+
+    // Param<T> is a newtype — &param == &param.0.
+    // When T is a struct, the indexer must NOT recurse into T's fields.
+    #[derive(Serialize, Clone)]
+    struct MyConfig {
+        value: f64,
+    }
+
+    #[derive(Serialize)]
+    struct ParamsCatalog {
+        cfg: Param<MyConfig>,
+        threshold: Param<f64>,
+    }
+
+    #[test]
+    fn test_param_first_field_collision() {
+        let catalog = ParamsCatalog {
+            cfg: Param(MyConfig { value: 42.0 }),
+            threshold: Param(1.5),
+        };
+
+        // Verify the collision: Param and its inner T share the same address.
+        assert_eq!(ptr_to_id(&catalog.cfg), ptr_to_id(&catalog.cfg.0));
+
+        let index = index_catalog(&catalog);
+
+        // Must be "cfg", not "cfg.value".
+        assert_eq!(index.get(ptr_to_id(&catalog.cfg)), Some("cfg"));
+        assert_eq!(index.get(ptr_to_id(&catalog.threshold)), Some("threshold"));
     }
 }

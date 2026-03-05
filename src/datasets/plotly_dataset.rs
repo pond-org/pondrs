@@ -13,7 +13,6 @@ use super::{Dataset, FileDataset};
 /// On save, a matching `.html` file is written alongside the JSON.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PlotlyDataset {
-    #[serde(skip_serializing)]
     pub path: String,
 }
 

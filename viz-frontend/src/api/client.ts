@@ -13,6 +13,13 @@ export async function fetchDatasetHtml(id: number): Promise<string> {
   return res.text();
 }
 
+export async function fetchDatasetYaml(id: number): Promise<string> {
+  const res = await fetch(`/api/dataset/${id}/yaml`);
+  if (res.status === 404) return '';
+  if (!res.ok) throw new Error(`GET /api/dataset/${id}/yaml: ${res.status}`);
+  return res.text();
+}
+
 export async function fetchStatus(): Promise<StatusSnapshot> {
   const res = await fetch('/api/status');
   if (!res.ok) throw new Error(`GET /api/status: ${res.status}`);

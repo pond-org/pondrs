@@ -66,6 +66,15 @@ export function useWebSocket(): LiveStatus {
             case 'node_error':
               nodes[event.node_name] = { status: 'error', duration_ms: null, error: event.error };
               break;
+            case 'pipeline_start':
+              nodes[event.node_name] = { status: 'running', duration_ms: null, error: null };
+              break;
+            case 'pipeline_end':
+              nodes[event.node_name] = { status: 'completed', duration_ms: event.duration_ms, error: null };
+              break;
+            case 'pipeline_error':
+              nodes[event.node_name] = { status: 'error', duration_ms: null, error: event.error };
+              break;
             case 'dataset_load_end':
               if (event.dataset_name) {
                 const prev_ds = datasets[event.dataset_name] ?? { load_ms: null, save_ms: null };

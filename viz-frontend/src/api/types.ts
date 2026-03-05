@@ -6,6 +6,7 @@ export interface VizDataset {
   type_string: string;
   is_param: boolean;
   has_html: boolean;
+  has_yaml: boolean;
 }
 
 export interface VizNode {
@@ -17,6 +18,11 @@ export interface VizNode {
   pipe_children: number[];
   input_dataset_ids: number[];
   output_dataset_ids: number[];
+}
+
+export interface DatasetSummary {
+  name: string;
+  type_string: string;
 }
 
 export interface VizEdge {

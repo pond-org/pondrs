@@ -65,6 +65,19 @@ async fn get_dataset_html(
     }
 }
 
+async fn get_dataset_yaml(
+    Path(id): Path<usize>,
+    State(state): State<Arc<VizState>>,
+) -> impl IntoResponse {
+    match state.dataset_meta.get(&id) {
+        Some(meta) => match meta.yaml() {
+            Some(yaml) => (StatusCode::OK, [(header::CONTENT_TYPE, "text/plain; charset=utf-8")], yaml).into_response(),
+            None => (StatusCode::NOT_FOUND, "No YAML definition available").into_response(),
+        },
+        None => (StatusCode::NOT_FOUND, "No YAML definition available").into_response(),
+    }
+}
+
 async fn get_status(State(state): State<Arc<VizState>>) -> impl IntoResponse {
     let statuses = state.node_statuses.lock().unwrap().clone();
     let activity = state.dataset_activity.lock().unwrap().clone();
@@ -80,13 +93,13 @@ async fn post_status(
 ) -> StatusCode {
     // Update node status based on event type
     match event.event_type.as_str() {
-        "node_start" => {
+        "node_start" | "pipeline_start" => {
             state.node_statuses.lock().unwrap().insert(
                 event.node_name.clone(),
                 NodeStatus { status: "running".to_string(), duration_ms: None, error: None },
             );
         }
-        "node_end" => {
+        "node_end" | "pipeline_end" => {
             state.node_statuses.lock().unwrap().insert(
                 event.node_name.clone(),
                 NodeStatus {
@@ -96,7 +109,7 @@ async fn post_status(
                 },
             );
         }
-        "node_error" => {
+        "node_error" | "pipeline_error" => {
             state.node_statuses.lock().unwrap().insert(
                 event.node_name.clone(),
                 NodeStatus {
@@ -200,6 +213,7 @@ pub fn start_server(state: VizState, port: u16) {
         let app = Router::new()
             .route("/api/graph", get(get_graph))
             .route("/api/dataset/{id}/html", get(get_dataset_html))
+            .route("/api/dataset/{id}/yaml", get(get_dataset_yaml))
             .route("/api/status", get(get_status))
             .route("/api/status", post(post_status))
             .route("/ws", get(ws_handler))

@@ -39,6 +39,7 @@ pub struct VizDataset {
     pub type_string: String,
     pub is_param: bool,
     pub has_html: bool,
+    pub has_yaml: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -73,6 +74,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
                 type_string: ds.meta.get_type_string().to_string(),
                 is_param: ds.meta.is_param(),
                 has_html: ds.meta.html().is_some(),
+                has_yaml: ds.meta.yaml().is_some(),
             });
             dataset_map.insert(ds.id, idx);
         }

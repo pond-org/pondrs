@@ -69,9 +69,11 @@ impl VizHook {
 
 impl Hook for VizHook {
     fn before_pipeline_run(&self, p: &dyn PipelineInfo) {
+        let name = p.get_name();
+        self.start_timing(name);
         self.send(&VizEvent {
             event_type: "pipeline_start".to_string(),
-            node_name: p.get_name().to_string(),
+            node_name: name.to_string(),
             duration_ms: None,
             error: None,
             dataset_id: None,
@@ -80,10 +82,12 @@ impl Hook for VizHook {
     }
 
     fn after_pipeline_run(&self, p: &dyn PipelineInfo) {
+        let name = p.get_name();
+        let duration_ms = self.elapsed_ms(name);
         self.send(&VizEvent {
             event_type: "pipeline_end".to_string(),
-            node_name: p.get_name().to_string(),
-            duration_ms: None,
+            node_name: name.to_string(),
+            duration_ms,
             error: None,
             dataset_id: None,
             dataset_name: None,
@@ -91,9 +95,11 @@ impl Hook for VizHook {
     }
 
     fn on_pipeline_error(&self, p: &dyn PipelineInfo, error: &str) {
+        let name = p.get_name();
+        self.elapsed_ms(name); // clean up timing entry
         self.send(&VizEvent {
             event_type: "pipeline_error".to_string(),
-            node_name: p.get_name().to_string(),
+            node_name: name.to_string(),
             duration_ms: None,
             error: Some(error.to_string()),
             dataset_id: None,

@@ -51,7 +51,6 @@ fn dataframe_to_html(df: &DataFrame) -> String {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PolarsCsvDataset {
-    #[serde(skip_serializing)]
     pub path: String,
 }
 
@@ -95,7 +94,6 @@ impl FileDataset for PolarsCsvDataset {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PolarsParquetDataset {
-    #[serde(skip_serializing)]
     pub path: String,
 }
 

@@ -127,21 +127,21 @@ fn iris_test() {
     let catalog = IrisCatalog {
         input: LazyPartitionedDataset::<PolarsParquetDataset> {
             path: "iris".to_string(),
-            ext: "parquet",
+            ext: "parquet".into(),
             dataset: PolarsParquetDataset {
                 path: String::new(),
             },
         },
         output: PartitionedDataset::<PolarsParquetDataset> {
             path: "iris_copy".to_string(),
-            ext: "parquet",
+            ext: "parquet".into(),
             dataset: PolarsParquetDataset {
                 path: String::new(),
             },
         },
         output_csv: LazyPartitionedDataset::<PolarsCsvDataset> {
             path: "iris_csv".to_string(),
-            ext: "csv",
+            ext: "csv".into(),
             dataset: PolarsCsvDataset {
                 path: String::new(),
             },

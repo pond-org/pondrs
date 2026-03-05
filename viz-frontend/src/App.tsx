@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { VizGraph } from './api/types';
+import type { VizGraph, DatasetSummary } from './api/types';
 import { fetchGraph } from './api/client';
 import { useWebSocket } from './hooks/useWebSocket';
 import { GraphView, type CenterRequest } from './components/GraphView';
@@ -16,6 +16,16 @@ export function App() {
   const [isDark, setIsDark] = useState(true);
   const [leftOpen, setLeftOpen] = useState(true);
   const [centerRequest, setCenterRequest] = useState<CenterRequest | null>(null);
+  const [expandedPipelines, setExpandedPipelines] = useState<Set<number>>(new Set());
+
+  const togglePipeline = useCallback((nodeId: number) => {
+    setExpandedPipelines(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }, []);
 
   const { nodes: nodeStatuses, datasets: datasetActivity, connected, lastEvent, runCount, reconnectCount } = useWebSocket();
 
@@ -46,13 +56,28 @@ export function App() {
     });
   }, [graph, datasetActivity]);
 
+  const resolveDatasets = useCallback((ids: number[]): DatasetSummary[] => {
+    if (!graph) return [];
+    return ids.map(id => {
+      const ds = graph.datasets.find(d => d.id === id);
+      return { name: ds?.name ?? `dataset_${id}`, type_string: ds?.type_string ?? '' };
+    });
+  }, [graph]);
+
   const handleNodeSelect = useCallback((name: string) => {
     setSelection(prev => {
       if (prev?.kind === 'node' && prev.name === name) return null;
       const node = graph?.nodes.find(n => n.name === name);
-      return { kind: 'node', name, type_string: node?.type_string ?? '', status: nodeStatuses[name] ?? null };
+      return {
+        kind: 'node',
+        name,
+        type_string: node?.type_string ?? '',
+        status: nodeStatuses[name] ?? null,
+        inputs: resolveDatasets(node?.input_dataset_ids ?? []),
+        outputs: resolveDatasets(node?.output_dataset_ids ?? []),
+      };
     });
-  }, [graph, nodeStatuses]);
+  }, [graph, nodeStatuses, resolveDatasets]);
 
   const handleLeftSelect = useCallback((rfId: string, sel: PanelSelection) => {
     setSelection(sel);
@@ -164,6 +189,8 @@ export function App() {
           nodeStatuses={nodeStatuses}
           datasetActivity={datasetActivity}
           onSelect={handleLeftSelect}
+          expandedPipelines={expandedPipelines}
+          onTogglePipeline={togglePipeline}
         />
       </div>
 
@@ -188,6 +215,8 @@ export function App() {
             datasetActivity={datasetActivity}
             onDatasetSelect={handleDatasetSelect}
             onNodeSelect={handleNodeSelect}
+            onTogglePipeline={togglePipeline}
+            expandedPipelines={expandedPipelines}
             isDark={isDark}
             centerRequest={centerRequest}
             onPaneClick={handlePaneClick}

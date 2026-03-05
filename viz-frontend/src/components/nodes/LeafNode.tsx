@@ -68,7 +68,7 @@ export function LeafNode({ data }: NodeProps<LeafNodeType>) {
           {data.status === 'running' && '⏳ running…'}
           {data.status === 'completed' && data.duration_ms != null && `✓ ${data.duration_ms.toFixed(1)}ms`}
           {data.status === 'completed' && data.duration_ms == null && '✓ done'}
-          {data.status === 'error' && `✗ ${data.error ?? 'error'}`}
+          {data.status === 'error' && 'error ↗'}
         </div>
       )}
 

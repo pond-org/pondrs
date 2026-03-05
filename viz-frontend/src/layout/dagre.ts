@@ -7,7 +7,7 @@ const DS_W = 160;
 const DS_H = 56;
 
 export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
-  const g = new Dagre.graphlib.Graph({ compound: true });
+  const g = new Dagre.graphlib.Graph();
   g.setGraph({ rankdir: 'LR', nodesep: 50, ranksep: 100, marginx: 24, marginy: 24 });
   g.setDefaultEdgeLabel(() => ({}));
 
@@ -15,9 +15,6 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
     const w = node.type === 'dataset' ? DS_W : NODE_W;
     const h = node.type === 'dataset' ? DS_H : NODE_H;
     g.setNode(node.id, { width: w, height: h });
-    if (node.parentId) {
-      g.setParent(node.id, node.parentId);
-    }
   }
 
   for (const edge of edges) {

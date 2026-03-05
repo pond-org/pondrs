@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { fetchDatasetHtml } from '../api/client';
-import type { NodeStatus, DatasetActivity } from '../api/types';
+import { fetchDatasetHtml, fetchDatasetYaml } from '../api/client';
+import type { NodeStatus, DatasetActivity, DatasetSummary } from '../api/types';
 
 export type PanelSelection =
   | { kind: 'dataset'; id: number; name: string; type_string: string; is_param: boolean; activity: DatasetActivity | null }
-  | { kind: 'node'; name: string; type_string: string; status: NodeStatus | null };
+  | { kind: 'node'; name: string; type_string: string; status: NodeStatus | null; inputs: DatasetSummary[]; outputs: DatasetSummary[] };
 
 interface Props {
   selection: PanelSelection | null;
@@ -167,16 +167,18 @@ function injectTheme(html: string, isDark: boolean): string {
 
 export function DatasetPanel({ selection, onClose, isDark, reconnectCount }: Props) {
   const [html, setHtml] = useState('');
+  const [yaml, setYaml] = useState('');
   const [loading, setLoading] = useState(false);
 
   const datasetId = selection?.kind === 'dataset' ? selection.id : null;
 
   useEffect(() => {
-    if (datasetId == null) { setHtml(''); return; }
+    if (datasetId == null) { setHtml(''); setYaml(''); return; }
     setLoading(true);
-    fetchDatasetHtml(datasetId)
-      .then(h => { setHtml(h); setLoading(false); })
-      .catch(() => { setHtml(''); setLoading(false); });
+    Promise.all([
+      fetchDatasetHtml(datasetId).catch(() => ''),
+      fetchDatasetYaml(datasetId).catch(() => ''),
+    ]).then(([h, y]) => { setHtml(h); setYaml(y); setLoading(false); });
   }, [datasetId, reconnectCount]);
 
   const themedHtml = html ? injectTheme(html, isDark) : '';
@@ -264,8 +266,10 @@ export function DatasetPanel({ selection, onClose, isDark, reconnectCount }: Pro
 
       {/* Node body */}
       {selection?.kind === 'node' && (
-        <div style={{ padding: 20, overflowY: 'auto' }}>
+        <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
           <NodeInfo status={selection.status} />
+          <IoList label="Inputs" items={selection.inputs} />
+          <IoList label="Outputs" items={selection.outputs} />
         </div>
       )}
 
@@ -282,42 +286,108 @@ export function DatasetPanel({ selection, onClose, isDark, reconnectCount }: Pro
               )}
             </div>
           )}
-          {/* Preview section */}
-          <div style={{
-            padding: '10px 18px 0',
-            flexShrink: 0,
-          }}>
-            <span style={{
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--text-dim)',
-            }}>
-              Preview
-            </span>
-          </div>
-          <div style={{ flex: 1, overflow: 'hidden', margin: '8px 18px 18px', borderRadius: 8, border: '1px solid var(--border-sub)', background: isDark ? '#141414' : '#ffffff' }}>
-            {loading && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                <div className="spinner" />
-                <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>Loading preview...</span>
+          {/* Definition section */}
+          {!loading && yaml && (
+            <>
+              <div style={{ padding: '10px 18px 0', flexShrink: 0 }}>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--text-dim)',
+                }}>
+                  Definition
+                </span>
               </div>
-            )}
-            {!loading && !html && (
-              <div style={{ color: 'var(--text-dim)', fontSize: 14, padding: 20, textAlign: 'center' }}>No preview available.</div>
-            )}
-            {!loading && html && (
-              <iframe
-                srcDoc={themedHtml}
-                sandbox="allow-scripts allow-same-origin"
-                style={{ width: '100%', height: '100%', border: 'none', background: isDark ? '#141414' : '#ffffff' }}
-                title="dataset preview"
-              />
-            )}
-          </div>
+              <div style={{ margin: '8px 18px 18px', borderRadius: 8, border: '1px solid var(--border-sub)', background: isDark ? '#1a1a1a' : '#f5f5f5', flexShrink: 0 }}>
+                <pre style={{
+                  margin: 0,
+                  padding: 14,
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  fontFamily: "'Fira Mono', 'Consolas', monospace",
+                  color: isDark ? '#e5e5e5' : '#111111',
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}>{yaml}</pre>
+              </div>
+            </>
+          )}
+          {/* Preview section (non-param datasets only) */}
+          {!selection.is_param && (
+            <>
+              <div style={{ padding: '10px 18px 0', flexShrink: 0 }}>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--text-dim)',
+                }}>
+                  Preview
+                </span>
+              </div>
+              {loading && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 10 }}>
+                  <div className="spinner" />
+                  <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>Loading preview...</span>
+                </div>
+              )}
+              {!loading && !html && (
+                <div style={{ color: 'var(--text-dim)', fontSize: 14, padding: 20, textAlign: 'center' }}>No preview available.</div>
+              )}
+              {!loading && html && (
+                <iframe
+                  srcDoc={themedHtml}
+                  sandbox="allow-scripts allow-same-origin"
+                  style={{ flex: 1, width: '100%', border: 'none', margin: '8px 0 18px', background: isDark ? '#141414' : '#ffffff' }}
+                  title="dataset preview"
+                />
+              )}
+            </>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+function IoList({ label, items }: { label: string; items: DatasetSummary[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginTop: 18 }}>
+      <span style={{
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        color: 'var(--text-dim)',
+      }}>
+        {label}
+      </span>
+      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 8,
+            padding: '4px 0',
+          }}>
+            <span style={{ fontSize: 14, color: 'var(--text-sub)', fontWeight: 500 }}>
+              {item.name}
+            </span>
+            <span style={{
+              fontSize: 12,
+              color: 'var(--text-dim)',
+              fontFamily: "'Fira Mono', 'Consolas', monospace",
+            }}>
+              {item.type_string}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -29,8 +29,31 @@ impl<T> Lazy<T> {
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct LazyPartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
     pub path: String,
-    pub ext: &'static str,
+    pub ext: String,
     pub dataset: D,
+}
+
+fn list_files(path: &str, ext: &str) -> Option<Vec<String>> {
+    let mut names: Vec<String> = fs::read_dir(path)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.ends_with(ext) { Some(name) } else { None }
+        })
+        .collect();
+    names.sort();
+    Some(names)
+}
+
+fn files_html(path: &str, ext: &str) -> Option<String> {
+    let files = list_files(path, ext)?;
+    if files.is_empty() { return None; }
+    let items: Vec<String> = files.iter().map(|f| format!("<li>{f}</li>")).collect();
+    Some(format!(
+        "<ul style=\"font-family:monospace;font-size:13px;padding:8px 8px 8px 28px;margin:0\">{}</ul>",
+        items.join("")
+    ))
 }
 
 impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset
@@ -46,7 +69,7 @@ where
         std::fs::create_dir_all(&self.path)?;
         let dir = std::path::Path::new(&self.path);
         for (name, data) in datasets {
-            let ext = self.ext;
+            let ext = &self.ext;
             let path = dir.join(format!("{name}.{ext}"));
             let mut dataset = self.dataset.clone();
             dataset.set_path(path.to_str().unwrap());
@@ -61,7 +84,7 @@ where
         for entry in paths {
             let entry = entry?;
             let file_name = entry.file_name();
-            if !file_name.to_string_lossy().ends_with(self.ext) {
+            if !file_name.to_string_lossy().ends_with(&*self.ext) {
                 continue;
             }
             let file_stem = entry
@@ -75,13 +98,18 @@ where
         }
         Ok(datasets)
     }
+
+    #[cfg(feature = "std")]
+    fn html(&self) -> Option<String> {
+        files_html(&self.path, &self.ext)
+    }
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct PartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
     pub path: String,
-    pub ext: &'static str,
+    pub ext: String,
     pub dataset: D,
 }
 
@@ -97,7 +125,7 @@ where
         std::fs::create_dir_all(&self.path)?;
         let dir = std::path::Path::new(&self.path);
         for (name, data) in datasets {
-            let ext = self.ext;
+            let ext = &self.ext;
             let path = dir.join(format!("{name}.{ext}"));
             let mut dataset = self.dataset.clone();
             dataset.set_path(path.to_str().unwrap());
@@ -112,7 +140,7 @@ where
         for entry in paths {
             let entry = entry?;
             let file_name = entry.file_name();
-            if !file_name.to_string_lossy().ends_with(self.ext) {
+            if !file_name.to_string_lossy().ends_with(&*self.ext) {
                 continue;
             }
             let file_stem = entry
@@ -125,5 +153,10 @@ where
             datasets.insert(file_stem, dataset.load()?);
         }
         Ok(datasets)
+    }
+
+    #[cfg(feature = "std")]
+    fn html(&self) -> Option<String> {
+        files_html(&self.path, &self.ext)
     }
 }
