@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use log::{debug, info, warn};
 
-use crate::core::{DatasetInfo, PipelineInfo};
+use crate::core::{DatasetRef, PipelineInfo};
 
 use super::Hook;
 
@@ -45,7 +45,7 @@ fn item_key(item: &dyn PipelineInfo) -> usize {
     item as *const dyn PipelineInfo as *const () as usize
 }
 
-fn ds_name<'a>(ds: &'a DatasetInfo) -> &'a str {
+fn ds_name<'a>(ds: &'a DatasetRef) -> &'a str {
     ds.name.unwrap_or("<unknown>")
 }
 
@@ -86,12 +86,12 @@ impl Hook for LoggingHook {
         warn!("[node] {} - error: {}", n.get_name(), error);
     }
 
-    fn before_dataset_load(&self, _n: &dyn PipelineInfo, ds: &DatasetInfo) {
+    fn before_dataset_load(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
         debug!("  loading {}", ds_name(ds));
         self.start_timing(ds.id);
     }
 
-    fn after_dataset_load(&self, _n: &dyn PipelineInfo, ds: &DatasetInfo) {
+    fn after_dataset_load(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
         if let Some(ms) = self.elapsed_ms(ds.id) {
             debug!("  loaded {} ({:.1}ms)", ds_name(ds), ms);
         } else {
@@ -99,12 +99,12 @@ impl Hook for LoggingHook {
         }
     }
 
-    fn before_dataset_save(&self, _n: &dyn PipelineInfo, ds: &DatasetInfo) {
+    fn before_dataset_save(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
         debug!("  saving {}", ds_name(ds));
         self.start_timing(ds.id);
     }
 
-    fn after_dataset_save(&self, _n: &dyn PipelineInfo, ds: &DatasetInfo) {
+    fn after_dataset_save(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
         if let Some(ms) = self.elapsed_ms(ds.id) {
             debug!("  saved {} ({:.1}ms)", ds_name(ds), ms);
         } else {

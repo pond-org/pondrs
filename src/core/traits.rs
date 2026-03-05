@@ -11,10 +11,12 @@ pub fn ptr_to_id<T: ?Sized>(r: &T) -> usize {
     r as *const T as *const () as usize
 }
 
-/// A reference to a dataset, carrying its pointer ID and object-safe metadata.
+/// A reference to a dataset, carrying its pointer ID, object-safe metadata,
+/// and an optionally resolved human-readable name.
 pub struct DatasetRef<'a> {
     pub id: usize,
     pub meta: &'a dyn DatasetMeta,
+    pub name: Option<&'a str>,
 }
 
 impl<'a> DatasetRef<'a> {
@@ -22,6 +24,7 @@ impl<'a> DatasetRef<'a> {
         Self {
             id: ptr_to_id(ds),
             meta: ds,
+            name: None,
         }
     }
 }
@@ -31,6 +34,7 @@ impl core::fmt::Debug for DatasetRef<'_> {
         f.debug_struct("DatasetRef")
             .field("id", &self.id)
             .field("is_param", &self.meta.is_param())
+            .field("name", &self.name)
             .finish()
     }
 }
@@ -48,14 +52,6 @@ pub enum DatasetEvent {
     AfterLoad,
     BeforeSave,
     AfterSave,
-}
-
-/// Dataset metadata passed to hooks, with an optionally resolved name.
-#[derive(Debug, Clone)]
-pub struct DatasetInfo<'a> {
-    pub id: usize,
-    pub is_param: bool,
-    pub name: Option<&'a str>,
 }
 
 /// Non-generic metadata trait -- used by hooks, graph building, object-safe.

@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::{DatasetInfo, PipelineInfo};
+use crate::core::{DatasetRef, PipelineInfo};
 use crate::hooks::Hook;
 
 /// An event sent from `VizHook` to the viz server's POST /api/status endpoint.
@@ -62,7 +62,7 @@ impl VizHook {
             .map(|start| start.elapsed().as_secs_f64() * 1000.0)
     }
 
-    fn ds_timing_key(ds: &DatasetInfo<'_>) -> String {
+    fn ds_timing_key(ds: &DatasetRef<'_>) -> String {
         format!("ds_{}", ds.id)
     }
 }
@@ -146,7 +146,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_load(&self, n: &dyn PipelineInfo, ds: &DatasetInfo<'_>) {
+    fn before_dataset_load(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
         self.start_timing(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             event_type: "dataset_load_start".to_string(),
@@ -158,7 +158,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_load(&self, n: &dyn PipelineInfo, ds: &DatasetInfo<'_>) {
+    fn after_dataset_load(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
         let duration_ms = self.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             event_type: "dataset_load_end".to_string(),
@@ -170,7 +170,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_save(&self, n: &dyn PipelineInfo, ds: &DatasetInfo<'_>) {
+    fn before_dataset_save(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
         self.start_timing(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             event_type: "dataset_save_start".to_string(),
@@ -182,7 +182,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_save(&self, n: &dyn PipelineInfo, ds: &DatasetInfo<'_>) {
+    fn after_dataset_save(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
         let duration_ms = self.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             event_type: "dataset_save_end".to_string(),

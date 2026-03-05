@@ -8,7 +8,7 @@ use std::thread;
 
 use serde::Serialize;
 
-use crate::core::{DatasetEvent, DatasetInfo, DatasetRef, PipelineItem, Steps};
+use crate::core::{DatasetEvent, DatasetRef, PipelineItem, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;
@@ -122,16 +122,12 @@ impl Runner for ParallelRunner {
                         s.spawn(move || {
                             hooks.for_each_hook(&mut |h| h.before_node_run(item));
                             let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent| {
-                                let info = DatasetInfo {
-                                    id: ds.id,
-                                    is_param: ds.meta.is_param(),
-                                    name: names.get(&ds.id).map(|s| s.as_str()),
-                                };
+                                let ds = DatasetRef { name: names.get(&ds.id).map(|s| s.as_str()), ..*ds };
                                 match event {
-                                    DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &info)),
-                                    DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &info)),
-                                    DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &info)),
-                                    DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &info)),
+                                    DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &ds)),
+                                    DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &ds)),
+                                    DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &ds)),
+                                    DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &ds)),
                                 }
                             };
                             match item.call(&mut on_event) {

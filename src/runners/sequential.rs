@@ -5,7 +5,7 @@ use std::prelude::v1::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use crate::core::{DatasetEvent, DatasetInfo, DatasetRef, PipelineItem, Steps};
+use crate::core::{DatasetEvent, DatasetRef, PipelineItem, Steps};
 use crate::error::PondError;
 use crate::hooks::Hooks;
 
@@ -21,16 +21,12 @@ impl SequentialRunner {
         hooks: &'a impl Hooks,
     ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
         move |ds: &DatasetRef<'_>, event: DatasetEvent| {
-            let info = DatasetInfo {
-                id: ds.id,
-                is_param: ds.meta.is_param(),
-                name: names.get(&ds.id).map(|s| s.as_str()),
-            };
+            let ds = DatasetRef { name: names.get(&ds.id).map(|s| s.as_str()), ..*ds };
             match event {
-                DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &info)),
-                DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &info)),
-                DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &info)),
-                DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &info)),
+                DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &ds)),
+                DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &ds)),
+                DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &ds)),
+                DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &ds)),
             }
         }
     }
@@ -41,16 +37,11 @@ impl SequentialRunner {
         hooks: &'a impl Hooks,
     ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
         move |ds: &DatasetRef<'_>, event: DatasetEvent| {
-            let info = DatasetInfo {
-                id: ds.id,
-                is_param: ds.meta.is_param(),
-                name: None,
-            };
             match event {
-                DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &info)),
-                DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &info)),
-                DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &info)),
-                DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &info)),
+                DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, ds)),
+                DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, ds)),
+                DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, ds)),
+                DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, ds)),
             }
         }
     }
