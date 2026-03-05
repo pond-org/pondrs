@@ -3,20 +3,20 @@
 //! Example: launch the interactive pipeline visualizer for the sales pipeline.
 //!
 //! Starts the viz web server on port 8080. Open http://localhost:8080 in your
-//! browser to inspect the pipeline graph. Then run `plotly_example` in a
+//! browser to inspect the pipeline graph. Then run `sales_run` in a
 //! second terminal to see live execution status stream in via VizHook.
 //!
 //! Usage:
-//!   Terminal 1:  cargo run --example viz_example
+//!   Terminal 1:  cargo run --example sales_viz
 //!   Browser:     http://localhost:8080
-//!   Terminal 2:  cargo run --example plotly_example
+//!   Terminal 2:  cargo run --example sales_run
 
-#[path = "shared/mod.rs"]
-mod shared;
+#[path = "sales/mod.rs"]
+mod sales;
 
 use pondrs::app::PondApp;
 
-use shared::{SalesApp, examples_data_dir, write_fixtures};
+use sales::{SalesApp, examples_data_dir, write_fixtures};
 
 fn main() {
     let dir = examples_data_dir();
@@ -24,7 +24,7 @@ fn main() {
 
     println!("Starting viz server on http://localhost:8080");
     println!("Open that URL in your browser, then in a second terminal run:");
-    println!("  cargo run --example plotly_example");
+    println!("  cargo run --example sales_run");
     println!("to see live execution status stream in.\n");
     println!("Press Ctrl+C to stop.");
 

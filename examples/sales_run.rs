@@ -12,15 +12,15 @@
 //! app entrypoint is invoked via `SalesApp::main_from(...)` with CLI args that
 //! point at those files. The HTML chart path is printed at the end.
 //!
-//! Run alongside `viz_example` to see live execution status in the pipeline
-//! visualizer (start viz_example first, then run this one).
+//! Run alongside `sales_viz` to see live execution status in the pipeline
+//! visualizer (start sales_viz first, then run this one).
 
-#[path = "shared/mod.rs"]
-mod shared;
+#[path = "sales/mod.rs"]
+mod sales;
 
 use pondrs::app::PondApp;
 
-use shared::{SalesApp, examples_data_dir, write_fixtures};
+use sales::{SalesApp, examples_data_dir, write_fixtures};
 
 fn main() {
     let dir = examples_data_dir();

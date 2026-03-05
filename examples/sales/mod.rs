@@ -1,6 +1,6 @@
-//! Shared pipeline definition for the plotly_example and viz_example.
+//! Shared pipeline definition for the sales_run, sales_viz, and sales_app examples.
 //!
-//! Both examples use the same sales pipeline and types; only the subcommand
+//! All examples use the same sales pipeline and types; only the subcommand
 //! they invoke (`run` vs `viz`) differs.
 
 use plotly::{Bar, Layout, Plot};

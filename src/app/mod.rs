@@ -10,7 +10,7 @@ use clap::Parser;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::core::Steps;
+use crate::core::{StepInfo, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;
@@ -87,13 +87,33 @@ pub trait PondApp {
     }
 
     /// Like `main()`, but parses CLI args from `iter` instead of `std::env::args`.
-    /// Useful for examples and integration tests that need to supply paths at runtime.
+    /// Useful for examples that need to supply paths at runtime.
+    /// Prints errors to stderr and exits with code 1 on failure.
     ///
     /// ```ignore
     /// SalesApp::main_from(["sales-app", "--catalog-path", "cat.yml",
     ///                      "--params-path", "params.yml", "run"]);
     /// ```
     fn main_from<I, T>(iter: I)
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<std::ffi::OsString> + Clone,
+    {
+        if let Err(e) = Self::try_main_from(iter) {
+            eprintln!("Error: {e}");
+            process::exit(1);
+        }
+    }
+
+    /// Like `main_from()`, but returns a `Result` instead of calling `process::exit`.
+    /// Useful for integration tests that need to assert on success or failure.
+    ///
+    /// ```ignore
+    /// let result = SalesApp::try_main_from(["test", "--catalog-path", "cat.yml",
+    ///                                       "--params-path", "params.yml", "run"]);
+    /// assert!(result.is_ok());
+    /// ```
+    fn try_main_from<I, T>(iter: I) -> Result<(), Self::Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
@@ -114,20 +134,14 @@ pub trait PondApp {
         let catalog_path = args.catalog_path.as_deref().unwrap_or(Self::catalog_path());
         let params_path = args.params_path.as_deref().unwrap_or(Self::params_path());
 
-        let result: Result<(), Self::Error> = match args.command {
+        match args.command {
             Command::Run {
                 runner,
                 param_overrides,
                 catalog_overrides,
             } => {
-                let catalog: Self::Catalog = match load_config::<Self::Catalog, Self::Error>(catalog_path, &catalog_overrides) {
-                    Ok(c) => c,
-                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
-                };
-                let params: Self::Params = match load_config::<Self::Params, Self::Error>(params_path, &param_overrides) {
-                    Ok(p) => p,
-                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
-                };
+                let catalog: Self::Catalog = load_config(catalog_path, &catalog_overrides)?;
+                let params: Self::Params = load_config(params_path, &param_overrides)?;
                 let pipeline = Self::pipeline(&catalog, &params);
                 let hooks = Self::hooks();
                 let runners = Self::runners();
@@ -137,63 +151,48 @@ pub trait PondApp {
                 match runners.run_by_name(name, &pipeline, &catalog, &params, &hooks) {
                     Some(result) => result,
                     None => {
-                        eprint!("Error: unknown runner '{name}'. Available runners: ");
+                        let mut available = String::new();
                         let mut first = true;
                         runners.for_each_name(&mut |n| {
-                            if !first { eprint!(", "); }
-                            eprint!("{n}");
+                            if !first { available.push_str(", "); }
+                            available.push_str(n);
                             first = false;
                         });
-                        eprintln!();
-                        process::exit(1);
+                        Err(PondError::Custom(format!(
+                            "unknown runner '{name}'. Available runners: {available}"
+                        )).into())
                     }
                 }
             }
             Command::Check => {
-                let catalog: Self::Catalog = match load_config::<Self::Catalog, Self::Error>(catalog_path, &[]) {
-                    Ok(c) => c,
-                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
-                };
-                let params: Self::Params = match load_config::<Self::Params, Self::Error>(params_path, &[]) {
-                    Ok(p) => p,
-                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
-                };
+                let catalog: Self::Catalog = load_config(catalog_path, &[])?;
+                let params: Self::Params = load_config(params_path, &[])?;
                 let pipeline = Self::pipeline(&catalog, &params);
 
-                let graph = build_pipeline_graph(&pipeline, &catalog, &params);
-                match graph.check() {
+                match pipeline.check() {
                     Ok(()) => {
-                        let num_nodes = graph.node_indices.len();
-                        let num_datasets = graph.dataset_names.len();
-                        println!("Pipeline is valid: {num_nodes} nodes, {num_datasets} datasets.");
+                        println!("Pipeline is valid.");
                         Ok(())
                     }
-                    Err(errors) => {
-                        eprintln!("Pipeline validation failed:");
-                        for err in &errors {
-                            eprintln!("  - {err}");
-                        }
-                        process::exit(1);
+                    Err(e) => {
+                        Err(PondError::Custom(format!(
+                            "Pipeline validation failed:\n  - {e}"
+                        )).into())
                     }
                 }
             }
             Command::Viz { port, output } => {
-                let catalog: Self::Catalog = match load_config::<Self::Catalog, Self::Error>(catalog_path, &[]) {
-                    Ok(c) => c,
-                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
-                };
-                let params: Self::Params = match load_config::<Self::Params, Self::Error>(params_path, &[]) {
-                    Ok(p) => p,
-                    Err(e) => { eprintln!("Error: {e}"); process::exit(1); }
-                };
+                let catalog: Self::Catalog = load_config(catalog_path, &[])?;
+                let params: Self::Params = load_config(params_path, &[])?;
                 let pipeline = Self::pipeline(&catalog, &params);
                 let graph = build_pipeline_graph(&pipeline, &catalog, &params);
 
                 #[cfg(not(feature = "viz"))]
                 {
                     let _ = (port, output, graph, &program_name);
-                    eprintln!("Error: viz subcommand requires the 'viz' feature (cargo build --features viz).");
-                    process::exit(1);
+                    Err(PondError::Custom(
+                        "viz subcommand requires the 'viz' feature (cargo build --features viz)".into()
+                    ).into())
                 }
 
                 #[cfg(feature = "viz")]
@@ -208,14 +207,10 @@ pub trait PondApp {
                     let dataset_meta = collect_dataset_meta(&graph);
 
                     if let Some(ref path) = output {
-                        let json = match serde_json::to_string_pretty(&viz_graph) {
-                            Ok(j) => j,
-                            Err(e) => { eprintln!("Error serializing graph: {e}"); process::exit(1); }
-                        };
-                        if let Err(e) = std::fs::write(path, &json) {
-                            eprintln!("Error writing to {path}: {e}");
-                            process::exit(1);
-                        }
+                        let json = serde_json::to_string_pretty(&viz_graph)
+                            .map_err(PondError::from)?;
+                        std::fs::write(path, &json)
+                            .map_err(PondError::from)?;
                         println!("Graph written to {path}");
                         Ok(())
                     } else {
@@ -232,11 +227,6 @@ pub trait PondApp {
                     }
                 }
             }
-        };
-
-        if let Err(e) = result {
-            eprintln!("Error: {e}");
-            process::exit(1);
         }
     }
 }
