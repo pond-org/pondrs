@@ -47,83 +47,37 @@ pub trait Runners {
     fn for_each_name(&self, f: &mut dyn FnMut(&str));
 }
 
-impl<R: Runner> Runners for (R,) {
-    fn run_by_name<E>(
-        &self,
-        name: &str,
-        pipe: &impl Steps<E>,
-        catalog: &impl Serialize,
-        params: &impl Serialize,
-        hooks: &impl Hooks,
-    ) -> Option<Result<(), E>>
-    where
-        E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
-    {
-        if self.0.name() == name {
-            return Some(self.0.run(pipe, catalog, params, hooks));
-        }
-        None
-    }
+macro_rules! impl_runners {
+    ($($R:ident $idx:tt),+) => {
+        impl<$($R: Runner),+> Runners for ($($R,)+) {
+            fn run_by_name<E>(
+                &self,
+                name: &str,
+                pipe: &impl Steps<E>,
+                catalog: &impl Serialize,
+                params: &impl Serialize,
+                hooks: &impl Hooks,
+            ) -> Option<Result<(), E>>
+            where
+                E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
+            {
+                $(
+                    if self.$idx.name() == name {
+                        return Some(self.$idx.run(pipe, catalog, params, hooks));
+                    }
+                )+
+                None
+            }
 
-    fn for_each_name(&self, f: &mut dyn FnMut(&str)) {
-        f(self.0.name());
-    }
+            fn for_each_name(&self, f: &mut dyn FnMut(&str)) {
+                $(f(self.$idx.name());)+
+            }
+        }
+    };
 }
 
-impl<R1: Runner, R2: Runner> Runners for (R1, R2) {
-    fn run_by_name<E>(
-        &self,
-        name: &str,
-        pipe: &impl Steps<E>,
-        catalog: &impl Serialize,
-        params: &impl Serialize,
-        hooks: &impl Hooks,
-    ) -> Option<Result<(), E>>
-    where
-        E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
-    {
-        if self.0.name() == name {
-            return Some(self.0.run(pipe, catalog, params, hooks));
-        }
-        if self.1.name() == name {
-            return Some(self.1.run(pipe, catalog, params, hooks));
-        }
-        None
-    }
-
-    fn for_each_name(&self, f: &mut dyn FnMut(&str)) {
-        f(self.0.name());
-        f(self.1.name());
-    }
-}
-
-impl<R1: Runner, R2: Runner, R3: Runner> Runners for (R1, R2, R3) {
-    fn run_by_name<E>(
-        &self,
-        name: &str,
-        pipe: &impl Steps<E>,
-        catalog: &impl Serialize,
-        params: &impl Serialize,
-        hooks: &impl Hooks,
-    ) -> Option<Result<(), E>>
-    where
-        E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
-    {
-        if self.0.name() == name {
-            return Some(self.0.run(pipe, catalog, params, hooks));
-        }
-        if self.1.name() == name {
-            return Some(self.1.run(pipe, catalog, params, hooks));
-        }
-        if self.2.name() == name {
-            return Some(self.2.run(pipe, catalog, params, hooks));
-        }
-        None
-    }
-
-    fn for_each_name(&self, f: &mut dyn FnMut(&str)) {
-        f(self.0.name());
-        f(self.1.name());
-        f(self.2.name());
-    }
-}
+impl_runners!(R0 0);
+impl_runners!(R0 0, R1 1);
+impl_runners!(R0 0, R1 1, R2 2);
+impl_runners!(R0 0, R1 1, R2 2, R3 3);
+impl_runners!(R0 0, R1 1, R2 2, R3 3, R4 4);

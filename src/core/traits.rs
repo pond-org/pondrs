@@ -85,74 +85,40 @@ impl NodeInput for () {
     fn for_each_input_id<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
 }
 
-impl<T: Dataset + Send + Sync> NodeInput for (&T,)
-where
-    PondError: From<T::Error>,
-{
-    type Args = (T::LoadItem,);
-    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError> {
-        let ds = DatasetRef::new(self.0);
-        on_event(&ds, DatasetEvent::BeforeLoad);
-        let val = self.0.load()?;
-        on_event(&ds, DatasetEvent::AfterLoad);
-        Ok((val,))
-    }
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::new(self.0));
-    }
+macro_rules! impl_node_input {
+    ($($T:ident $idx:tt),+) => {
+        impl<$($T: Dataset + Send + Sync),+> NodeInput for ($(&$T,)+)
+        where
+            $(PondError: From<$T::Error>,)+
+        {
+            type Args = ($($T::LoadItem,)+);
+            #[allow(non_snake_case)]
+            fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError> {
+                $(
+                    let ds = DatasetRef::new(self.$idx);
+                    on_event(&ds, DatasetEvent::BeforeLoad);
+                    let $T = self.$idx.load()?;
+                    on_event(&ds, DatasetEvent::AfterLoad);
+                )+
+                Ok(($($T,)+))
+            }
+            fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+                $(f(&DatasetRef::new(self.$idx));)+
+            }
+        }
+    };
 }
 
-impl<T1: Dataset + Send + Sync, T2: Dataset + Send + Sync> NodeInput for (&T1, &T2)
-where
-    PondError: From<T1::Error>,
-    PondError: From<T2::Error>,
-{
-    type Args = (T1::LoadItem, T2::LoadItem);
-    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError> {
-        let ds0 = DatasetRef::new(self.0);
-        on_event(&ds0, DatasetEvent::BeforeLoad);
-        let val0 = self.0.load()?;
-        on_event(&ds0, DatasetEvent::AfterLoad);
-        let ds1 = DatasetRef::new(self.1);
-        on_event(&ds1, DatasetEvent::BeforeLoad);
-        let val1 = self.1.load()?;
-        on_event(&ds1, DatasetEvent::AfterLoad);
-        Ok((val0, val1))
-    }
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::new(self.0));
-        f(&DatasetRef::new(self.1));
-    }
-}
-
-impl<T1: Dataset + Send + Sync, T2: Dataset + Send + Sync, T3: Dataset + Send + Sync> NodeInput for (&T1, &T2, &T3)
-where
-    PondError: From<T1::Error>,
-    PondError: From<T2::Error>,
-    PondError: From<T3::Error>,
-{
-    type Args = (T1::LoadItem, T2::LoadItem, T3::LoadItem);
-    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError> {
-        let ds0 = DatasetRef::new(self.0);
-        on_event(&ds0, DatasetEvent::BeforeLoad);
-        let val0 = self.0.load()?;
-        on_event(&ds0, DatasetEvent::AfterLoad);
-        let ds1 = DatasetRef::new(self.1);
-        on_event(&ds1, DatasetEvent::BeforeLoad);
-        let val1 = self.1.load()?;
-        on_event(&ds1, DatasetEvent::AfterLoad);
-        let ds2 = DatasetRef::new(self.2);
-        on_event(&ds2, DatasetEvent::BeforeLoad);
-        let val2 = self.2.load()?;
-        on_event(&ds2, DatasetEvent::AfterLoad);
-        Ok((val0, val1, val2))
-    }
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::new(self.0));
-        f(&DatasetRef::new(self.1));
-        f(&DatasetRef::new(self.2));
-    }
-}
+impl_node_input!(T0 0);
+impl_node_input!(T0 0, T1 1);
+impl_node_input!(T0 0, T1 1, T2 2);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
+impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 
 /// Trait for saving data to output datasets.
 pub trait NodeOutput: Tuple {
@@ -169,71 +135,36 @@ impl NodeOutput for () {
     fn for_each_output_id<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
 }
 
-impl<T: Dataset + Send + Sync> NodeOutput for (&T,)
-where
-    PondError: From<T::Error>,
-{
-    type Output = (T::SaveItem,);
-    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError> {
-        let ds = DatasetRef::new(self.0);
-        on_event(&ds, DatasetEvent::BeforeSave);
-        self.0.save(output.0)?;
-        on_event(&ds, DatasetEvent::AfterSave);
-        Ok(())
-    }
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::new(self.0));
-    }
+macro_rules! impl_node_output {
+    ($($T:ident $idx:tt),+) => {
+        impl<$($T: Dataset + Send + Sync),+> NodeOutput for ($(&$T,)+)
+        where
+            $(PondError: From<$T::Error>,)+
+        {
+            type Output = ($($T::SaveItem,)+);
+            fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError> {
+                $({
+                    let ds = DatasetRef::new(self.$idx);
+                    on_event(&ds, DatasetEvent::BeforeSave);
+                    self.$idx.save(output.$idx)?;
+                    on_event(&ds, DatasetEvent::AfterSave);
+                })+
+                Ok(())
+            }
+            fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+                $(f(&DatasetRef::new(self.$idx));)+
+            }
+        }
+    };
 }
 
-impl<T1: Dataset + Send + Sync, T2: Dataset + Send + Sync> NodeOutput for (&T1, &T2)
-where
-    PondError: From<T1::Error>,
-    PondError: From<T2::Error>,
-{
-    type Output = (T1::SaveItem, T2::SaveItem);
-    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError> {
-        let ds0 = DatasetRef::new(self.0);
-        on_event(&ds0, DatasetEvent::BeforeSave);
-        self.0.save(output.0)?;
-        on_event(&ds0, DatasetEvent::AfterSave);
-        let ds1 = DatasetRef::new(self.1);
-        on_event(&ds1, DatasetEvent::BeforeSave);
-        self.1.save(output.1)?;
-        on_event(&ds1, DatasetEvent::AfterSave);
-        Ok(())
-    }
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::new(self.0));
-        f(&DatasetRef::new(self.1));
-    }
-}
-
-impl<T1: Dataset + Send + Sync, T2: Dataset + Send + Sync, T3: Dataset + Send + Sync> NodeOutput for (&T1, &T2, &T3)
-where
-    PondError: From<T1::Error>,
-    PondError: From<T2::Error>,
-    PondError: From<T3::Error>,
-{
-    type Output = (T1::SaveItem, T2::SaveItem, T3::SaveItem);
-    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError> {
-        let ds0 = DatasetRef::new(self.0);
-        on_event(&ds0, DatasetEvent::BeforeSave);
-        self.0.save(output.0)?;
-        on_event(&ds0, DatasetEvent::AfterSave);
-        let ds1 = DatasetRef::new(self.1);
-        on_event(&ds1, DatasetEvent::BeforeSave);
-        self.1.save(output.1)?;
-        on_event(&ds1, DatasetEvent::AfterSave);
-        let ds2 = DatasetRef::new(self.2);
-        on_event(&ds2, DatasetEvent::BeforeSave);
-        self.2.save(output.2)?;
-        on_event(&ds2, DatasetEvent::AfterSave);
-        Ok(())
-    }
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::new(self.0));
-        f(&DatasetRef::new(self.1));
-        f(&DatasetRef::new(self.2));
-    }
-}
+impl_node_output!(T0 0);
+impl_node_output!(T0 0, T1 1);
+impl_node_output!(T0 0, T1 1, T2 2);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3, T4 4);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
+impl_node_output!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);

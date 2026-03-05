@@ -36,23 +36,23 @@ impl Hooks for () {
     fn for_each_hook(&self, _f: &mut dyn FnMut(&dyn Hook)) {}
 }
 
-impl<H: Hook> Hooks for (H,) {
-    fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook)) {
-        f(&self.0);
-    }
+macro_rules! impl_hooks {
+    ($($H:ident $idx:tt),+) => {
+        impl<$($H: Hook),+> Hooks for ($($H,)+) {
+            fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook)) {
+                $(f(&self.$idx);)+
+            }
+        }
+    };
 }
 
-impl<H1: Hook, H2: Hook> Hooks for (H1, H2) {
-    fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook)) {
-        f(&self.0);
-        f(&self.1);
-    }
-}
-
-impl<H1: Hook, H2: Hook, H3: Hook> Hooks for (H1, H2, H3) {
-    fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook)) {
-        f(&self.0);
-        f(&self.1);
-        f(&self.2);
-    }
-}
+impl_hooks!(H0 0);
+impl_hooks!(H0 0, H1 1);
+impl_hooks!(H0 0, H1 1, H2 2);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3, H4 4);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3, H4 4, H5 5);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3, H4 4, H5 5, H6 6);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3, H4 4, H5 5, H6 6, H7 7);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3, H4 4, H5 5, H6 6, H7 7, H8 8);
+impl_hooks!(H0 0, H1 1, H2 2, H3 3, H4 4, H5 5, H6 6, H7 7, H8 8, H9 9);
