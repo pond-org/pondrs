@@ -28,14 +28,14 @@ impl<T: Clone> Default for MemoryDataset<T> {
     }
 }
 
-impl<T: Copy> Dataset for MemoryDataset<T> {
+impl<T: Clone> Dataset for MemoryDataset<T> {
     type LoadItem = T;
     type SaveItem = T;
     type Error = PondError;
 
     fn load(&self) -> Result<Self::LoadItem, PondError> {
         let guard = self.value.lock().map_err(|e| PondError::LockPoisoned(e.to_string()))?;
-        (*guard).ok_or(PondError::DatasetNotLoaded)
+        guard.clone().ok_or(PondError::DatasetNotLoaded)
     }
 
     fn save(&self, output: Self::SaveItem) -> Result<(), PondError> {

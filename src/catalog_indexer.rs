@@ -16,7 +16,7 @@ use std::fmt;
 
 use serde::ser::{self, Serialize};
 
-use crate::core::ptr_to_id;
+use crate::pipeline::ptr_to_id;
 
 /// A mapping from dataset pointer IDs to their human-readable names.
 pub struct CatalogIndex {
@@ -95,6 +95,21 @@ impl ser::Error for IndexerError {
     }
 }
 
+// CONVENTION: Leaf type detection via serde struct name.
+//
+// In Rust, a struct and its first field share the same memory address.
+// If we recursed into every struct, a dataset and its first field would both
+// get recorded under different names but the same pointer ID — the last write
+// wins, producing wrong or missing entries.
+//
+// To stop recursion at dataset/param boundaries we inspect the serde struct
+// name passed to `serialize_struct` / `serialize_newtype_struct`:
+//   - Names ending with `"Dataset"` → treated as leaves (no field recursion)
+//   - The name `"Param"` → treated as a leaf (newtype wrapper)
+//   - All other names → recursed into (container structs, nested catalogs)
+//
+// IMPORTANT: User-defined dataset types MUST end with "Dataset" for this to
+// work. Container structs (catalogs, param groups) MUST NOT end with "Dataset".
 /// Returns true if the serde struct name indicates a Dataset or Param leaf type.
 fn is_leaf_type(name: &str) -> bool {
     name.ends_with("Dataset") || name == "Param"

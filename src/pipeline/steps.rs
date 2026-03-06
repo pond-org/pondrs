@@ -4,7 +4,7 @@ use core::marker::Tuple;
 
 use super::check::{CheckError, check_item, collect_all_outputs};
 use super::id_set::IdSet;
-use super::traits::{PipelineInfo, PipelineItem};
+use super::traits::{PipelineInfo, RunnableStep};
 
 /// Non-generic trait for a sequence of pipeline items (metadata only).
 pub trait StepInfo: Tuple {
@@ -49,7 +49,7 @@ pub trait StepInfo: Tuple {
 
 /// Generic trait for a sequence of executable pipeline items.
 pub trait Steps<E>: StepInfo {
-    fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineItem<E>));
+    fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 }
 
 macro_rules! impl_steps {
@@ -60,8 +60,8 @@ macro_rules! impl_steps {
             }
         }
 
-        impl<E, $($N: PipelineItem<E>),+> Steps<E> for ($($N,)+) {
-            fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineItem<E>)) {
+        impl<E, $($N: RunnableStep<E>),+> Steps<E> for ($($N,)+) {
+            fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
                 $(f(&self.$idx);)+
             }
         }

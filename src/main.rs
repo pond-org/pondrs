@@ -142,9 +142,7 @@ fn iris_test() {
         output_csv: LazyPartitionedDataset::<PolarsCsvDataset> {
             path: "iris_csv".to_string(),
             ext: "csv".into(),
-            dataset: PolarsCsvDataset {
-                path: String::new(),
-            },
+            dataset: PolarsCsvDataset::new(""),
         },
     };
     let pipe = (

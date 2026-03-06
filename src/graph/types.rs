@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::prelude::v1::*;
 
-use crate::core::{DatasetRef, PipelineInfo};
+use crate::pipeline::{DatasetRef, PipelineInfo};
 
 pub struct PipelineGraph<'a> {
     pub nodes: Vec<GraphNode<'a>>,

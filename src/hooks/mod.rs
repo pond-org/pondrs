@@ -2,11 +2,13 @@
 
 #[cfg(feature = "std")]
 mod logging;
+#[cfg(feature = "std")]
+pub(crate) mod timing;
 
 #[cfg(feature = "std")]
 pub use logging::LoggingHook;
 
-use crate::core::{DatasetRef, PipelineInfo};
+use crate::pipeline::{DatasetRef, PipelineInfo};
 
 /// Trait for individual hooks that respond to pipeline events.
 pub trait Hook: Sync {
@@ -21,10 +23,10 @@ pub trait Hook: Sync {
     fn on_node_error(&self, _n: &dyn PipelineInfo, _error: &str) {}
 
     // Dataset hooks — fired per-dataset during Node::call()
-    fn before_dataset_load(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
-    fn after_dataset_load(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
-    fn before_dataset_save(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
-    fn after_dataset_save(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
+    fn before_dataset_loaded(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
+    fn after_dataset_loaded(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
+    fn before_dataset_saved(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
+    fn after_dataset_saved(&self, _n: &dyn PipelineInfo, _ds: &DatasetRef) {}
 }
 
 /// Trait for a collection of hooks (implemented for tuples).

@@ -71,7 +71,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
             datasets.push(VizDataset {
                 id: ds.id,
                 name,
-                type_string: ds.meta.get_type_string().to_string(),
+                type_string: ds.meta.type_string().to_string(),
                 is_param: ds.meta.is_param(),
                 has_html: ds.meta.html().is_some(),
                 has_yaml: ds.meta.yaml().is_some(),
@@ -87,7 +87,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
         .map(|(i, n)| VizNode {
             id: i,
             name: n.name.to_string(),
-            type_string: n.item.get_type_string().to_string(),
+            type_string: n.item.type_string().to_string(),
             is_pipe: n.is_pipe,
             parent_pipe: n.parent_pipe,
             pipe_children: n.pipe_children.clone(),

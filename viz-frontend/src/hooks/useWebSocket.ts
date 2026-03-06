@@ -46,9 +46,9 @@ export function useWebSocket(): LiveStatus {
 
           let runCount = prev.runCount;
 
-          switch (event.event_type) {
-            case 'node_start': {
-              // Detect new run: either first-ever node_start (empty tracking)
+          switch (event.kind) {
+            case 'before_node_run': {
+              // Detect new run: either first-ever before_node_run (empty tracking)
               // or a node that already ran before (re-run of the pipeline)
               const isFirst = Object.keys(nodes).length === 0;
               const isRerun = event.node_name in nodes;
@@ -60,28 +60,28 @@ export function useWebSocket(): LiveStatus {
               nodes[event.node_name] = { status: 'running', duration_ms: null, error: null };
               break;
             }
-            case 'node_end':
+            case 'after_node_run':
               nodes[event.node_name] = { status: 'completed', duration_ms: event.duration_ms, error: null };
               break;
-            case 'node_error':
+            case 'on_node_error':
               nodes[event.node_name] = { status: 'error', duration_ms: null, error: event.error };
               break;
-            case 'pipeline_start':
+            case 'before_pipeline_run':
               nodes[event.node_name] = { status: 'running', duration_ms: null, error: null };
               break;
-            case 'pipeline_end':
+            case 'after_pipeline_run':
               nodes[event.node_name] = { status: 'completed', duration_ms: event.duration_ms, error: null };
               break;
-            case 'pipeline_error':
+            case 'on_pipeline_error':
               nodes[event.node_name] = { status: 'error', duration_ms: null, error: event.error };
               break;
-            case 'dataset_load_end':
+            case 'after_dataset_loaded':
               if (event.dataset_name) {
                 const prev_ds = datasets[event.dataset_name] ?? { load_ms: null, save_ms: null };
                 datasets[event.dataset_name] = { ...prev_ds, load_ms: event.duration_ms };
               }
               break;
-            case 'dataset_save_end':
+            case 'after_dataset_saved':
               if (event.dataset_name) {
                 const prev_ds = datasets[event.dataset_name] ?? { load_ms: null, save_ms: null };
                 datasets[event.dataset_name] = { ...prev_ds, save_ms: event.duration_ms };

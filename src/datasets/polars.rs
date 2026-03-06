@@ -1,7 +1,7 @@
 //! Polars DataFrame dataset.
 
 use std::prelude::v1::*;
-use polars::prelude::{CsvReadOptions, CsvWriter, DataFrame, ParquetReader, ParquetWriter, SerReader, SerWriter};
+use polars::prelude::{CsvParseOptions, CsvReadOptions, CsvWriter, DataFrame, ParquetReader, ParquetWriter, SerReader, SerWriter};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PondError;
@@ -49,14 +49,28 @@ fn dataframe_to_html(df: &DataFrame) -> String {
     s
 }
 
+fn default_separator() -> char { ',' }
+fn default_has_header() -> bool { true }
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PolarsCsvDataset {
     pub path: String,
+    #[serde(default = "default_separator")]
+    pub separator: char,
+    #[serde(default = "default_has_header")]
+    pub has_header: bool,
+    #[serde(default)]
+    pub skip_rows: usize,
 }
 
 impl PolarsCsvDataset {
     pub fn new(path: impl Into<String>) -> Self {
-        Self { path: path.into() }
+        Self {
+            path: path.into(),
+            separator: default_separator(),
+            has_header: default_has_header(),
+            skip_rows: 0,
+        }
     }
 }
 
@@ -67,12 +81,19 @@ impl Dataset for PolarsCsvDataset {
 
     fn save(&self, mut df: Self::SaveItem) -> Result<(), PondError> {
         let mut file = std::fs::File::create(&self.path)?;
-        CsvWriter::new(&mut file).finish(&mut df)?;
+        CsvWriter::new(&mut file)
+            .with_separator(self.separator as u8)
+            .finish(&mut df)?;
         Ok(())
     }
 
     fn load(&self) -> Result<Self::LoadItem, PondError> {
         let df = CsvReadOptions::default()
+            .with_has_header(self.has_header)
+            .with_skip_rows(self.skip_rows)
+            .with_parse_options(
+                CsvParseOptions::default().with_separator(self.separator as u8)
+            )
             .try_into_reader_with_file_path(Some(self.path.clone().into()))?
             .finish()?;
         Ok(df)
@@ -84,7 +105,7 @@ impl Dataset for PolarsCsvDataset {
 }
 
 impl FileDataset for PolarsCsvDataset {
-    fn get_path(&self) -> &str {
+    fn path(&self) -> &str {
         &self.path
     }
     fn set_path(&mut self, path: &str) {
@@ -126,7 +147,7 @@ impl Dataset for PolarsParquetDataset {
 }
 
 impl FileDataset for PolarsParquetDataset {
-    fn get_path(&self) -> &str {
+    fn path(&self) -> &str {
         &self.path
     }
     fn set_path(&mut self, path: &str) {

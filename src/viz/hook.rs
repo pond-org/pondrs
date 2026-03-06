@@ -1,19 +1,36 @@
 //! VizHook: fires HTTP events to a running viz server during pipeline execution.
 
-use std::collections::HashMap;
 use std::prelude::v1::*;
-use std::sync::Mutex;
-use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::{DatasetRef, PipelineInfo};
+use crate::pipeline::{DatasetRef, PipelineInfo};
 use crate::hooks::Hook;
+use crate::hooks::timing::TimingTracker;
+
+/// The kind of execution event sent from `VizHook` to the viz server.
+///
+/// Serializes to/from snake_case strings matching Kedro hook method names
+/// (e.g. `BeforePipelineRun` ↔ `"before_pipeline_run"`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum VizEventKind {
+    BeforePipelineRun,
+    AfterPipelineRun,
+    OnPipelineError,
+    BeforeNodeRun,
+    AfterNodeRun,
+    OnNodeError,
+    BeforeDatasetLoaded,
+    AfterDatasetLoaded,
+    BeforeDatasetSaved,
+    AfterDatasetSaved,
+}
 
 /// An event sent from `VizHook` to the viz server's POST /api/status endpoint.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct VizEvent {
-    pub event_type: String,
+    pub kind: VizEventKind,
     /// Name of the pipeline item (node or pipeline) involved.
     pub node_name: String,
     pub duration_ms: Option<f64>,
@@ -30,36 +47,20 @@ pub struct VizEvent {
 /// never crashes the pipeline.
 pub struct VizHook {
     base_url: String,
-    /// Timing keys: node names + dataset IDs (as strings).
-    timings: Mutex<HashMap<String, Instant>>,
+    timings: TimingTracker<String>,
 }
 
 impl VizHook {
     pub fn new(base_url: String) -> Self {
         Self {
             base_url,
-            timings: Mutex::new(HashMap::new()),
+            timings: TimingTracker::new(),
         }
     }
 
     fn send(&self, event: &VizEvent) {
         let url = format!("{}/api/status", self.base_url);
         let _ = ureq::post(&url).send_json(event);
-    }
-
-    fn start_timing(&self, key: &str) {
-        self.timings
-            .lock()
-            .unwrap()
-            .insert(key.to_string(), Instant::now());
-    }
-
-    fn elapsed_ms(&self, key: &str) -> Option<f64> {
-        self.timings
-            .lock()
-            .unwrap()
-            .remove(key)
-            .map(|start| start.elapsed().as_secs_f64() * 1000.0)
     }
 
     fn ds_timing_key(ds: &DatasetRef<'_>) -> String {
@@ -69,10 +70,10 @@ impl VizHook {
 
 impl Hook for VizHook {
     fn before_pipeline_run(&self, p: &dyn PipelineInfo) {
-        let name = p.get_name();
-        self.start_timing(name);
+        let name = p.name();
+        self.timings.start(name.to_string());
         self.send(&VizEvent {
-            event_type: "pipeline_start".to_string(),
+            kind: VizEventKind::BeforePipelineRun,
             node_name: name.to_string(),
             duration_ms: None,
             error: None,
@@ -82,10 +83,10 @@ impl Hook for VizHook {
     }
 
     fn after_pipeline_run(&self, p: &dyn PipelineInfo) {
-        let name = p.get_name();
-        let duration_ms = self.elapsed_ms(name);
+        let name = p.name();
+        let duration_ms = self.timings.elapsed_ms(&name.to_string());
         self.send(&VizEvent {
-            event_type: "pipeline_end".to_string(),
+            kind: VizEventKind::AfterPipelineRun,
             node_name: name.to_string(),
             duration_ms,
             error: None,
@@ -95,10 +96,10 @@ impl Hook for VizHook {
     }
 
     fn on_pipeline_error(&self, p: &dyn PipelineInfo, error: &str) {
-        let name = p.get_name();
-        self.elapsed_ms(name); // clean up timing entry
+        let name = p.name();
+        self.timings.elapsed_ms(&name.to_string()); // clean up timing entry
         self.send(&VizEvent {
-            event_type: "pipeline_error".to_string(),
+            kind: VizEventKind::OnPipelineError,
             node_name: name.to_string(),
             duration_ms: None,
             error: Some(error.to_string()),
@@ -108,10 +109,10 @@ impl Hook for VizHook {
     }
 
     fn before_node_run(&self, n: &dyn PipelineInfo) {
-        let name = n.get_name();
-        self.start_timing(name);
+        let name = n.name();
+        self.timings.start(name.to_string());
         self.send(&VizEvent {
-            event_type: "node_start".to_string(),
+            kind: VizEventKind::BeforeNodeRun,
             node_name: name.to_string(),
             duration_ms: None,
             error: None,
@@ -121,10 +122,10 @@ impl Hook for VizHook {
     }
 
     fn after_node_run(&self, n: &dyn PipelineInfo) {
-        let name = n.get_name();
-        let duration_ms = self.elapsed_ms(name);
+        let name = n.name();
+        let duration_ms = self.timings.elapsed_ms(&name.to_string());
         self.send(&VizEvent {
-            event_type: "node_end".to_string(),
+            kind: VizEventKind::AfterNodeRun,
             node_name: name.to_string(),
             duration_ms,
             error: None,
@@ -134,10 +135,10 @@ impl Hook for VizHook {
     }
 
     fn on_node_error(&self, n: &dyn PipelineInfo, error: &str) {
-        let name = n.get_name();
-        self.elapsed_ms(name); // clean up timing entry
+        let name = n.name();
+        self.timings.elapsed_ms(&name.to_string()); // clean up timing entry
         self.send(&VizEvent {
-            event_type: "node_error".to_string(),
+            kind: VizEventKind::OnNodeError,
             node_name: name.to_string(),
             duration_ms: None,
             error: Some(error.to_string()),
@@ -146,11 +147,11 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_load(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
-        self.start_timing(&Self::ds_timing_key(ds));
+    fn before_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+        self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
-            event_type: "dataset_load_start".to_string(),
-            node_name: n.get_name().to_string(),
+            kind: VizEventKind::BeforeDatasetLoaded,
+            node_name: n.name().to_string(),
             duration_ms: None,
             error: None,
             dataset_id: Some(ds.id),
@@ -158,11 +159,11 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_load(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
-        let duration_ms = self.elapsed_ms(&Self::ds_timing_key(ds));
+    fn after_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+        let duration_ms = self.timings.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
-            event_type: "dataset_load_end".to_string(),
-            node_name: n.get_name().to_string(),
+            kind: VizEventKind::AfterDatasetLoaded,
+            node_name: n.name().to_string(),
             duration_ms,
             error: None,
             dataset_id: Some(ds.id),
@@ -170,11 +171,11 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_save(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
-        self.start_timing(&Self::ds_timing_key(ds));
+    fn before_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+        self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
-            event_type: "dataset_save_start".to_string(),
-            node_name: n.get_name().to_string(),
+            kind: VizEventKind::BeforeDatasetSaved,
+            node_name: n.name().to_string(),
             duration_ms: None,
             error: None,
             dataset_id: Some(ds.id),
@@ -182,11 +183,11 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_save(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
-        let duration_ms = self.elapsed_ms(&Self::ds_timing_key(ds));
+    fn after_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+        let duration_ms = self.timings.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
-            event_type: "dataset_save_end".to_string(),
-            node_name: n.get_name().to_string(),
+            kind: VizEventKind::AfterDatasetSaved,
+            node_name: n.name().to_string(),
             duration_ms,
             error: None,
             dataset_id: Some(ds.id),

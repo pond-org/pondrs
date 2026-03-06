@@ -39,7 +39,7 @@ pub enum Command {
     /// Validate pipeline structure (dependency ordering, output uniqueness).
     Check,
 
-    /// Build pipeline graph and serve visualization (not yet implemented).
+    /// Build pipeline graph and serve visualization.
     Viz {
         /// Port for the visualization server.
         #[arg(long, default_value = "8080")]

@@ -53,7 +53,7 @@ impl Dataset for PlotlyDataset {
 }
 
 impl FileDataset for PlotlyDataset {
-    fn get_path(&self) -> &str {
+    fn path(&self) -> &str {
         &self.path
     }
 

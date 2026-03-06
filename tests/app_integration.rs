@@ -14,7 +14,7 @@ use pondrs::error::PondError;
 use pondrs::graph::build_pipeline_graph;
 use pondrs::hooks::LoggingHook;
 use pondrs::runners::{Runner, SequentialRunner, ParallelRunner};
-use pondrs::{Dataset, Hooks, Node, Pipeline, Steps};
+use pondrs::{Dataset, Hooks, Node, Pipeline, StepInfo, Steps};
 
 // ---------------------------------------------------------------------------
 // Shared test types
@@ -294,56 +294,9 @@ fn test_pond_app_check_valid() {
     let params: TestParams = deserialize_config(load_yaml(&params_path).unwrap()).unwrap();
 
     let pipeline = SeqApp::pipeline(&catalog, &params);
+    assert!(pipeline.check().is_ok());
     let graph = build_pipeline_graph(&pipeline, &catalog, &params);
-    assert!(graph.check().is_ok());
     assert_eq!(graph.node_indices.len(), 3);
-}
-
-// ---------------------------------------------------------------------------
-// PondApp: check on invalid pipeline (missing input)
-// ---------------------------------------------------------------------------
-
-struct BadApp;
-
-impl PondApp for BadApp {
-    type Catalog = TestCatalog;
-    type Params = TestParams;
-    type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error>;
-
-    fn pipeline<'a>(cat: &'a TestCatalog, _params: &'a TestParams) -> Self::Pipeline<'a> {
-        (
-            // reads cat.a but nothing produces it (and it's not a param)
-            Node {
-                name: "bad_node",
-                func: |a: i32| (a,),
-                input: (&cat.a,),
-                output: (&cat.b,),
-            },
-        )
-    }
-
-    fn hooks() -> impl Hooks {
-        ()
-    }
-}
-
-#[test]
-fn test_pond_app_check_invalid_missing_input() {
-    let dir = TempDir::new().unwrap();
-    let catalog_path = write_yaml(&dir, "catalog.yml", "a: {}\nb: {}\nc: {}\n");
-    let params_path = write_yaml(&dir, "params.yml", "scale: 1\noffset: 1\n");
-
-    let catalog: TestCatalog = deserialize_config(load_yaml(&catalog_path).unwrap()).unwrap();
-    let params: TestParams = deserialize_config(load_yaml(&params_path).unwrap()).unwrap();
-
-    let pipeline = BadApp::pipeline(&catalog, &params);
-    let graph = build_pipeline_graph(&pipeline, &catalog, &params);
-    let errors = graph.check().unwrap_err();
-    assert!(!errors.is_empty());
-    assert!(errors.iter().any(|e| {
-        matches!(e, pondrs::graph::ValidationError::MissingInput { node_name: "bad_node", .. })
-    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -405,8 +358,7 @@ fn test_pond_app_nested_pipeline_check_and_run() {
     let pipeline = NestedApp::pipeline(&catalog, &params);
 
     // Check passes
-    let graph = build_pipeline_graph(&pipeline, &catalog, &params);
-    assert!(graph.check().is_ok());
+    assert!(pipeline.check().is_ok());
 
     // Run and verify
     let hooks = NestedApp::hooks();

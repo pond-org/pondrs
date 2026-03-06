@@ -12,7 +12,7 @@ pub struct CellDataset<T: Copy> {
 }
 
 // SAFETY: CellDataset is intended for single-threaded use only (e.g. SequentialRunner).
-// The Sync impl is required because PipelineItem: Send + Sync, but no concurrent
+// The Sync impl is required because RunnableStep: Send + Sync, but no concurrent
 // access occurs in single-threaded runners.
 unsafe impl<T: Copy + Send> Sync for CellDataset<T> {}
 

@@ -10,9 +10,35 @@ pub use sequential::SequentialRunner;
 
 use serde::Serialize;
 
-use crate::core::Steps;
+use crate::pipeline::{DatasetEvent, DatasetRef, PipelineInfo, Steps};
 use crate::error::PondError;
 use crate::hooks::Hooks;
+
+#[cfg(feature = "std")]
+pub(crate) fn dispatch_dataset_event(
+    item: &dyn PipelineInfo,
+    ds: &DatasetRef<'_>,
+    event: DatasetEvent,
+    names: &std::collections::HashMap<usize, std::string::String>,
+    hooks: &impl Hooks,
+) {
+    let ds = DatasetRef { name: names.get(&ds.id).map(|s: &std::string::String| s.as_str()), ..*ds };
+    dispatch_dataset_event_raw(item, &ds, event, hooks);
+}
+
+pub(crate) fn dispatch_dataset_event_raw(
+    item: &dyn PipelineInfo,
+    ds: &DatasetRef<'_>,
+    event: DatasetEvent,
+    hooks: &impl Hooks,
+) {
+    match event {
+        DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_loaded(item, ds)),
+        DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_loaded(item, ds)),
+        DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_saved(item, ds)),
+        DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_saved(item, ds)),
+    }
+}
 
 /// Trait for pipeline runners.
 pub trait Runner {

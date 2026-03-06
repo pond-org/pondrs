@@ -94,7 +94,7 @@ export function StatusBar({ connected, lastEvent, graph, nodeStatuses, runCount 
 
       {lastEvent && (
         <span style={{ color: 'var(--text-dimmer)', marginLeft: 'auto', fontSize: 14 }}>
-          {lastEvent.event_type.replace(/_/g, ' ')}
+          {lastEvent.kind.replace(/_/g, ' ')}
           {' — '}
           <span style={{ color: 'var(--text-muted)' }}>{lastEvent.node_name}</span>
           {lastEvent.dataset_name && (

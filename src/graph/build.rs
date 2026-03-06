@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use serde::Serialize;
 
 use crate::catalog_indexer::index_catalog_with_params;
-use crate::core::{PipelineInfo, StepInfo, ptr_to_id};
+use crate::pipeline::{PipelineInfo, StepInfo, ptr_to_id};
 
 use super::types::{Edge, GraphNode, PipelineGraph};
 
@@ -68,13 +68,13 @@ fn collect_node<'a>(
     let is_pipe = !item.is_leaf();
 
     let mut inputs = Vec::new();
-    item.for_each_input_id(&mut |d| inputs.push(d.clone()));
+    item.for_each_input(&mut |d| inputs.push(d.clone()));
     let mut outputs = Vec::new();
-    item.for_each_output_id(&mut |d| outputs.push(d.clone()));
+    item.for_each_output(&mut |d| outputs.push(d.clone()));
 
     nodes.push(GraphNode {
         id: ptr_to_id(item),
-        name: item.get_name(),
+        name: item.name(),
         is_pipe,
         inputs,
         outputs,
@@ -130,7 +130,7 @@ fn build_edges<'a>(nodes: &'_ [GraphNode<'a>]) -> Vec<Edge<'a>> {
 mod tests {
     use super::*;
     use crate::datasets::{MemoryDataset, Param};
-    use crate::core::{Node, Pipeline};
+    use crate::pipeline::{Node, Pipeline};
     use serde::Serialize;
 
     #[derive(Serialize)]

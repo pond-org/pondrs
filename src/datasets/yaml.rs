@@ -51,7 +51,7 @@ impl Dataset for YamlDataset {
 }
 
 impl FileDataset for YamlDataset {
-    fn get_path(&self) -> &str {
+    fn path(&self) -> &str {
         &self.path
     }
     fn set_path(&mut self, path: &str) {

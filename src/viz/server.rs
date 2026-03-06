@@ -91,15 +91,16 @@ async fn post_status(
     State(state): State<Arc<VizState>>,
     Json(event): Json<VizEvent>,
 ) -> StatusCode {
-    // Update node status based on event type
-    match event.event_type.as_str() {
-        "node_start" | "pipeline_start" => {
+    // Update node status based on event kind
+    use crate::viz::VizEventKind;
+    match event.kind {
+        VizEventKind::BeforeNodeRun | VizEventKind::BeforePipelineRun => {
             state.node_statuses.lock().unwrap().insert(
                 event.node_name.clone(),
                 NodeStatus { status: "running".to_string(), duration_ms: None, error: None },
             );
         }
-        "node_end" | "pipeline_end" => {
+        VizEventKind::AfterNodeRun | VizEventKind::AfterPipelineRun => {
             state.node_statuses.lock().unwrap().insert(
                 event.node_name.clone(),
                 NodeStatus {
@@ -109,7 +110,7 @@ async fn post_status(
                 },
             );
         }
-        "node_error" | "pipeline_error" => {
+        VizEventKind::OnNodeError | VizEventKind::OnPipelineError => {
             state.node_statuses.lock().unwrap().insert(
                 event.node_name.clone(),
                 NodeStatus {
@@ -119,21 +120,21 @@ async fn post_status(
                 },
             );
         }
-        "dataset_load_end" => {
+        VizEventKind::AfterDatasetLoaded => {
             if let Some(ds_name) = &event.dataset_name {
                 let mut map = state.dataset_activity.lock().unwrap();
                 let entry = map.entry(ds_name.clone()).or_default();
                 entry.load_ms = event.duration_ms;
             }
         }
-        "dataset_save_end" => {
+        VizEventKind::AfterDatasetSaved => {
             if let Some(ds_name) = &event.dataset_name {
                 let mut map = state.dataset_activity.lock().unwrap();
                 let entry = map.entry(ds_name.clone()).or_default();
                 entry.save_ms = event.duration_ms;
             }
         }
-        _ => {}
+        VizEventKind::BeforeDatasetLoaded | VizEventKind::BeforeDatasetSaved => {}
     }
 
     // Broadcast the raw event JSON to all WebSocket clients

@@ -20,8 +20,10 @@ impl<T: Clone + Serialize> Dataset for Param<T> {
         Ok(self.0.clone())
     }
 
+    /// Param is read-only — the validator prevents writing to params,
+    /// so `save()` should never be reached.
     fn save(&self, _output: Self::SaveItem) -> Result<(), Infallible> {
-        Ok(())
+        unreachable!("Param is read-only — save() should never be called")
     }
 
     fn is_param(&self) -> bool { true }

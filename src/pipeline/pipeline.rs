@@ -1,7 +1,7 @@
 //! Pipeline struct - a container for multiple steps.
 
 use super::steps::{StepInfo, Steps};
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
 
 pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
     pub name: &'static str,
@@ -13,7 +13,7 @@ pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
 impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
     PipelineInfo for Pipeline<S, Input, Output>
 {
-    fn get_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         self.name
     }
 
@@ -21,7 +21,7 @@ impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutp
         false
     }
 
-    fn get_type_string(&self) -> &'static str {
+    fn type_string(&self) -> &'static str {
         "pipeline"
     }
 
@@ -29,25 +29,27 @@ impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutp
         self.steps.for_each_info(f);
     }
 
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        self.input.for_each_input_id(f);
+    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        self.input.for_each_input(f);
     }
 
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        self.output.for_each_output_id(f);
+    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        self.output.for_each_output(f);
     }
 }
 
 impl<E, S, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
-    PipelineItem<E> for Pipeline<S, Input, Output>
+    RunnableStep<E> for Pipeline<S, Input, Output>
 where
     S: Steps<E> + Send + Sync,
 {
+    /// Pipeline is a container — execution happens via `for_each_child_step`.
+    /// Runners should never call this directly; they check `is_leaf()` first.
     fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
-        Ok(())
+        unreachable!("Pipeline::call() should not be invoked directly — use for_each_child_step")
     }
 
-    fn for_each_child_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineItem<E>)) {
+    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
         self.steps.for_each_item(f);
     }
 }

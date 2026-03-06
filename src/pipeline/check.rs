@@ -2,63 +2,7 @@
 
 use super::id_set::IdSet;
 use super::traits::{DatasetRef, PipelineInfo};
-
-/// Validation error from [`StepInfo::check`](super::StepInfo::check).
-#[derive(Debug)]
-pub enum CheckError {
-    /// A node reads a dataset that is produced by a later node (wrong order).
-    InputNotProduced {
-        node_name: &'static str,
-        dataset_id: usize,
-    },
-    /// A dataset is produced by more than one node.
-    DuplicateOutput {
-        node_name: &'static str,
-        dataset_id: usize,
-    },
-    /// A node writes to a param dataset (params are read-only).
-    ParamWritten {
-        node_name: &'static str,
-        dataset_id: usize,
-    },
-    /// A pipeline declares an input that none of its children consume.
-    UnusedPipelineInput {
-        pipeline_name: &'static str,
-        dataset_id: usize,
-    },
-    /// A pipeline declares an output that none of its children produce.
-    UnproducedPipelineOutput {
-        pipeline_name: &'static str,
-        dataset_id: usize,
-    },
-    /// The fixed-capacity dataset buffer overflowed.
-    CapacityExceeded,
-}
-
-impl core::fmt::Display for CheckError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            CheckError::InputNotProduced { node_name, dataset_id } => {
-                write!(f, "Node '{node_name}' requires dataset {dataset_id:#x}, which is produced by a later node")
-            }
-            CheckError::DuplicateOutput { node_name, dataset_id } => {
-                write!(f, "Node '{node_name}' produces dataset {dataset_id:#x}, which was already produced by an earlier node")
-            }
-            CheckError::ParamWritten { node_name, dataset_id } => {
-                write!(f, "Node '{node_name}' writes to param dataset {dataset_id:#x}, but params are read-only")
-            }
-            CheckError::UnusedPipelineInput { pipeline_name, dataset_id } => {
-                write!(f, "Pipeline '{pipeline_name}' declares input {dataset_id:#x}, but none of its children consume it")
-            }
-            CheckError::UnproducedPipelineOutput { pipeline_name, dataset_id } => {
-                write!(f, "Pipeline '{pipeline_name}' declares output {dataset_id:#x}, but none of its children produce it")
-            }
-            CheckError::CapacityExceeded => {
-                write!(f, "Dataset capacity exceeded; use check_with_capacity::<N>() with a larger N")
-            }
-        }
-    }
-}
+pub use crate::CheckError;
 
 /// Collect all output dataset IDs from all leaf nodes (recursively).
 pub(crate) fn collect_all_outputs<const N: usize>(
@@ -66,7 +10,7 @@ pub(crate) fn collect_all_outputs<const N: usize>(
     all_produced: &mut IdSet<N>,
 ) {
     if item.is_leaf() {
-        item.for_each_output_id(&mut |d: &DatasetRef| {
+        item.for_each_output(&mut |d: &DatasetRef| {
             all_produced.insert(d.id);
         });
     } else {
@@ -103,13 +47,13 @@ fn check_leaf<const N: usize>(
     produced: &mut IdSet<N>,
     consumed: &mut IdSet<N>,
 ) -> Result<(), CheckError> {
-    let name = item.get_name();
+    let name = item.name();
 
     // Check inputs: if a dataset is produced somewhere in this pipeline
     // but not yet by an earlier node, it's an ordering error.
     // Datasets not produced by anyone are external inputs — valid.
     let mut input_err: Result<(), CheckError> = Ok(());
-    item.for_each_input_id(&mut |d: &DatasetRef| {
+    item.for_each_input(&mut |d: &DatasetRef| {
         if input_err.is_err() {
             return;
         }
@@ -128,7 +72,7 @@ fn check_leaf<const N: usize>(
 
     // Check outputs: no params, no duplicates.
     let mut output_err: Result<(), CheckError> = Ok(());
-    item.for_each_output_id(&mut |d: &DatasetRef| {
+    item.for_each_output(&mut |d: &DatasetRef| {
         if output_err.is_err() {
             return;
         }
@@ -159,7 +103,7 @@ fn check_pipeline<const N: usize>(
     produced: &mut IdSet<N>,
     consumed: &mut IdSet<N>,
 ) -> Result<(), CheckError> {
-    let name = item.get_name();
+    let name = item.name();
 
     // Snapshot parent produced set so children can see it.
     let mut inner_produced = IdSet::<N>::new();
@@ -188,7 +132,7 @@ fn check_pipeline<const N: usize>(
 
     // Check pipeline contract: declared outputs must be produced by children.
     let mut output_err: Result<(), CheckError> = Ok(());
-    item.for_each_output_id(&mut |d: &DatasetRef| {
+    item.for_each_output(&mut |d: &DatasetRef| {
         if output_err.is_err() {
             return;
         }
@@ -203,7 +147,7 @@ fn check_pipeline<const N: usize>(
 
     // Check pipeline contract: declared inputs must be consumed by children.
     let mut input_err: Result<(), CheckError> = Ok(());
-    item.for_each_input_id(&mut |d: &DatasetRef| {
+    item.for_each_input(&mut |d: &DatasetRef| {
         if input_err.is_err() {
             return;
         }
@@ -220,7 +164,7 @@ fn check_pipeline<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{Node, Pipeline, StepInfo};
+    use crate::pipeline::{Node, Pipeline, StepInfo};
     use crate::datasets::{CellDataset, Param};
 
     #[test]

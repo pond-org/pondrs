@@ -8,7 +8,7 @@ use std::thread;
 
 use serde::Serialize;
 
-use crate::core::{DatasetEvent, DatasetRef, PipelineItem, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;
@@ -18,10 +18,10 @@ use super::Runner;
 pub struct ParallelRunner;
 
 /// Collect callable items by walking the tree in the same order as graph building.
-fn collect_items<'a, E>(items: &mut Vec<&'a dyn PipelineItem<E>>, item: &'a dyn PipelineItem<E>) {
+fn collect_items<'a, E>(items: &mut Vec<&'a dyn RunnableStep<E>>, item: &'a dyn RunnableStep<E>) {
     items.push(item);
     if !item.is_leaf() {
-        item.for_each_child_item(&mut |child| {
+        item.for_each_child_step(&mut |child| {
             collect_items(items, child);
         });
     }
@@ -44,7 +44,7 @@ impl Runner for ParallelRunner {
         }
 
         // Collect callable items in the same tree-walk order as graph building
-        let mut callable_items: Vec<&dyn PipelineItem<E>> = Vec::new();
+        let mut callable_items: Vec<&dyn RunnableStep<E>> = Vec::new();
         pipe.for_each_item(&mut |item| {
             collect_items(&mut callable_items, item);
         });
@@ -122,13 +122,7 @@ impl Runner for ParallelRunner {
                         s.spawn(move || {
                             hooks.for_each_hook(&mut |h| h.before_node_run(item));
                             let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent| {
-                                let ds = DatasetRef { name: names.get(&ds.id).map(|s| s.as_str()), ..*ds };
-                                match event {
-                                    DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_load(item, &ds)),
-                                    DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_load(item, &ds)),
-                                    DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_save(item, &ds)),
-                                    DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_save(item, &ds)),
-                                }
+                                super::dispatch_dataset_event(item, ds, event, names, hooks);
                             };
                             match item.call(&mut on_event) {
                                 Ok(()) => {

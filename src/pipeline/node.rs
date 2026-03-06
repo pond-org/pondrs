@@ -3,7 +3,7 @@
 use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, PipelineItem};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
 
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
@@ -21,7 +21,7 @@ where
     Output: NodeOutput + Send + Sync,
     F: Fn<Input::Args> + Send + Sync,
 {
-    fn get_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         self.name
     }
 
@@ -29,22 +29,22 @@ where
         true
     }
 
-    fn get_type_string(&self) -> &'static str {
+    fn type_string(&self) -> &'static str {
         core::any::type_name::<F>()
     }
 
     fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
 
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        self.input.for_each_input_id(f);
+    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        self.input.for_each_input(f);
     }
 
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        self.output.for_each_output_id(f);
+    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        self.output.for_each_output(f);
     }
 }
 
-impl<F, Input, Output, E, R> PipelineItem<E> for Node<F, Input, Output>
+impl<F, Input, Output, E, R> RunnableStep<E> for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
@@ -60,5 +60,5 @@ where
         Ok(())
     }
 
-    fn for_each_child_item<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineItem<E>)) {}
+    fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
 }

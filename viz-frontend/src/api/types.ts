@@ -57,9 +57,22 @@ export interface StatusSnapshot {
   datasets: Record<string, DatasetActivity>;
 }
 
+// Event kinds — mirror Rust VizEventKind (serde snake_case = Kedro hook names).
+export type VizEventKind =
+  | 'before_pipeline_run'
+  | 'after_pipeline_run'
+  | 'on_pipeline_error'
+  | 'before_node_run'
+  | 'after_node_run'
+  | 'on_node_error'
+  | 'before_dataset_loaded'
+  | 'after_dataset_loaded'
+  | 'before_dataset_saved'
+  | 'after_dataset_saved';
+
 // Events pushed over WebSocket.
 export interface VizEvent {
-  event_type: string;
+  kind: VizEventKind;
   node_name: string;
   duration_ms: number | null;
   error: string | null;

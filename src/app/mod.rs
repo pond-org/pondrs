@@ -10,7 +10,7 @@ use clap::Parser;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::core::{StepInfo, Steps};
+use crate::pipeline::{StepInfo, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::Hooks;

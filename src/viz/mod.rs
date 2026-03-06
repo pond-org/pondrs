@@ -5,6 +5,6 @@ pub mod hook;
 pub mod serialization;
 pub mod server;
 
-pub use hook::VizHook;
+pub use hook::{VizEvent, VizEventKind, VizHook};
 pub use serialization::{VizGraph, collect_dataset_meta, viz_graph_from};
 pub use server::{VizState, start_server};

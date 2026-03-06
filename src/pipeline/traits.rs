@@ -7,7 +7,7 @@ use crate::error::PondError;
 
 /// Convert a reference to a unique ID based on its pointer address.
 /// Uses the data pointer only (ignores vtable for trait objects).
-pub fn ptr_to_id<T: ?Sized>(r: &T) -> usize {
+pub(crate) fn ptr_to_id<T: ?Sized>(r: &T) -> usize {
     r as *const T as *const () as usize
 }
 
@@ -20,7 +20,7 @@ pub struct DatasetRef<'a> {
 }
 
 impl<'a> DatasetRef<'a> {
-    pub fn new<T: Dataset + Send + Sync>(ds: &'a T) -> Self {
+    pub fn from_ref<T: Dataset + Send + Sync>(ds: &'a T) -> Self {
         Self {
             id: ptr_to_id(ds),
             meta: ds,
@@ -56,25 +56,25 @@ pub enum DatasetEvent {
 
 /// Non-generic metadata trait -- used by hooks, graph building, object-safe.
 pub trait PipelineInfo: Send + Sync {
-    fn get_name(&self) -> &'static str;
+    fn name(&self) -> &'static str;
     fn is_leaf(&self) -> bool;
-    fn get_type_string(&self) -> &'static str;
+    fn type_string(&self) -> &'static str;
     fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
 /// Generic execution trait -- parameterized by error type E.
-pub trait PipelineItem<E>: PipelineInfo {
+pub trait RunnableStep<E>: PipelineInfo {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E>;
-    fn for_each_child_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineItem<E>));
+    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 }
 
 /// Trait for loading data from input datasets.
 pub trait NodeInput: Tuple {
     type Args: Tuple;
     fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError>;
-    fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
 impl NodeInput for () {
@@ -82,7 +82,7 @@ impl NodeInput for () {
     fn load_data(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError> {
         Ok(())
     }
-    fn for_each_input_id<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
+    fn for_each_input<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
 }
 
 macro_rules! impl_node_input {
@@ -95,15 +95,15 @@ macro_rules! impl_node_input {
             #[allow(non_snake_case)]
             fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError> {
                 $(
-                    let ds = DatasetRef::new(self.$idx);
+                    let ds = DatasetRef::from_ref(self.$idx);
                     on_event(&ds, DatasetEvent::BeforeLoad);
                     let $T = self.$idx.load()?;
                     on_event(&ds, DatasetEvent::AfterLoad);
                 )+
                 Ok(($($T,)+))
             }
-            fn for_each_input_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-                $(f(&DatasetRef::new(self.$idx));)+
+            fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+                $(f(&DatasetRef::from_ref(self.$idx));)+
             }
         }
     };
@@ -124,7 +124,7 @@ impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 pub trait NodeOutput: Tuple {
     type Output: Tuple;
     fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError>;
-    fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
 impl NodeOutput for () {
@@ -132,7 +132,7 @@ impl NodeOutput for () {
     fn save_data(&self, _output: Self::Output, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError> {
         Ok(())
     }
-    fn for_each_output_id<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
+    fn for_each_output<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
 }
 
 macro_rules! impl_node_output {
@@ -144,15 +144,15 @@ macro_rules! impl_node_output {
             type Output = ($($T::SaveItem,)+);
             fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError> {
                 $({
-                    let ds = DatasetRef::new(self.$idx);
+                    let ds = DatasetRef::from_ref(self.$idx);
                     on_event(&ds, DatasetEvent::BeforeSave);
                     self.$idx.save(output.$idx)?;
                     on_event(&ds, DatasetEvent::AfterSave);
                 })+
                 Ok(())
             }
-            fn for_each_output_id<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-                $(f(&DatasetRef::new(self.$idx));)+
+            fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+                $(f(&DatasetRef::from_ref(self.$idx));)+
             }
         }
     };
