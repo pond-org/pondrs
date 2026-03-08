@@ -6,6 +6,7 @@ mod ident;
 mod into_result;
 mod node;
 mod pipeline;
+pub mod stable;
 mod steps;
 mod traits;
 

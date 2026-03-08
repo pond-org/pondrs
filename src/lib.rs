@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(unboxed_closures, fn_traits, tuple_trait, impl_trait_in_assoc_type)]
+#![feature(impl_trait_in_assoc_type)]
 
 #[cfg(feature = "std")]
 #[macro_use]
