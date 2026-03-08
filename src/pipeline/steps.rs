@@ -1,13 +1,13 @@
 //! Steps trait and tuple implementations.
 
-use core::marker::Tuple;
-
 use super::check::{CheckError, check_item, collect_all_outputs};
 use super::id_set::IdSet;
 use super::traits::{PipelineInfo, RunnableStep};
 
 /// Non-generic trait for a sequence of pipeline items (metadata only).
-pub trait StepInfo: Tuple {
+use super::stable::StableTuple;
+
+pub trait StepInfo: StableTuple {
     fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
 
     /// Validate sequential ordering and pipeline contracts.

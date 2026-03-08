@@ -1,8 +1,8 @@
 //! Core traits for pipeline items and data flow.
 
-use core::marker::Tuple;
-
 use crate::datasets::{Dataset, DatasetMeta};
+
+use super::stable::StableTuple;
 use crate::error::PondError;
 
 /// Convert a reference to a unique ID based on its pointer address.
@@ -71,8 +71,8 @@ pub trait RunnableStep<E>: PipelineInfo {
 }
 
 /// Trait for loading data from input datasets.
-pub trait NodeInput: Tuple {
-    type Args: Tuple;
+pub trait NodeInput: StableTuple {
+    type Args: StableTuple;
     fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<Self::Args, PondError>;
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
@@ -121,8 +121,8 @@ impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
 impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 
 /// Trait for saving data to output datasets.
-pub trait NodeOutput: Tuple {
-    type Output: Tuple;
+pub trait NodeOutput: StableTuple {
+    type Output: StableTuple;
     fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), PondError>;
     fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }

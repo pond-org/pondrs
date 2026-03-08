@@ -3,11 +3,12 @@
 use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
+use super::stable::StableFn;
 use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
 
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
-    F: Fn<Input::Args>,
+    F: StableFn<Input::Args>,
 {
     pub name: &'static str,
     pub func: F,
@@ -19,7 +20,7 @@ impl<F, Input, Output> PipelineInfo for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
-    F: Fn<Input::Args> + Send + Sync,
+    F: StableFn<Input::Args> + Send + Sync,
 {
     fn name(&self) -> &'static str {
         self.name
@@ -48,13 +49,13 @@ impl<F, Input, Output, E, R> RunnableStep<E> for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
-    F: Fn<Input::Args, Output = R> + Send + Sync,
+    F: StableFn<Input::Args, Output = R> + Send + Sync,
     R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
         let args = self.input.load_data(on_event).map_err(E::from)?;
-        let result = Fn::call(&self.func, args);
+        let result = StableFn::call(&self.func, args);
         let output = result.into_node_result()?;
         self.output.save_data(output, on_event).map_err(E::from)?;
         Ok(())
