@@ -136,6 +136,11 @@ impl<C, P, H, R> App<C, P, H, R> {
         self.command = command;
         self
     }
+
+    /// Borrow the current command.
+    pub fn command(&self) -> &Command {
+        &self.command
+    }
 }
 
 // --- Execution methods (no_std) ---

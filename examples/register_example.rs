@@ -11,8 +11,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use pondrs::datasets::{GpioDataset, Param, RegisterDataset};
 use pondrs::Dataset;
+use pondrs::app::Command;
+use pondrs::datasets::{GpioDataset, Param, RegisterDataset};
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
 use pondrs::pipeline::{Node, Steps};
@@ -67,10 +68,7 @@ struct Params {
 // Pipeline
 // ---------------------------------------------------------------------------
 
-fn register_pipeline<'a>(
-    cat: &'a Catalog,
-    params: &'a Params,
-) -> impl Steps<PondError> + 'a {
+fn register_pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<PondError> + 'a {
     (
         Node {
             name: "read_sensor",
@@ -143,6 +141,10 @@ fn main() -> Result<(), PondError> {
 
     // Pre-load a sensor reading so the pipeline has data
     app.catalog().sensor.save(750)?;
+
+    if let Command::Viz { .. } = app.command() {
+        app.execute(register_pipeline)?;
+    }
 
     app.dispatch(register_pipeline)
 }
