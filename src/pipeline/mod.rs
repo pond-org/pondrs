@@ -6,6 +6,7 @@ mod ident;
 mod into_result;
 mod node;
 mod pipeline;
+mod pipeline_fn;
 pub mod stable;
 mod steps;
 mod traits;
@@ -15,6 +16,7 @@ pub use ident::Ident;
 pub use into_result::IntoNodeResult;
 pub use node::Node;
 pub use pipeline::Pipeline;
+pub use pipeline_fn::PipelineFn;
 pub use steps::{StepInfo, Steps};
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;

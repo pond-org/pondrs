@@ -4,9 +4,11 @@
 use std::prelude::v1::*;
 
 mod cell;
+mod gpio;
 #[cfg(feature = "std")]
 mod memory;
 mod param;
+mod register;
 #[cfg(feature = "polars")]
 mod partitioned;
 #[cfg(feature = "polars")]
@@ -23,9 +25,11 @@ mod plotly_dataset;
 mod image_dataset;
 
 pub use cell::CellDataset;
+pub use gpio::GpioDataset;
 #[cfg(feature = "std")]
 pub use memory::MemoryDataset;
 pub use param::Param;
+pub use register::RegisterDataset;
 #[cfg(feature = "polars")]
 pub use partitioned::Lazy;
 #[cfg(feature = "polars")]

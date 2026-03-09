@@ -1,5 +1,3 @@
-#![feature(unboxed_closures, fn_traits, tuple_trait, impl_trait_in_assoc_type)]
-
 //! Example: launch the interactive pipeline visualizer for the sales pipeline.
 //!
 //! Starts the viz web server on port 8080. Open http://localhost:8080 in your
@@ -14,11 +12,12 @@
 #[path = "sales/mod.rs"]
 mod sales;
 
-use pondrs::app::PondApp;
+use pondrs::hooks::LoggingHook;
+use pondrs::viz::VizHook;
 
-use sales::{SalesApp, examples_data_dir, write_fixtures};
+use sales::{sales_pipeline, examples_data_dir, write_fixtures};
 
-fn main() {
+fn main() -> Result<(), pondrs::error::PondError> {
     let dir = examples_data_dir();
     write_fixtures(&dir);
 
@@ -28,12 +27,18 @@ fn main() {
     println!("to see live execution status stream in.\n");
     println!("Press Ctrl+C to stop.");
 
-    // Launch the viz subcommand — blocks until Ctrl+C
-    SalesApp::main_from([
+    let app = pondrs::app::App::from_args([
         "sales-app",
         "--catalog-path", dir.join("catalog.yml").to_str().unwrap(),
         "--params-path",  dir.join("params.yml").to_str().unwrap(),
         "viz",
         "--port", "8080",
-    ]);
+    ])?
+    .with_hooks((
+        LoggingHook::new(),
+        VizHook::new("http://localhost:8080".to_string()),
+    ));
+
+    app.dispatch(sales_pipeline)?;
+    Ok(())
 }

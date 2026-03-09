@@ -35,6 +35,12 @@ pub enum PondError {
     #[error("Dataset not loaded: no data available")]
     DatasetNotLoaded,
 
+    #[error("Runner not found")]
+    RunnerNotFound,
+
+    #[error("Pipeline check failed")]
+    CheckFailed,
+
     #[cfg(feature = "std")]
     #[error("Lock poisoned: {0}")]
     LockPoisoned(std::string::String),

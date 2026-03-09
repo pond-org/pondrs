@@ -1,15 +1,13 @@
-#![feature(unboxed_closures, fn_traits, tuple_trait, impl_trait_in_assoc_type)]
 #![allow(dead_code)]
 
-//! Integration test for the sales pipeline, exercising the full PondApp
-//! entrypoint via `try_main_from`.
+//! Integration test for the sales pipeline via App::from_args + dispatch.
 
 #[path = "../examples/sales/mod.rs"]
 mod sales;
 
-use pondrs::app::PondApp;
+use pondrs::hooks::LoggingHook;
 
-use sales::{SalesApp, write_fixtures};
+use sales::{sales_pipeline, write_fixtures};
 
 #[test]
 fn sales_pipeline_succeeds() {
@@ -19,12 +17,15 @@ fn sales_pipeline_succeeds() {
     let cat_path = dir.path().join("catalog.yml");
     let params_path = dir.path().join("params.yml");
 
-    SalesApp::try_main_from([
+    let app = pondrs::app::App::from_args([
         "test",
         "--catalog-path", cat_path.to_str().unwrap(),
         "--params-path",  params_path.to_str().unwrap(),
         "run",
-    ]).unwrap();
+    ]).unwrap()
+    .with_hooks((LoggingHook::new(),));
+
+    app.dispatch(sales_pipeline).unwrap();
 }
 
 #[test]
@@ -35,10 +36,12 @@ fn sales_pipeline_check_succeeds() {
     let cat_path = dir.path().join("catalog.yml");
     let params_path = dir.path().join("params.yml");
 
-    SalesApp::try_main_from([
+    let app = pondrs::app::App::from_args([
         "test",
         "--catalog-path", cat_path.to_str().unwrap(),
         "--params-path",  params_path.to_str().unwrap(),
         "check",
     ]).unwrap();
+
+    app.dispatch(sales_pipeline).unwrap();
 }

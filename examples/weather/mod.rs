@@ -11,14 +11,11 @@ use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use yaml_rust2::Yaml;
 
-use pondrs::app::PondApp;
 use pondrs::datasets::{
     MemoryDataset, Param, PartitionedDataset, PlotlyDataset, PolarsCsvDataset, YamlDataset,
 };
 use pondrs::error::PondError;
-use pondrs::hooks::LoggingHook;
-use pondrs::viz::VizHook;
-use pondrs::{Hooks, Node, Pipeline, Steps};
+use pondrs::{Node, Pipeline, Steps};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -134,8 +131,6 @@ pub struct ReportsCatalog {
 // Node functions
 // ---------------------------------------------------------------------------
 
-/// Merge all station CSV partitions into a single DataFrame, adding a
-/// "station" column from the partition key.
 fn merge_stations(
     partitions: HashMap<String, DataFrame>,
 ) -> Result<(DataFrame,), PolarsError> {
@@ -152,7 +147,6 @@ fn merge_stations(
     Ok((combined.unwrap_or_default(),))
 }
 
-/// Load station metadata from YAML (side-effect node, just prints info).
 fn load_metadata(meta: Yaml) {
     if let Yaml::Hash(ref map) = meta {
         for (key, _) in map {
@@ -163,12 +157,11 @@ fn load_metadata(meta: Yaml) {
     }
 }
 
-/// Compute aggregate weather statistics from the combined readings.
 fn compute_summary(
     df: DataFrame,
     baseline: BaselinePeriod,
 ) -> (WeatherSummary,) {
-    let _ = baseline; // used for filtering in a real scenario
+    let _ = baseline;
 
     let temp = df.column("temperature").unwrap().f64().unwrap();
     let rain = df.column("rainfall").unwrap().f64().unwrap();
@@ -195,7 +188,6 @@ fn compute_summary(
     (summary,)
 }
 
-/// Detect anomalous temperature readings (beyond threshold * std_dev from mean).
 fn detect_anomalies(
     df: DataFrame,
     threshold: f64,
@@ -211,7 +203,6 @@ fn detect_anomalies(
     Ok((df.filter(&mask)?,))
 }
 
-/// Build a temperature bar chart from the summary.
 fn plot_temperatures(summary: WeatherSummary, title: String) -> (Plot,) {
     let labels = vec!["Min", "Avg", "Max"];
     let values = vec![summary.min_temp, summary.avg_temp, summary.max_temp];
@@ -228,7 +219,6 @@ fn plot_temperatures(summary: WeatherSummary, title: String) -> (Plot,) {
     (plot,)
 }
 
-/// Build a rainfall summary chart.
 fn plot_rainfall(summary: WeatherSummary, title: String) -> (Plot,) {
     let labels = vec![
         format!("{} stations", summary.station_count),
@@ -251,7 +241,6 @@ fn plot_rainfall(summary: WeatherSummary, title: String) -> (Plot,) {
     (plot,)
 }
 
-/// Validation node that always fails (demonstrates error state in viz).
 fn validate_reports(
     _temp_chart: serde_json::Value,
     _rain_chart: serde_json::Value,
@@ -262,115 +251,99 @@ fn validate_reports(
 }
 
 // ---------------------------------------------------------------------------
-// App
+// Pipeline function
 // ---------------------------------------------------------------------------
 
-pub struct WeatherApp;
-
-impl PondApp for WeatherApp {
-    type Catalog = WeatherCatalog;
-    type Params = WeatherParams;
-    type Error = WeatherError;
-    type Pipeline<'a> = impl Steps<Self::Error>;
-
-    fn pipeline<'a>(
-        cat: &'a WeatherCatalog,
-        params: &'a WeatherParams,
-    ) -> Self::Pipeline<'a> {
-        (
-            // Subpipeline: data preparation
-            Pipeline {
-                name: "data_prep",
-                steps: (
-                    Node {
-                        name: "merge_stations",
-                        func: merge_stations,
-                        input: (&cat.sources.station_readings,),
-                        output: (&cat.analysis.combined_readings,),
-                    },
-                    Node {
-                        name: "load_metadata",
-                        func: load_metadata,
-                        input: (&cat.sources.station_metadata,),
-                        output: (),
-                    },
-                ),
-                input: (
-                    &cat.sources.station_readings,
-                    &cat.sources.station_metadata,
-                ),
-                output: (&cat.analysis.combined_readings,),
-            },
-            // These two nodes can run in parallel (both read combined_readings)
-            Node {
-                name: "compute_summary",
-                func: compute_summary,
-                input: (
-                    &cat.analysis.combined_readings,
-                    &params.analysis.baseline,
-                ),
-                output: (&cat.analysis.weather_summary,),
-            },
-            Node {
-                name: "detect_anomalies",
-                func: detect_anomalies,
-                input: (
-                    &cat.analysis.combined_readings,
-                    &params.analysis.anomaly_threshold,
-                ),
-                output: (&cat.analysis.anomalies,),
-            },
-            // Subpipeline: reporting (inner nodes can run in parallel)
-            Pipeline {
-                name: "reporting",
-                steps: (
-                    Node {
-                        name: "plot_temperatures",
-                        func: plot_temperatures,
-                        input: (
-                            &cat.analysis.weather_summary,
-                            &params.display.chart_title,
-                        ),
-                        output: (&cat.reports.temperature_chart,),
-                    },
-                    Node {
-                        name: "plot_rainfall",
-                        func: plot_rainfall,
-                        input: (
-                            &cat.analysis.weather_summary,
-                            &params.display.chart_title,
-                        ),
-                        output: (&cat.reports.rainfall_chart,),
-                    },
-                ),
-                input: (
-                    &cat.analysis.weather_summary,
-                    &params.display.chart_title,
-                ),
-                output: (
-                    &cat.reports.temperature_chart,
-                    &cat.reports.rainfall_chart,
-                ),
-            },
-            // Validation node: intentionally fails
-            Node {
-                name: "validate_reports",
-                func: validate_reports,
-                input: (
-                    &cat.reports.temperature_chart,
-                    &cat.reports.rainfall_chart,
-                ),
-                output: (&cat.reports.validation_passed,),
-            },
-        )
-    }
-
-    fn hooks() -> impl Hooks {
-        (
-            LoggingHook::new(),
-            VizHook::new("http://localhost:8080".to_string()),
-        )
-    }
+pub fn weather_pipeline<'a>(
+    cat: &'a WeatherCatalog,
+    params: &'a WeatherParams,
+) -> impl Steps<WeatherError> + 'a {
+    (
+        // Subpipeline: data preparation
+        Pipeline {
+            name: "data_prep",
+            steps: (
+                Node {
+                    name: "merge_stations",
+                    func: merge_stations,
+                    input: (&cat.sources.station_readings,),
+                    output: (&cat.analysis.combined_readings,),
+                },
+                Node {
+                    name: "load_metadata",
+                    func: load_metadata,
+                    input: (&cat.sources.station_metadata,),
+                    output: (),
+                },
+            ),
+            input: (
+                &cat.sources.station_readings,
+                &cat.sources.station_metadata,
+            ),
+            output: (&cat.analysis.combined_readings,),
+        },
+        // These two nodes can run in parallel (both read combined_readings)
+        Node {
+            name: "compute_summary",
+            func: compute_summary,
+            input: (
+                &cat.analysis.combined_readings,
+                &params.analysis.baseline,
+            ),
+            output: (&cat.analysis.weather_summary,),
+        },
+        Node {
+            name: "detect_anomalies",
+            func: detect_anomalies,
+            input: (
+                &cat.analysis.combined_readings,
+                &params.analysis.anomaly_threshold,
+            ),
+            output: (&cat.analysis.anomalies,),
+        },
+        // Subpipeline: reporting (inner nodes can run in parallel)
+        Pipeline {
+            name: "reporting",
+            steps: (
+                Node {
+                    name: "plot_temperatures",
+                    func: plot_temperatures,
+                    input: (
+                        &cat.analysis.weather_summary,
+                        &params.display.chart_title,
+                    ),
+                    output: (&cat.reports.temperature_chart,),
+                },
+                Node {
+                    name: "plot_rainfall",
+                    func: plot_rainfall,
+                    input: (
+                        &cat.analysis.weather_summary,
+                        &params.display.chart_title,
+                    ),
+                    output: (&cat.reports.rainfall_chart,),
+                },
+            ),
+            input: (
+                &cat.analysis.weather_summary,
+                &params.display.chart_title,
+            ),
+            output: (
+                &cat.reports.temperature_chart,
+                &cat.reports.rainfall_chart,
+            ),
+        },
+        // Validation node: intentionally fails
+        Node {
+            name: "validate_reports",
+            func: validate_reports,
+            input: (
+                &cat.reports.temperature_chart,
+                &cat.reports.rainfall_chart,
+            ),
+            output: (&cat.reports.validation_passed,),
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +360,6 @@ pub fn write_fixtures(dir: &std::path::Path) {
 
     fs::create_dir_all(dir.join("stations")).unwrap();
 
-    // Station North: cool climate
     fs::write(
         dir.join("stations/north.csv"),
         "\
@@ -408,7 +380,6 @@ date,temperature,humidity,rainfall,wind_speed
     )
     .unwrap();
 
-    // Station South: warm climate
     fs::write(
         dir.join("stations/south.csv"),
         "\
@@ -429,7 +400,6 @@ date,temperature,humidity,rainfall,wind_speed
     )
     .unwrap();
 
-    // Station East: temperate, with an anomalous July reading (50.0C!)
     fs::write(
         dir.join("stations/east.csv"),
         "\
@@ -450,7 +420,6 @@ date,temperature,humidity,rainfall,wind_speed
     )
     .unwrap();
 
-    // Station metadata YAML
     fs::write(
         dir.join("station_metadata.yml"),
         "\
@@ -473,7 +442,6 @@ east:
     )
     .unwrap();
 
-    // Catalog YAML
     fs::write(
         dir.join("catalog.yml"),
         format!(
@@ -504,7 +472,6 @@ reports:
     )
     .unwrap();
 
-    // Params YAML
     fs::write(
         dir.join("params.yml"),
         "\

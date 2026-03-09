@@ -15,6 +15,7 @@ use crate::hooks::Hooks;
 
 use super::Runner;
 
+#[derive(Default)]
 pub struct ParallelRunner;
 
 /// Collect callable items by walking the tree in the same order as graph building.

@@ -1,5 +1,3 @@
-#![feature(unboxed_closures, fn_traits, tuple_trait)]
-
 //! Example demonstrating pondrs running with only the no_std subset.
 //!
 //! This binary itself uses std (it's a regular executable), but it only
@@ -37,7 +35,7 @@ fn checked_square(b: i32) -> Result<(i32,), PondError> {
     Ok((b * b,))
 }
 
-fn main() {
+fn main() -> Result<(), PondError> {
     let params = Params {
         scale: Param(3),
         offset: Param(10),
@@ -83,11 +81,12 @@ fn main() {
 
     // Run with no hooks, no panic catching
     let hooks = ();
-    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
+    SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks)?;
 
     // Verify results: scale=3, so a=6, b=6+10=16, c=16*16=256
-    let result = catalog.c.load().unwrap();
+    let result = catalog.c.load()?;
     assert_eq!(result, 256);
     println!("Pipeline result: {result}");
     println!("no_std-compatible pipeline executed successfully!");
+    Ok(())
 }

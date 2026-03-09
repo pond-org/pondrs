@@ -11,6 +11,7 @@ use crate::hooks::Hooks;
 
 use super::Runner;
 
+#[derive(Default)]
 pub struct SequentialRunner;
 
 impl SequentialRunner {

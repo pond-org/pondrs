@@ -1,5 +1,3 @@
-#![feature(unboxed_closures, fn_traits, tuple_trait, impl_trait_in_assoc_type)]
-
 //! Example demonstrating the Ident node: write CSV as plain text, then read it
 //! back as a Polars DataFrame via Ident, and produce a Plotly bar chart.
 //!
@@ -11,12 +9,11 @@ use plotly::{Bar, Layout, Plot};
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use pondrs::app::PondApp;
 use pondrs::datasets::{PlotlyDataset, PolarsCsvDataset, TextDataset};
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
 use pondrs::viz::VizHook;
-use pondrs::{Hooks, Ident, Node, Steps};
+use pondrs::{Ident, Node, Steps};
 
 // ---------------------------------------------------------------------------
 // Catalog
@@ -24,11 +21,8 @@ use pondrs::{Hooks, Ident, Node, Steps};
 
 #[derive(Serialize, Deserialize)]
 struct IdentCatalog {
-    /// The CSV file written as plain text.
     csv_text: TextDataset,
-    /// The same file read back as a Polars DataFrame.
     csv_data: PolarsCsvDataset,
-    /// Output bar chart.
     chart: PlotlyDataset,
 }
 
@@ -77,61 +71,45 @@ fn build_chart(df: DataFrame) -> (Plot,) {
 }
 
 // ---------------------------------------------------------------------------
-// App
+// Pipeline function
 // ---------------------------------------------------------------------------
 
-struct IdentApp;
-
-impl PondApp for IdentApp {
-    type Catalog = IdentCatalog;
-    type Params = ();
-    type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error>;
-
-    fn pipeline<'a>(cat: &'a IdentCatalog, _params: &'a ()) -> Self::Pipeline<'a> {
-        (
-            // Step 1: generate CSV content and write it as plain text
-            Node {
-                name: "generate_csv",
-                func: generate_csv,
-                input: (),
-                output: (&cat.csv_text,),
-            },
-            // Step 2: Ident links the text file to the CSV reader (same file)
-            Ident {
-                name: "text_to_csv",
-                input: &cat.csv_text,
-                output: &cat.csv_data,
-            },
-            // Step 3: read the CSV as a DataFrame and build a chart
-            Node {
-                name: "build_chart",
-                func: build_chart,
-                input: (&cat.csv_data,),
-                output: (&cat.chart,),
-            },
-        )
-    }
-
-    fn hooks() -> impl Hooks {
-        (
-            LoggingHook::new(),
-            VizHook::new("http://localhost:8080".to_string()),
-        )
-    }
+fn ident_pipeline<'a>(
+    cat: &'a IdentCatalog,
+    _params: &'a (),
+) -> impl Steps<PondError> + 'a {
+    (
+        Node {
+            name: "generate_csv",
+            func: generate_csv,
+            input: (),
+            output: (&cat.csv_text,),
+        },
+        Ident {
+            name: "text_to_csv",
+            input: &cat.csv_text,
+            output: &cat.csv_data,
+        },
+        Node {
+            name: "build_chart",
+            func: build_chart,
+            input: (&cat.csv_data,),
+            output: (&cat.chart,),
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
-fn main() {
+fn main() -> Result<(), pondrs::error::PondError> {
     let dir = {
         let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         manifest.join("examples").join("ident_data")
     };
 
-    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&dir)?;
 
     std::fs::write(
         dir.join("catalog.yml"),
@@ -146,10 +124,16 @@ chart:
 ",
             d = dir.display()
         ),
-    )
-    .unwrap();
+    )?;
 
-    std::fs::write(dir.join("params.yml"), "~\n").unwrap();
+    std::fs::write(dir.join("params.yml"), "~\n")?;
 
-    IdentApp::main();
+    let app = pondrs::app::App::from_args(std::env::args_os())?
+        .with_hooks((
+            LoggingHook::new(),
+            VizHook::new("http://localhost:8080".to_string()),
+        ));
+
+    app.dispatch(ident_pipeline)?;
+    Ok(())
 }

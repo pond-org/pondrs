@@ -59,6 +59,9 @@ pub trait Runner {
 /// Trait for a collection of runners (implemented for tuples).
 /// Allows selecting a runner by name at runtime.
 pub trait Runners {
+    /// The name of the first (default) runner in the collection.
+    fn first_name(&self) -> &'static str;
+
     fn run_by_name<E>(
         &self,
         name: &str,
@@ -76,6 +79,10 @@ pub trait Runners {
 macro_rules! impl_runners {
     ($($R:ident $idx:tt),+) => {
         impl<$($R: Runner),+> Runners for ($($R,)+) {
+            fn first_name(&self) -> &'static str {
+                self.0.name()
+            }
+
             fn run_by_name<E>(
                 &self,
                 name: &str,

@@ -1,5 +1,3 @@
-#![feature(unboxed_closures, fn_traits, tuple_trait)]
-
 use std::fs;
 
 use polars::prelude::*;

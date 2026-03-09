@@ -1,10 +1,4 @@
-#![feature(unboxed_closures, fn_traits, tuple_trait, impl_trait_in_assoc_type)]
-
 //! Thin CLI wrapper for the weather pipeline app.
-//!
-//! Writes fixtures to examples/weather_data/ and then delegates to
-//! `WeatherApp::main()`, which reads subcommands and flags from the
-//! command line.
 //!
 //! Usage:
 //!   cargo run --example weather_app -- --catalog-path examples/weather_data/catalog.yml \
@@ -17,11 +11,20 @@
 #[path = "weather/mod.rs"]
 mod weather;
 
-use pondrs::app::PondApp;
+use pondrs::hooks::LoggingHook;
+use pondrs::viz::VizHook;
 
-use weather::{WeatherApp, weather_data_dir, write_fixtures};
+use weather::{WeatherError, weather_pipeline, weather_data_dir, write_fixtures};
 
-fn main() {
+fn main() -> Result<(), WeatherError> {
     write_fixtures(&weather_data_dir());
-    WeatherApp::main();
+
+    let app = pondrs::app::App::from_args(std::env::args_os())?
+        .with_hooks((
+            LoggingHook::new(),
+            VizHook::new("http://localhost:8080".to_string()),
+        ));
+
+    app.dispatch(weather_pipeline)?;
+    Ok(())
 }

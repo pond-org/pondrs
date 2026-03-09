@@ -7,12 +7,9 @@ use plotly::{Bar, Layout, Plot};
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use pondrs::app::PondApp;
 use pondrs::datasets::{MemoryDataset, Param, PolarsCsvDataset, PlotlyDataset};
 use pondrs::error::PondError;
-use pondrs::hooks::LoggingHook;
-use pondrs::viz::VizHook;
-use pondrs::{Hooks, Node, Steps};
+use pondrs::{Node, Steps};
 
 // ---------------------------------------------------------------------------
 // Catalog and params
@@ -60,58 +57,43 @@ fn build_chart(df: DataFrame, total: i64) -> (Plot,) {
 }
 
 // ---------------------------------------------------------------------------
-// App
+// Pipeline function
 // ---------------------------------------------------------------------------
 
-pub struct SalesApp;
-
-impl PondApp for SalesApp {
-    type Catalog = SalesCatalog;
-    type Params = SalesParams;
-    type Error = PondError;
-    type Pipeline<'a> = impl Steps<Self::Error>;
-
-    fn pipeline<'a>(cat: &'a SalesCatalog, params: &'a SalesParams) -> Self::Pipeline<'a> {
-        (
-            // Node 1: filter out months below the threshold
-            Node {
-                name: "filter_months",
-                func: |df: DataFrame, min_sales: i64| -> Result<(DataFrame,), PolarsError> {
-                    let mask = df.column("sales")?.i64()?.gt_eq(min_sales);
-                    Ok((df.filter(&mask)?,))
-                },
-                input: (&cat.raw_sales, &params.min_sales),
-                output: (&cat.filtered_sales,),
+pub fn sales_pipeline<'a>(
+    cat: &'a SalesCatalog,
+    params: &'a SalesParams,
+) -> impl Steps<PondError> + 'a {
+    (
+        // Node 1: filter out months below the threshold
+        Node {
+            name: "filter_months",
+            func: |df: DataFrame, min_sales: i64| -> Result<(DataFrame,), PolarsError> {
+                let mask = df.column("sales")?.i64()?.gt_eq(min_sales);
+                Ok((df.filter(&mask)?,))
             },
-            // Node 2: sum the filtered sales
-            Node {
-                name: "compute_total",
-                func: |df: DataFrame| {
-                    let total =
-                        df.column("sales").unwrap().i64().unwrap().sum().unwrap_or(0);
-                    (total,)
-                },
-                input: (&cat.filtered_sales,),
-                output: (&cat.total_sales,),
+            input: (&cat.raw_sales, &params.min_sales),
+            output: (&cat.filtered_sales,),
+        },
+        // Node 2: sum the filtered sales
+        Node {
+            name: "compute_total",
+            func: |df: DataFrame| {
+                let total =
+                    df.column("sales").unwrap().i64().unwrap().sum().unwrap_or(0);
+                (total,)
             },
-            // Node 3: build a bar chart of the filtered monthly sales
-            Node {
-                name: "build_chart",
-                func: build_chart,
-                input: (&cat.filtered_sales, &cat.total_sales),
-                output: (&cat.chart,),
-            },
-        )
-    }
-
-    fn hooks() -> impl Hooks {
-        (
-            LoggingHook::new(),
-            // VizHook posts live execution events to the viz server.
-            // Fire-and-forget: silently ignored if the server is not running.
-            VizHook::new("http://localhost:8080".to_string()),
-        )
-    }
+            input: (&cat.filtered_sales,),
+            output: (&cat.total_sales,),
+        },
+        // Node 3: build a bar chart of the filtered monthly sales
+        Node {
+            name: "build_chart",
+            func: build_chart,
+            input: (&cat.filtered_sales, &cat.total_sales),
+            output: (&cat.chart,),
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------
