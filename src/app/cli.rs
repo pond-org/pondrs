@@ -48,5 +48,9 @@ pub enum Command {
         /// Write pipeline graph JSON to file instead of serving.
         #[arg(long)]
         output: Option<String>,
+
+        /// Export a self-contained HTML file with the pipeline graph.
+        #[arg(long)]
+        export: Option<String>,
     },
 }

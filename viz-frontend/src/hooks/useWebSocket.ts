@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { VizEvent, NodeStatus, DatasetActivity } from '../api/types';
+import { isStaticMode } from '../api/client';
 
 export interface LiveStatus {
   nodes: Record<string, NodeStatus>;
@@ -10,15 +11,19 @@ export interface LiveStatus {
   reconnectCount: number;
 }
 
+const STATIC_STATUS: LiveStatus = {
+  nodes: {},
+  datasets: {},
+  connected: false,
+  lastEvent: null,
+  runCount: 0,
+  reconnectCount: 0,
+};
+
 export function useWebSocket(): LiveStatus {
-  const [status, setStatus] = useState<LiveStatus>({
-    nodes: {},
-    datasets: {},
-    connected: false,
-    lastEvent: null,
-    runCount: 0,
-    reconnectCount: 0,
-  });
+  const [status, setStatus] = useState<LiveStatus>(STATIC_STATUS);
+
+  if (isStaticMode()) return STATIC_STATUS;
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

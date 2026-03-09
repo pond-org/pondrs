@@ -1,4 +1,5 @@
 import type { VizEvent, VizGraph, NodeStatus } from '../api/types';
+import { isStaticMode } from '../api/client';
 
 interface Props {
   connected: boolean;
@@ -42,7 +43,7 @@ export function StatusBar({ connected, lastEvent, graph, nodeStatuses, runCount 
           background: connected ? 'var(--color-done)' : 'var(--color-error)',
           display: 'inline-block',
         }} />
-        {connected ? 'Live' : 'Disconnected'}
+        {isStaticMode() ? 'Static' : connected ? 'Live' : 'Disconnected'}
       </span>
 
       {total > 0 && (

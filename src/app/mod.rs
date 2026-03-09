@@ -31,6 +31,7 @@ pub enum Command {
     Viz {
         port: u16,
         output: Option<std::string::String>,
+        export: Option<std::string::String>,
     },
 }
 
@@ -204,8 +205,8 @@ impl<C: Serialize, P: Serialize, H: Hooks, R: Runners> App<C, P, H, R> {
                 }
             }
             #[cfg(feature = "std")]
-            Command::Viz { port, output } => {
-                self.dispatch_viz(f, *port, output.as_deref())
+            Command::Viz { port, output, export } => {
+                self.dispatch_viz(f, *port, output.as_deref(), export.as_deref())
             }
         }
     }
@@ -239,10 +240,11 @@ mod std_app {
         match cli_cmd {
             CliCommand::Run { runner, .. } => (Command::Run, runner.clone()),
             CliCommand::Check => (Command::Check, None),
-            CliCommand::Viz { port, output } => (
+            CliCommand::Viz { port, output, export } => (
                 Command::Viz {
                     port: *port,
                     output: output.clone(),
+                    export: export.clone(),
                 },
                 None,
             ),
@@ -433,6 +435,7 @@ mod std_app {
             f: F,
             port: u16,
             output: Option<&str>,
+            export: Option<&str>,
         ) -> Result<(), E>
         where
             E: From<PondError> + core::fmt::Display + core::fmt::Debug + Send + Sync + 'static,
@@ -443,7 +446,7 @@ mod std_app {
 
             #[cfg(not(feature = "viz"))]
             {
-                let _ = (port, output, graph);
+                let _ = (port, output, export, graph);
                 Err(PondError::Custom(
                     "viz subcommand requires the 'viz' feature (cargo build --features viz)"
                         .into(),
@@ -454,21 +457,58 @@ mod std_app {
             #[cfg(feature = "viz")]
             {
                 use crate::viz::serialization::{collect_dataset_meta, viz_graph_from};
-                use crate::viz::server::VizState;
-                use std::sync::Mutex;
-                use tokio::sync::broadcast;
+                use crate::viz::assets::FrontendAssets;
+                use std::collections::HashMap;
 
                 let mut viz_graph = viz_graph_from(&graph);
                 viz_graph.name = self.program_name.clone();
                 let dataset_meta = collect_dataset_meta(&graph);
 
-                if let Some(path) = output {
+                if let Some(path) = export {
+                    // Collect dataset HTML and YAML snapshots
+                    let dataset_html: HashMap<usize, String> = dataset_meta.iter()
+                        .filter_map(|(&id, meta)| meta.html().map(|h| (id, h)))
+                        .collect();
+                    let dataset_yaml: HashMap<usize, String> = dataset_meta.iter()
+                        .filter_map(|(&id, meta)| meta.yaml().map(|y| (id, y)))
+                        .collect();
+
+                    let static_data = serde_json::json!({
+                        "graph": viz_graph,
+                        "datasetHtml": dataset_html,
+                        "datasetYaml": dataset_yaml,
+                    });
+                    let json = serde_json::to_string(&static_data)
+                        .map_err(PondError::from)?;
+                    // Escape </script> in JSON to prevent breaking the HTML
+                    let json = json.replace("</script", "<\\/script");
+
+                    let template = FrontendAssets::get("index.html")
+                        .ok_or_else(|| PondError::Custom("embedded index.html not found".into()))?;
+                    let html = String::from_utf8_lossy(&template.data);
+                    let script = std::format!(
+                        "<script>window.__STATIC_DATA__={};</script>",
+                        json
+                    );
+                    let html_str = html.as_ref();
+                    let output_html = match html_str.rfind("</head>") {
+                        Some(pos) => std::format!("{}{script}{}", &html_str[..pos], &html_str[pos..]),
+                        None => std::format!("{script}{html_str}"),
+                    };
+                    std::fs::write(path, output_html.as_bytes()).map_err(PondError::from)?;
+                    println!("Static HTML exported to {path}");
+                    Ok(())
+                } else if let Some(path) = output {
                     let json =
                         serde_json::to_string_pretty(&viz_graph).map_err(PondError::from)?;
                     std::fs::write(path, &json).map_err(PondError::from)?;
                     println!("Graph written to {path}");
                     Ok(())
                 } else {
+                    use crate::viz::server::VizState;
+                    use std::sync::Mutex;
+                    use tokio::sync::broadcast;
+
                     let (tx, _rx) = broadcast::channel(64);
                     let state = VizState {
                         graph: viz_graph,
