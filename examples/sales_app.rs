@@ -1,14 +1,9 @@
-//! Thin CLI wrapper for the sales pipeline app.
-//!
-//! Writes fixtures to examples/data/ and then dispatches based on CLI args.
+//! Sales pipeline app.
 //!
 //! Usage:
-//!   cargo run --example sales_app -- --catalog-path examples/data/catalog.yml \
-//!       --params-path examples/data/params.yml run
-//!   cargo run --example sales_app -- --catalog-path examples/data/catalog.yml \
-//!       --params-path examples/data/params.yml check
-//!   cargo run --example sales_app -- --catalog-path examples/data/catalog.yml \
-//!       --params-path examples/data/params.yml viz
+//!   cargo run --example sales_app -- run
+//!   cargo run --example sales_app -- check
+//!   cargo run --example sales_app -- viz
 
 #[path = "sales/mod.rs"]
 mod sales;
@@ -16,17 +11,20 @@ mod sales;
 use pondrs::hooks::LoggingHook;
 use pondrs::viz::VizHook;
 
-use sales::{sales_pipeline, examples_data_dir, write_fixtures};
+use sales::{examples_data_dir, sales_pipeline, write_fixtures};
 
 fn main() -> Result<(), pondrs::error::PondError> {
-    write_fixtures(&examples_data_dir());
+    let dir = examples_data_dir();
+    write_fixtures(&dir);
 
-    let app = pondrs::app::App::from_args(std::env::args_os())?
-        .with_hooks((
-            LoggingHook::new(),
-            VizHook::new("http://localhost:8080".to_string()),
-        ));
-
-    app.dispatch(sales_pipeline)?;
-    Ok(())
+    pondrs::app::App::from_yaml(
+        dir.join("catalog.yml").to_str().unwrap(),
+        dir.join("params.yml").to_str().unwrap(),
+    )?
+    .with_hooks((
+        LoggingHook::new(),
+        VizHook::new("http://localhost:8080".to_string()),
+    ))
+    .with_args(std::env::args_os())?
+    .dispatch(sales_pipeline)
 }

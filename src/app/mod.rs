@@ -254,6 +254,34 @@ mod std_app {
     impl<C: DeserializeOwned, P: DeserializeOwned>
         App<C, P, (), DefaultRunners>
     {
+        /// Create an App from YAML catalog and params files.
+        ///
+        /// Loads and deserializes both files without any CLI parsing.
+        /// Combine with [`with_args`](App::with_args) to add CLI subcommand
+        /// dispatch and param overrides.
+        ///
+        /// # Example
+        ///
+        /// ```ignore
+        /// let app = App::from_yaml("conf/catalog.yml", "conf/params.yml")?
+        ///     .with_hooks(my_hooks)
+        ///     .with_args(std::env::args_os())?;
+        /// app.dispatch(my_pipeline)?;
+        /// ```
+        pub fn from_yaml(catalog_path: &str, params_path: &str) -> Result<Self, PondError> {
+            let catalog: C = load_config(catalog_path, &[])?;
+            let params: P = load_config(params_path, &[])?;
+            Ok(App {
+                catalog,
+                params,
+                hooks: (),
+                runners: DefaultRunners::default(),
+                command: Command::Run,
+                runner_name: None,
+                program_name: String::new(),
+            })
+        }
+
         /// Create an App from pre-parsed [`CliArgs`].
         ///
         /// Loads catalog and params from YAML, applies CLI overrides,
