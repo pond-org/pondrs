@@ -1,0 +1,10 @@
+[book]
+title = "🤔 pondrs"
+authors = ["nbore"]
+language = "en"
+src = "src"
+
+[rust]
+edition = "2021"
+
+[output.html]
