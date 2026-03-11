@@ -3,12 +3,25 @@
 use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
-use super::stable::StableFn;
+use super::stable::{StableFn, StableTuple};
 use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
 
+/// Marker trait asserting that a return type is structurally compatible
+/// with an output tuple `O`.
+///
+/// Implemented for `O` itself (bare tuple return) and `Result<O, E>`
+/// (fallible return). This allows [`Node`] to catch output type mismatches
+/// at construction time, before the pipeline error type `E` is known.
+pub trait CompatibleOutput<O: StableTuple> {}
+
+impl<O: StableTuple> CompatibleOutput<O> for O {}
+impl<O: StableTuple, E> CompatibleOutput<O> for Result<O, E> {}
+
+/// A single computation unit: loads inputs, calls a function, saves outputs.
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
     F: StableFn<Input::Args>,
+    F::Output: CompatibleOutput<Output::Output>,
 {
     pub name: &'static str,
     pub func: F,
@@ -21,6 +34,7 @@ where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
     F: StableFn<Input::Args> + Send + Sync,
+    F::Output: CompatibleOutput<Output::Output>,
 {
     fn name(&self) -> &'static str {
         self.name
@@ -50,7 +64,7 @@ where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
     F: StableFn<Input::Args, Output = R> + Send + Sync,
-    R: IntoNodeResult<Output::Output, E>,
+    R: IntoNodeResult<Output::Output, E> + CompatibleOutput<Output::Output>,
     E: From<PondError>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {

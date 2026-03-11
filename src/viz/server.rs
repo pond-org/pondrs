@@ -195,7 +195,7 @@ async fn serve_asset(uri: Uri) -> impl IntoResponse {
 
 // ── Server entry point ────────────────────────────────────────────────────────
 
-/// Build and run the viz server, blocking until killed.
+/// Build and run the viz server on the given port. Blocks until the process is killed.
 pub fn start_server(state: VizState, port: u16) {
     let state = Arc::new(state);
 

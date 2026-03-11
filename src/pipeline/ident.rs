@@ -5,6 +5,8 @@ use crate::error::PondError;
 use super::traits::{DatasetEvent, DatasetRef, PipelineInfo, RunnableStep};
 use crate::datasets::Dataset;
 
+/// A no-op node that declares two datasets as linked in the graph
+/// without performing any computation or data transfer.
 pub struct Ident<'a, Input: Dataset + Send + Sync, Output: Dataset + Send + Sync> {
     pub name: &'static str,
     pub input: &'a Input,

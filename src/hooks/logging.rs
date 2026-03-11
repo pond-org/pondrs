@@ -7,6 +7,9 @@ use crate::pipeline::{DatasetRef, PipelineInfo};
 use super::Hook;
 use super::timing::TimingTracker;
 
+/// Hook that logs pipeline and node lifecycle events using the `log` crate.
+///
+/// Tracks timing for each item and includes duration in completion messages.
 pub struct LoggingHook {
     timings: TimingTracker<usize>,
 }

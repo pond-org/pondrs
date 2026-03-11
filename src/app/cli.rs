@@ -4,6 +4,7 @@ use std::prelude::v1::*;
 
 use clap::{Parser, Subcommand};
 
+/// Top-level CLI arguments parsed by clap.
 #[derive(Parser)]
 #[command(version, about)]
 pub struct CliArgs {

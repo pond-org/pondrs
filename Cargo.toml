@@ -2,6 +2,16 @@
 name = "pondrs"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "A pipeline execution library"
+license = "Apache-2.0"
+repository = "https://github.com/pond-org/pondrs"
+homepage = "https://pond-org.github.io/pondrs"
+documentation = "https://docs.rs/pondrs"
+authors = ["Nils Bore <nilsbore@gmail.com>"]
+readme = "README.md"
+keywords = ["pipeline", "data", "workflow", "etl", "dag"]
+categories = ["data-structures", "concurrency", "no-std", "command-line-utilities", "visualization"]
 
 [features]
 default = ["all"]

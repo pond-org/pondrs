@@ -2,6 +2,10 @@
 
 use thiserror::Error;
 
+/// Framework-level errors from dataset I/O and pipeline infrastructure.
+///
+/// Feature-gated variants are only available when the corresponding feature
+/// is enabled. The `DatasetNotLoaded` variant is always available (no_std).
 #[derive(Error, Debug)]
 pub enum PondError {
     #[cfg(feature = "std")]

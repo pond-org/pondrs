@@ -14,7 +14,7 @@ mod traits;
 pub use crate::error::CheckError;
 pub use ident::Ident;
 pub use into_result::IntoNodeResult;
-pub use node::Node;
+pub use node::{CompatibleOutput, Node};
 pub use pipeline::Pipeline;
 pub use pipeline_fn::PipelineFn;
 pub use steps::{StepInfo, Steps};

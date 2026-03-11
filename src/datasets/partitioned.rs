@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
+/// A deferred loader that produces a value on demand.
 pub struct Lazy<T> {
     loader: Box<dyn Fn() -> Result<T, PondError>>,
 }
@@ -25,6 +26,10 @@ impl<T> Lazy<T> {
     }
 }
 
+/// A directory of files where each file is loaded lazily on demand.
+///
+/// On load, returns a `HashMap<filename_stem, Lazy<D::LoadItem>>`.
+/// On save, writes each entry as `{name}.{ext}` in the directory.
 #[derive(Serialize, Deserialize)]
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct LazyPartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
@@ -105,6 +110,10 @@ where
     }
 }
 
+/// A directory of files where each file is eagerly loaded into memory.
+///
+/// On load, returns a `HashMap<filename_stem, D::LoadItem>`.
+/// On save, writes each entry as `{name}.{ext}` in the directory.
 #[derive(Serialize, Deserialize)]
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct PartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {

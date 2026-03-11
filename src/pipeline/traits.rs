@@ -54,19 +54,30 @@ pub enum DatasetEvent {
     AfterSave,
 }
 
-/// Non-generic metadata trait -- used by hooks, graph building, object-safe.
+/// Non-generic, object-safe metadata for pipeline items.
+///
+/// Used by hooks, graph building, and validation. Leaf items are nodes;
+/// non-leaf items are pipelines (containers with children).
 pub trait PipelineInfo: Send + Sync {
+    /// Human-readable name for this item.
     fn name(&self) -> &'static str;
+    /// `true` for nodes, `false` for pipelines.
     fn is_leaf(&self) -> bool;
+    /// The Rust type name of the underlying function or `"pipeline"`.
     fn type_string(&self) -> &'static str;
+    /// Iterate over child items (empty for leaf nodes).
     fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
+    /// Iterate over input dataset references.
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+    /// Iterate over output dataset references.
     fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-/// Generic execution trait -- parameterized by error type E.
+/// Generic execution trait, parameterized by the pipeline error type `E`.
 pub trait RunnableStep<E>: PipelineInfo {
+    /// Execute this item, firing dataset events via the callback.
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E>;
+    /// Iterate over child steps (empty for leaf nodes).
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 }
 

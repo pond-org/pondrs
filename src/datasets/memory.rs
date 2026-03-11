@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use crate::error::PondError;
 use super::Dataset;
 
+/// Thread-safe in-memory dataset for intermediate pipeline values.
+///
+/// Starts empty; loading before any save returns `DatasetNotLoaded`.
 #[derive(Serialize, Deserialize)]
 pub struct MemoryDataset<T: Clone> {
     #[serde(skip_serializing, skip_deserializing)]

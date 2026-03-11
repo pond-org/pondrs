@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use super::Dataset;
 
+/// A read-only parameter dataset. Always loads successfully; writing is forbidden.
+///
+/// The pipeline validator rejects any node that writes to a `Param`.
 #[derive(Serialize, Deserialize)]
 pub struct Param<T: Clone>(pub T);
 

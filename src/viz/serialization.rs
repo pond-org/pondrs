@@ -16,6 +16,7 @@ pub struct VizGraph {
     pub datasets: Vec<VizDataset>,
 }
 
+/// Serializable representation of a pipeline node or sub-pipeline.
 #[derive(Serialize, Clone)]
 pub struct VizNode {
     /// Index into `VizGraph::nodes`.
@@ -31,6 +32,7 @@ pub struct VizNode {
     pub output_dataset_ids: Vec<usize>,
 }
 
+/// Serializable metadata for a dataset in the visualization.
 #[derive(Serialize, Clone)]
 pub struct VizDataset {
     /// Dataset ptr ID (from `ptr_to_id`).
@@ -42,6 +44,7 @@ pub struct VizDataset {
     pub has_yaml: bool,
 }
 
+/// Serializable edge connecting two nodes through a dataset.
 #[derive(Serialize, Clone)]
 pub struct VizEdge {
     /// Index into `VizGraph::nodes` for the producing node.

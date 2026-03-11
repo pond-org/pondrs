@@ -11,6 +11,9 @@ use crate::hooks::Hooks;
 
 use super::Runner;
 
+/// Runs pipeline steps one at a time in definition order.
+///
+/// Available in both `no_std` and `std` environments.
 #[derive(Default)]
 pub struct SequentialRunner;
 

@@ -6,6 +6,8 @@ use std::prelude::v1::*;
 mod cell;
 mod gpio;
 #[cfg(feature = "std")]
+mod cache;
+#[cfg(feature = "std")]
 mod memory;
 mod param;
 mod register;
@@ -26,6 +28,8 @@ mod image_dataset;
 
 pub use cell::CellDataset;
 pub use gpio::GpioDataset;
+#[cfg(feature = "std")]
+pub use cache::CacheDataset;
 #[cfg(feature = "std")]
 pub use memory::MemoryDataset;
 pub use param::Param;
@@ -94,9 +98,15 @@ impl<T: Dataset + Send + Sync> DatasetMeta for T {
     fn yaml(&self) -> Option<String> { serde_yaml::to_string(self).ok() }
 }
 
+/// A dataset backed by a file on disk.
+///
+/// Used by `PartitionedDataset` to clone a template dataset and
+/// point each partition at a different file path.
 #[cfg(feature = "std")]
 pub trait FileDataset: Dataset + Clone {
+    /// The file path this dataset reads from / writes to.
     fn path(&self) -> &str;
+    /// Redirect this dataset to a different file path.
     fn set_path(&mut self, path: &str);
 }
 

@@ -11,6 +11,7 @@ fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
+/// YAML file dataset. Loads the first document as `yaml_rust2::Yaml`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct YamlDataset {
     path: String,

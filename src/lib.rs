@@ -1,3 +1,13 @@
+//! A pipeline execution library for building data processing workflows.
+//!
+//! Pipelines are composed of [`Node`]s that read from and write to [`Dataset`]s.
+//! Nodes are grouped into [`Steps`] (tuples) and executed by a [`Runner`].
+//! The [`App`] struct ties everything together with CLI dispatch, YAML config
+//! loading, and hook-based lifecycle events.
+//!
+//! Works in `no_std` environments (with `CellDataset` + `SequentialRunner`)
+//! and scales up to parallel execution with `std`.
+
 #![no_std]
 
 #[cfg(feature = "std")]

@@ -11,6 +11,7 @@ fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
+/// JSON file dataset. Loads/saves `serde_json::Value`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct JsonDataset {
     path: String,

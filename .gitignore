@@ -1,6 +1,8 @@
 /target
+/.cargo/
 /examples/data/
 /examples/ident_data/
 /examples/weather_data/
 /book/book/
 /book/src/assets/
+/*.md

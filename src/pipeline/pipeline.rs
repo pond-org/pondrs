@@ -3,6 +3,10 @@
 use super::steps::{StepInfo, Steps};
 use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
 
+/// A named group of steps with declared input/output dataset contracts.
+///
+/// Pipelines are containers — they delegate execution to their child steps
+/// and are never called directly by runners.
 pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
     pub name: &'static str,
     pub steps: S,

@@ -10,6 +10,7 @@ fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
+/// Plain text file dataset. Loads/saves the entire file as a `String`.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TextDataset {
     path: String,

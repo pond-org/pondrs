@@ -10,6 +10,10 @@ use crate::pipeline::{PipelineInfo, StepInfo, ptr_to_id};
 
 use super::types::{Edge, GraphNode, PipelineGraph};
 
+/// Build a `PipelineGraph` from a set of steps and their catalog/params.
+///
+/// Walks the pipeline tree, indexes dataset names via the catalog serializer,
+/// and computes producer-consumer edges between leaf nodes.
 pub fn build_pipeline_graph<'a>(
     pipe: &'a impl StepInfo,
     catalog: &impl Serialize,

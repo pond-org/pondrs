@@ -15,6 +15,10 @@ use crate::hooks::Hooks;
 
 use super::Runner;
 
+/// Runs pipeline nodes concurrently using scoped threads.
+///
+/// Builds a dependency graph from the pipeline and schedules nodes
+/// as soon as their input datasets are produced. Requires `std`.
 #[derive(Default)]
 pub struct ParallelRunner;
 

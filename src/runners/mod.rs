@@ -14,6 +14,7 @@ use crate::pipeline::{DatasetEvent, DatasetRef, PipelineInfo, Steps};
 use crate::error::PondError;
 use crate::hooks::Hooks;
 
+/// Resolve dataset name from the catalog index and dispatch to hooks.
 #[cfg(feature = "std")]
 pub(crate) fn dispatch_dataset_event(
     item: &dyn PipelineInfo,
@@ -26,6 +27,7 @@ pub(crate) fn dispatch_dataset_event(
     dispatch_dataset_event_raw(item, &ds, event, hooks);
 }
 
+/// Dispatch a dataset event to all hooks without name resolution.
 pub(crate) fn dispatch_dataset_event_raw(
     item: &dyn PipelineInfo,
     ds: &DatasetRef<'_>,

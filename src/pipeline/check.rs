@@ -241,7 +241,7 @@ mod tests {
 
         // n1 writes to param p
         let pipe = (
-            Node { name: "n1", func: || (1i32,), input: (), output: (&p,) },
+            Node { name: "n1", func: || ((),), input: (), output: (&p,) },
         );
         let err = pipe.check().unwrap_err();
         assert!(matches!(err, CheckError::ParamWritten { node_name: "n1", .. }));

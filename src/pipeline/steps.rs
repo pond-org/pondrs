@@ -4,10 +4,14 @@ use super::check::{CheckError, check_item, collect_all_outputs};
 use super::id_set::IdSet;
 use super::traits::{PipelineInfo, RunnableStep};
 
-/// Non-generic trait for a sequence of pipeline items (metadata only).
 use super::stable::StableTuple;
 
+/// Non-generic trait for a sequence of pipeline items (metadata only).
+///
+/// Implemented for tuples of `PipelineInfo` items. Provides pipeline
+/// validation via [`check`](StepInfo::check).
 pub trait StepInfo: StableTuple {
+    /// Iterate over each item's metadata.
     fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
 
     /// Validate sequential ordering and pipeline contracts.
@@ -48,7 +52,10 @@ pub trait StepInfo: StableTuple {
 }
 
 /// Generic trait for a sequence of executable pipeline items.
+///
+/// Extends [`StepInfo`] with the ability to iterate over runnable steps.
 pub trait Steps<E>: StepInfo {
+    /// Iterate over each executable step.
     fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 }
 
