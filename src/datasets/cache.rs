@@ -15,7 +15,7 @@ use super::Dataset;
 ///
 /// Subsequent loads return the cached value without hitting the
 /// underlying dataset.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CacheDataset<D: Dataset> {
     pub dataset: D,
     #[serde(skip_serializing, skip_deserializing)]

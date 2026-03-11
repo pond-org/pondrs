@@ -54,7 +54,7 @@ fn default_has_header() -> bool { true }
 
 /// CSV file dataset backed by Polars. Supports configurable separator,
 /// header, and row skipping.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PolarsCsvDataset {
     pub path: String,
     #[serde(default = "default_separator")]
@@ -116,7 +116,7 @@ impl FileDataset for PolarsCsvDataset {
 }
 
 /// Parquet file dataset backed by Polars.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PolarsParquetDataset {
     pub path: String,
 }

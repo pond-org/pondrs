@@ -11,7 +11,7 @@ use super::Dataset;
 /// Thread-safe in-memory dataset for intermediate pipeline values.
 ///
 /// Starts empty; loading before any save returns `DatasetNotLoaded`.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MemoryDataset<T: Clone> {
     #[serde(skip_serializing, skip_deserializing)]
     value: Arc<Mutex<Option<T>>>,

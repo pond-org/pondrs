@@ -30,7 +30,7 @@ impl<T> Lazy<T> {
 ///
 /// On load, returns a `HashMap<filename_stem, Lazy<D::LoadItem>>`.
 /// On save, writes each entry as `{name}.{ext}` in the directory.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct LazyPartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
     pub path: String,
@@ -77,7 +77,7 @@ where
             let ext = &self.ext;
             let path = dir.join(format!("{name}.{ext}"));
             let mut dataset = self.dataset.clone();
-            dataset.set_path(path.to_str().unwrap());
+            dataset.set_path(path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
             dataset.save(data)?;
         }
         Ok(())
@@ -92,13 +92,14 @@ where
             if !file_name.to_string_lossy().ends_with(&*self.ext) {
                 continue;
             }
-            let file_stem = entry
-                .path()
+            let entry_path = entry.path();
+            let file_stem = entry_path
                 .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap();
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", entry_path.display())))?
+                .to_string();
             let mut dataset = self.dataset.clone();
-            dataset.set_path(entry.path().to_str().unwrap());
+            dataset.set_path(entry_path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", entry_path.display())))?);
             datasets.insert(file_stem, Lazy::new(move || Ok(dataset.load()?)));
         }
         Ok(datasets)
@@ -114,7 +115,7 @@ where
 ///
 /// On load, returns a `HashMap<filename_stem, D::LoadItem>`.
 /// On save, writes each entry as `{name}.{ext}` in the directory.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct PartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
     pub path: String,
@@ -137,7 +138,7 @@ where
             let ext = &self.ext;
             let path = dir.join(format!("{name}.{ext}"));
             let mut dataset = self.dataset.clone();
-            dataset.set_path(path.to_str().unwrap());
+            dataset.set_path(path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
             dataset.save(data)?;
         }
         Ok(())
@@ -152,13 +153,14 @@ where
             if !file_name.to_string_lossy().ends_with(&*self.ext) {
                 continue;
             }
-            let file_stem = entry
-                .path()
+            let entry_path = entry.path();
+            let file_stem = entry_path
                 .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap();
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", entry_path.display())))?
+                .to_string();
             let mut dataset = self.dataset.clone();
-            dataset.set_path(entry.path().to_str().unwrap());
+            dataset.set_path(entry_path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", entry_path.display())))?);
             datasets.insert(file_stem, dataset.load()?);
         }
         Ok(datasets)

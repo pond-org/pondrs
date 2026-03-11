@@ -11,7 +11,7 @@ fn html_escape(s: &str) -> String {
 }
 
 /// Plain text file dataset. Loads/saves the entire file as a `String`.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TextDataset {
     path: String,
 }

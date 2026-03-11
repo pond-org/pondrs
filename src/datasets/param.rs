@@ -11,7 +11,7 @@ use super::Dataset;
 /// A read-only parameter dataset. Always loads successfully; writing is forbidden.
 ///
 /// The pipeline validator rejects any node that writes to a `Param`.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Param<T: Clone>(pub T);
 
 impl<T: Clone + Serialize> Dataset for Param<T> {

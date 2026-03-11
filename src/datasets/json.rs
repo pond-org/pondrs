@@ -12,7 +12,7 @@ fn html_escape(s: &str) -> String {
 }
 
 /// JSON file dataset. Loads/saves `serde_json::Value`.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JsonDataset {
     path: String,
 }

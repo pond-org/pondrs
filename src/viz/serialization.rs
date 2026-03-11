@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::graph::PipelineGraph;
 
 /// Owned, serializable representation of the full pipeline graph.
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct VizGraph {
     pub name: String,
     pub nodes: Vec<VizNode>,
@@ -17,7 +17,7 @@ pub struct VizGraph {
 }
 
 /// Serializable representation of a pipeline node or sub-pipeline.
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct VizNode {
     /// Index into `VizGraph::nodes`.
     pub id: usize,
@@ -33,7 +33,7 @@ pub struct VizNode {
 }
 
 /// Serializable metadata for a dataset in the visualization.
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct VizDataset {
     /// Dataset ptr ID (from `ptr_to_id`).
     pub id: usize,
@@ -45,7 +45,7 @@ pub struct VizDataset {
 }
 
 /// Serializable edge connecting two nodes through a dataset.
-#[derive(Serialize, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct VizEdge {
     /// Index into `VizGraph::nodes` for the producing node.
     pub from_node: usize,

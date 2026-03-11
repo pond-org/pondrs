@@ -12,7 +12,7 @@ fn html_escape(s: &str) -> String {
 }
 
 /// YAML file dataset. Loads the first document as `yaml_rust2::Yaml`.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct YamlDataset {
     path: String,
 }

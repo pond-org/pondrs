@@ -10,6 +10,7 @@ use super::Dataset;
 /// Stack-friendly dataset using `Cell` for `no_std` / single-threaded pipelines.
 ///
 /// Only works with `Copy` types. Use `MemoryDataset` for `std` with thread safety.
+#[derive(Debug)]
 pub struct CellDataset<T: Copy> {
     value: Cell<Option<T>>,
 }
