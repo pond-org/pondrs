@@ -1,6 +1,6 @@
-# pondrs
+# 🤔 pondrs
 
-A Rust pipeline execution library, heavily inspired by [Kedro](https://github.com/kedro-org/kedro).
+**Pipelines of Nodes & Datasets** — a Rust pipeline execution library, heavily inspired by [Kedro](https://github.com/kedro-org/kedro).
 
 ## License
 
