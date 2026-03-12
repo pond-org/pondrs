@@ -8,3 +8,4 @@ src = "src"
 edition = "2021"
 
 [output.html]
+default-theme = "coal"
