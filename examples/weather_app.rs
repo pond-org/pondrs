@@ -17,6 +17,7 @@ fn main() -> Result<(), WeatherError> {
     let dir = weather_data_dir();
     write_fixtures(&dir);
 
+    // ANCHOR: app
     pondrs::app::App::from_yaml(
         dir.join("catalog.yml").to_str().unwrap(),
         dir.join("params.yml").to_str().unwrap(),
@@ -27,4 +28,5 @@ fn main() -> Result<(), WeatherError> {
     ))
     .with_args(std::env::args_os())?
     .dispatch(weather_pipeline)
+    // ANCHOR_END: app
 }

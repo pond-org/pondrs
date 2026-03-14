@@ -11,12 +11,26 @@ cargo run --example ident_app -- \
     --params-path examples/ident_data/params.yml run
 ```
 
-## Source
+## Types
 
-```rust,no_run
-{{#include ../../../examples/ident_app.rs}}
+```rust,ignore
+{{#include ../../../examples/ident_app.rs:types}}
+```
+
+## Node functions
+
+```rust,ignore
+{{#include ../../../examples/ident_app.rs:nodes}}
+```
+
+## Pipeline definition
+
+```rust,ignore
+{{#include ../../../examples/ident_app.rs:pipeline}}
 ```
 
 ## Pipeline visualization
+
+<a href="../assets/ident_viz.html" target="_blank">Open fullscreen</a>
 
 <iframe src="../assets/ident_viz.html" style="width:100%; height:600px; border:1px solid #ccc; border-radius:4px;"></iframe>

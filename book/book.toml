@@ -9,3 +9,4 @@ edition = "2021"
 
 [output.html]
 default-theme = "coal"
+preferred-dark-theme = "coal"

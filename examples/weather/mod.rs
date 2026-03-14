@@ -17,6 +17,7 @@ use pondrs::datasets::{
 use pondrs::error::PondError;
 use pondrs::{Node, Pipeline, Steps};
 
+// ANCHOR: types
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
@@ -127,6 +128,9 @@ pub struct ReportsCatalog {
     pub validation_passed: MemoryDataset<bool>,
 }
 
+// ANCHOR_END: types
+
+// ANCHOR: nodes
 // ---------------------------------------------------------------------------
 // Node functions
 // ---------------------------------------------------------------------------
@@ -250,6 +254,9 @@ fn validate_reports(
     ))
 }
 
+// ANCHOR_END: nodes
+
+// ANCHOR: pipeline
 // ---------------------------------------------------------------------------
 // Pipeline function
 // ---------------------------------------------------------------------------
@@ -345,6 +352,8 @@ pub fn weather_pipeline<'a>(
         },
     )
 }
+
+// ANCHOR_END: pipeline
 
 // ---------------------------------------------------------------------------
 // Fixture generation

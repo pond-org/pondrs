@@ -17,6 +17,7 @@ fn main() -> Result<(), pondrs::error::PondError> {
     let dir = examples_data_dir();
     write_fixtures(&dir);
 
+    // ANCHOR: app
     pondrs::app::App::from_yaml(
         dir.join("catalog.yml").to_str().unwrap(),
         dir.join("params.yml").to_str().unwrap(),
@@ -27,4 +28,5 @@ fn main() -> Result<(), pondrs::error::PondError> {
     ))
     .with_args(std::env::args_os())?
     .dispatch(sales_pipeline)
+    // ANCHOR_END: app
 }

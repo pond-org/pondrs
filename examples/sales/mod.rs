@@ -11,6 +11,7 @@ use pondrs::datasets::{MemoryDataset, Param, PolarsCsvDataset, PlotlyDataset};
 use pondrs::error::PondError;
 use pondrs::{Node, Steps};
 
+// ANCHOR: types
 // ---------------------------------------------------------------------------
 // Catalog and params
 // ---------------------------------------------------------------------------
@@ -29,6 +30,9 @@ pub struct SalesParams {
     pub min_sales: Param<i64>,
 }
 
+// ANCHOR_END: types
+
+// ANCHOR: nodes
 // ---------------------------------------------------------------------------
 // Node functions
 // ---------------------------------------------------------------------------
@@ -56,6 +60,9 @@ fn build_chart(df: DataFrame, total: i64) -> (Plot,) {
     (plot,)
 }
 
+// ANCHOR_END: nodes
+
+// ANCHOR: pipeline
 // ---------------------------------------------------------------------------
 // Pipeline function
 // ---------------------------------------------------------------------------
@@ -95,6 +102,8 @@ pub fn sales_pipeline<'a>(
         },
     )
 }
+
+// ANCHOR_END: pipeline
 
 // ---------------------------------------------------------------------------
 // Shared fixture helpers

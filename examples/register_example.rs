@@ -19,6 +19,7 @@ use pondrs::hooks::LoggingHook;
 use pondrs::pipeline::{Node, Steps};
 use pondrs::viz::VizHook;
 
+// ANCHOR: types
 // ---------------------------------------------------------------------------
 // Simulated hardware: heap-allocated "registers"
 // ---------------------------------------------------------------------------
@@ -64,6 +65,9 @@ struct Params {
     crit_threshold: Param<u16>,
 }
 
+// ANCHOR_END: types
+
+// ANCHOR: pipeline
 // ---------------------------------------------------------------------------
 // Pipeline
 // ---------------------------------------------------------------------------
@@ -111,6 +115,8 @@ fn register_pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<Pon
         },
     )
 }
+
+// ANCHOR_END: pipeline
 
 // ---------------------------------------------------------------------------
 // Main
