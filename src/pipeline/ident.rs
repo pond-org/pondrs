@@ -52,4 +52,6 @@ where
     }
 
     fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
+
+    fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }
 }

@@ -79,6 +79,22 @@ pub trait RunnableStep<E>: PipelineInfo {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E>;
     /// Iterate over child steps (empty for leaf nodes).
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
+
+    /// Upcast to `&dyn PipelineInfo`.
+    ///
+    /// Rust 1.85 does not support automatic trait-object upcasting, so this
+    /// method is required to obtain a `&dyn PipelineInfo` from a
+    /// `&dyn RunnableStep<E>`. Implement as `fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }`.
+    fn as_pipeline_info(&self) -> &dyn PipelineInfo;
+
+    /// Box this step for use in a [`StepVec`](crate::StepVec).
+    #[cfg(feature = "std")]
+    fn boxed<'a>(self) -> std::boxed::Box<dyn RunnableStep<E> + Send + Sync + 'a>
+    where
+        Self: Sized + Send + Sync + 'a,
+    {
+        std::boxed::Box::new(self)
+    }
 }
 
 /// Trait for loading data from input datasets.

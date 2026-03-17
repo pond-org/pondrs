@@ -3,6 +3,9 @@
 //! Usage:
 //!   cargo run --example minimal
 
+#[path = "minimal_fixtures/mod.rs"]
+mod minimal_fixtures;
+
 use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -77,37 +80,8 @@ fn data_dir() -> std::path::PathBuf {
 }
 
 fn write_fixtures(dir: &std::path::Path) {
-    use std::fs;
-
-    fs::create_dir_all(dir).unwrap();
-
-    fs::write(
-        dir.join("readings.csv"),
-        "\
-name,value
-a,0.8
-b,0.3
-c,0.6
-d,0.9
-",
-    )
-    .unwrap();
-
-    fs::write(
-        dir.join("catalog.yml"),
-        format!(
-            "\
-readings:
-  path: {d}/readings.csv
-  separator: \",\"
-summary: {{}}
-report:
-  path: {d}/report.json
-",
-            d = dir.display()
-        ),
-    )
-    .unwrap();
-
-    fs::write(dir.join("params.yml"), "threshold: 0.5\n").unwrap();
+    std::fs::create_dir_all(dir).unwrap();
+    minimal_fixtures::write_readings_csv(dir);
+    minimal_fixtures::write_catalog_yml(dir);
+    std::fs::write(dir.join("params.yml"), "threshold: 0.5\n").unwrap();
 }

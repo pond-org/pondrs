@@ -1,6 +1,8 @@
 //! Core types and traits for pipelines.
 
 mod check;
+#[cfg(feature = "std")]
+mod dyn_steps;
 pub(crate) mod id_set;
 mod ident;
 mod into_result;
@@ -18,6 +20,8 @@ pub use node::{CompatibleOutput, Node};
 pub use pipeline::Pipeline;
 pub use pipeline_fn::PipelineFn;
 pub use steps::{StepInfo, Steps};
+#[cfg(feature = "std")]
+pub use dyn_steps::StepVec;
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
 pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};

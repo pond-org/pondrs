@@ -41,5 +41,7 @@ pub use pipeline::{
     RunnableStep, StepInfo, Steps,
 };
 #[cfg(feature = "std")]
+pub use pipeline::StepVec;
+#[cfg(feature = "std")]
 pub use runners::ParallelRunner;
 pub use runners::{Runner, Runners, SequentialRunner};
