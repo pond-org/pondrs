@@ -39,7 +39,7 @@ pub use partitioned::Lazy;
 #[cfg(feature = "polars")]
 pub use partitioned::{LazyPartitionedDataset, PartitionedDataset};
 #[cfg(feature = "polars")]
-pub use polars::{PolarsCsvDataset, PolarsParquetDataset};
+pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
 #[cfg(feature = "json")]
 pub use json::JsonDataset;
 #[cfg(feature = "std")]
