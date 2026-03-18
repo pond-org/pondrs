@@ -14,17 +14,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
-
       - uses: Swatinem/rust-cache@v2
-
       - name: Build (all features)
         run: cargo build
 
+  no_std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Build (no_std)
         run: cargo build --no-default-features --lib
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test -- --test-threads=6
 
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build examples
+        run: cargo build --examples
+      - name: Run examples
+        run: |
+          cargo run --example minimal -- run
+          cargo run --example weather_app -- run || true
+          cargo run --example sales_app -- run
+          cargo run --example ident_app -- --catalog-path examples/ident_data/catalog.yml --params-path examples/ident_data/params.yml run
+          cargo run --example register_example -- run
+          cargo run --example dyn_steps_app -- run
