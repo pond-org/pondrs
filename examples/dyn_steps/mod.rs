@@ -10,6 +10,7 @@ use serde_json::json;
 use pondrs::datasets::{JsonDataset, MemoryDataset, Param, PolarsCsvDataset};
 use pondrs::{Node, RunnableStep, StepVec};
 
+// ANCHOR: types
 #[derive(Serialize, Deserialize)]
 pub struct Catalog {
     pub readings: PolarsCsvDataset,
@@ -22,7 +23,9 @@ pub struct Params {
     pub threshold: Param<f64>,
     pub include_report: Param<bool>,
 }
+// ANCHOR_END: types
 
+// ANCHOR: pipeline
 pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> StepVec<'a> {
     let mut steps = vec![
         Node {
@@ -53,6 +56,7 @@ pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> StepVec<'a> {
 
     steps
 }
+// ANCHOR_END: pipeline
 
 pub fn write_fixtures(dir: &std::path::Path) {
     std::fs::create_dir_all(dir).unwrap();

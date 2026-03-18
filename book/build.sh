@@ -26,6 +26,8 @@ cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example register_example -- r
 
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example minimal -- run
 
+cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example dyn_steps_app -- run
+
 echo "Generating static viz pages..."
 
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example weather_app -- \
@@ -44,6 +46,9 @@ cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example register_example -- \
 
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example minimal -- \
     viz --export "$ASSETS_DIR/minimal_viz.html"
+
+cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example dyn_steps_app -- \
+    viz --export "$ASSETS_DIR/dyn_steps_viz.html"
 
 echo "Building book..."
 mdbook build "$SCRIPT_DIR"

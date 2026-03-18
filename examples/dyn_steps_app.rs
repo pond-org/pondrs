@@ -13,6 +13,7 @@ mod dyn_steps;
 use dyn_steps::{pipeline, write_fixtures};
 use pondrs::error::PondError;
 
+// ANCHOR: app
 fn main() -> Result<(), PondError> {
     let dir = {
         let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -27,3 +28,4 @@ fn main() -> Result<(), PondError> {
     .with_args(std::env::args_os())?
     .dispatch(pipeline)
 }
+// ANCHOR_END: app

@@ -14,6 +14,7 @@
 - [Pipelines & Nodes](./pipelines/README.md)
   - [Nodes](./pipelines/nodes.md)
   - [Pipeline](./pipelines/pipeline.md)
+  - [Dynamic Pipelines](./pipelines/dynamic.md)
   - [Check](./pipelines/check.md)
 - [Error handling](./error_handling/README.md)
   - [Error Type](./error_handling/error_type.md)
@@ -50,3 +51,4 @@
   - [Sales Pipeline](./examples/sales.md)
   - [Identity Pipeline](./examples/ident.md)
   - [Register Pipeline](./examples/register.md)
+  - [Dynamic Pipeline](./examples/dyn_steps.md)
