@@ -23,6 +23,7 @@ All built-in dataset types, their feature flags, and typical use cases.
 |------|---------|----------------|-------------|
 | `PolarsCsvDataset` | `polars` | `DataFrame` / `DataFrame` | CSV files via Polars. Configurable separator, header, etc. |
 | `PolarsParquetDataset` | `polars` | `DataFrame` / `DataFrame` | Parquet files via Polars. |
+| `PolarsExcelDataset` | `polars` | `DataFrame` / — | Excel files via fastexcel. Read-only. |
 | `JsonDataset` | `json` | `serde_json::Value` / `serde_json::Value` | JSON files. |
 | `YamlDataset` | `yaml` | `Vec<Yaml>` / `Vec<Yaml>` | YAML files using `yaml_rust2`. |
 | `PlotlyDataset` | `plotly` | `serde_json::Value` / `serde_json::Value` | Plotly charts. Saves `.json` + `.html`. Custom `html()` for viz. |
@@ -53,4 +54,4 @@ pub trait FileDataset: Dataset + Clone {
 }
 ```
 
-Implementors: `PolarsCsvDataset`, `PolarsParquetDataset`, `TextDataset`, `JsonDataset`.
+Implementors: `PolarsCsvDataset`, `PolarsParquetDataset`, `PolarsExcelDataset`, `TextDataset`, `JsonDataset`.

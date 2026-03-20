@@ -25,6 +25,8 @@ mod yaml;
 mod plotly_dataset;
 #[cfg(feature = "image")]
 mod image_dataset;
+#[cfg(feature = "std")]
+mod templated;
 
 pub use cell::CellDataset;
 pub use gpio::GpioDataset;
@@ -39,7 +41,7 @@ pub use partitioned::Lazy;
 #[cfg(feature = "polars")]
 pub use partitioned::{LazyPartitionedDataset, PartitionedDataset};
 #[cfg(feature = "polars")]
-pub use polars::{PolarsCsvDataset, PolarsParquetDataset};
+pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
 #[cfg(feature = "json")]
 pub use json::JsonDataset;
 #[cfg(feature = "std")]
@@ -50,6 +52,8 @@ pub use yaml::YamlDataset;
 pub use plotly_dataset::PlotlyDataset;
 #[cfg(feature = "image")]
 pub use image_dataset::ImageDataset;
+#[cfg(feature = "std")]
+pub use templated::TemplatedCatalog;
 
 /// Trait for datasets that can load and save data.
 ///

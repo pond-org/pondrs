@@ -5,6 +5,7 @@
 /examples/minimal_data/
 /examples/dyn_steps_data/
 /examples/weather_data/
+/examples/split_join_data/
 /book/book/
 /book/src/assets/
 /*.md

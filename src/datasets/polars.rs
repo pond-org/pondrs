@@ -1,7 +1,7 @@
 //! Polars DataFrame dataset.
 
 use std::prelude::v1::*;
-use polars::prelude::{CsvParseOptions, CsvReadOptions, CsvWriter, DataFrame, ParquetReader, ParquetWriter, SerReader, SerWriter};
+use polars::prelude::{Column, CsvParseOptions, CsvReadOptions, CsvWriter, DataFrame, NamedFrom, ParquetReader, ParquetWriter, SerReader, SerWriter, Series};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PondError;
@@ -150,6 +150,76 @@ impl Dataset for PolarsParquetDataset {
 }
 
 impl FileDataset for PolarsParquetDataset {
+    fn path(&self) -> &str {
+        &self.path
+    }
+    fn set_path(&mut self, path: &str) {
+        self.path = path.to_string();
+    }
+}
+
+fn default_sheet_index() -> usize { 0 }
+
+/// Excel file dataset backed by Polars (via fastexcel). Read-only.
+///
+/// Loads a single sheet by index (default: 0) into a Polars `DataFrame`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PolarsExcelDataset {
+    pub path: String,
+    #[serde(default = "default_sheet_index")]
+    pub sheet_index: usize,
+}
+
+impl PolarsExcelDataset {
+    pub fn new(path: impl Into<String>) -> Self {
+        Self { path: path.into(), sheet_index: 0 }
+    }
+}
+
+impl Dataset for PolarsExcelDataset {
+    type LoadItem = DataFrame;
+    type SaveItem = DataFrame;
+    type Error = PondError;
+
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        let mut reader = fastexcel::read_excel(&self.path)
+            .map_err(|e| PondError::Custom(e.to_string()))?;
+        let sheet = reader.load_sheet(
+            self.sheet_index.into(),
+            fastexcel::LoadSheetOrTableOptions::new_for_sheet(),
+        ).map_err(|e| PondError::Custom(e.to_string()))?;
+        let columns = sheet.to_columns()
+            .map_err(|e| PondError::Custom(e.to_string()))?;
+        let series: Vec<Series> = columns.into_iter().map(|col| {
+            let name = col.name().to_owned();
+            let data: fastexcel::FastExcelSeries = col.into();
+            match data {
+                fastexcel::FastExcelSeries::Null => Series::new_null(name.into(), 0),
+                fastexcel::FastExcelSeries::Bool(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::String(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::Int(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::Float(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::Datetime(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::Date(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::Duration(v) => Series::new(name.into(), &v),
+            }
+        }).collect();
+        let columns: Vec<Column> = series.into_iter().map(Column::from).collect();
+        let height = columns.first().map_or(0, |c| c.len());
+        let df = DataFrame::new(height, columns)?;
+        Ok(df)
+    }
+
+    fn save(&self, _df: Self::SaveItem) -> Result<(), PondError> {
+        unimplemented!("PolarsExcelDataset is read-only")
+    }
+
+    fn html(&self) -> Option<String> {
+        self.load().ok().map(|df| dataframe_to_html(&df))
+    }
+}
+
+impl FileDataset for PolarsExcelDataset {
     fn path(&self) -> &str {
         &self.path
     }
