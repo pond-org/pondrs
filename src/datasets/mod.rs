@@ -25,6 +25,8 @@ mod yaml;
 mod plotly_dataset;
 #[cfg(feature = "image")]
 mod image_dataset;
+#[cfg(feature = "std")]
+mod templated;
 
 pub use cell::CellDataset;
 pub use gpio::GpioDataset;
@@ -50,6 +52,8 @@ pub use yaml::YamlDataset;
 pub use plotly_dataset::PlotlyDataset;
 #[cfg(feature = "image")]
 pub use image_dataset::ImageDataset;
+#[cfg(feature = "std")]
+pub use templated::TemplatedCatalog;
 
 /// Trait for datasets that can load and save data.
 ///

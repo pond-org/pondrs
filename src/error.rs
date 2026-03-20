@@ -52,6 +52,13 @@ pub enum PondError {
     #[cfg(feature = "std")]
     #[error("{0}")]
     Custom(std::string::String),
+
+    #[cfg(feature = "std")]
+    #[error("Key mismatch: expected keys {expected:?}, got {actual:?}")]
+    KeyMismatch {
+        expected: std::vec::Vec<std::string::String>,
+        actual: std::vec::Vec<std::string::String>,
+    },
 }
 
 /// Validation error from [`StepInfo::check`](crate::pipeline::StepInfo::check).

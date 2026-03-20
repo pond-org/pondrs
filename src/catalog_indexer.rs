@@ -57,6 +57,8 @@ pub fn index_catalog(catalog: &impl Serialize) -> CatalogIndex {
     let mut indexer = CatalogIndexer {
         names: HashMap::new(),
         prefix: String::new(),
+        pending_map_key: None,
+        capturing_map_key: false,
     };
     catalog.serialize(&mut indexer).ok();
     CatalogIndex { names: indexer.names }
@@ -65,6 +67,8 @@ pub fn index_catalog(catalog: &impl Serialize) -> CatalogIndex {
 struct CatalogIndexer {
     names: HashMap<usize, String>,
     prefix: String,
+    pending_map_key: Option<String>,
+    capturing_map_key: bool,
 }
 
 impl CatalogIndexer {
@@ -156,7 +160,13 @@ impl<'a> ser::Serializer for &'a mut CatalogIndexer {
     fn serialize_f32(self, _v: f32) -> Result<(), Self::Error> { Ok(()) }
     fn serialize_f64(self, _v: f64) -> Result<(), Self::Error> { Ok(()) }
     fn serialize_char(self, _v: char) -> Result<(), Self::Error> { Ok(()) }
-    fn serialize_str(self, _v: &str) -> Result<(), Self::Error> { Ok(()) }
+    fn serialize_str(self, v: &str) -> Result<(), Self::Error> {
+        if self.capturing_map_key {
+            self.pending_map_key = Some(v.to_string());
+            self.capturing_map_key = false;
+        }
+        Ok(())
+    }
     fn serialize_bytes(self, _v: &[u8]) -> Result<(), Self::Error> { Ok(()) }
     fn serialize_none(self) -> Result<(), Self::Error> { Ok(()) }
     fn serialize_some<T: ?Sized + Serialize>(self, _v: &T) -> Result<(), Self::Error> { Ok(()) }
@@ -240,8 +250,27 @@ impl<'a> ser::SerializeTupleVariant for &'a mut CatalogIndexer {
 impl<'a> ser::SerializeMap for &'a mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
-    fn serialize_key<T: ?Sized + Serialize>(&mut self, _key: &T) -> Result<(), Self::Error> { Ok(()) }
-    fn serialize_value<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<(), Self::Error> { Ok(()) }
+
+    fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> Result<(), Self::Error> {
+        self.capturing_map_key = true;
+        key.serialize(&mut **self)?;
+        // capturing_map_key is cleared by serialize_str once the key is captured.
+        Ok(())
+    }
+
+    fn serialize_value<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), Self::Error> {
+        if let Some(key) = self.pending_map_key.take() {
+            let ptr_id = ptr_to_id(value);
+            let name = self.full_name(&key);
+            self.names.insert(ptr_id, name.clone());
+
+            let prev_prefix = std::mem::replace(&mut self.prefix, name);
+            value.serialize(&mut **self).ok();
+            self.prefix = prev_prefix;
+        }
+        Ok(())
+    }
+
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
 

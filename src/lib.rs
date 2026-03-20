@@ -32,6 +32,8 @@ pub use app::App;
 #[cfg(feature = "std")]
 pub use catalog_indexer::{CatalogIndex, index_catalog, index_catalog_with_params};
 pub use datasets::{Dataset, DatasetMeta};
+#[cfg(feature = "std")]
+pub use datasets::TemplatedCatalog;
 pub use error::{CheckError, PondError};
 #[cfg(feature = "std")]
 pub use graph::{PipelineGraph, build_pipeline_graph};
@@ -41,7 +43,7 @@ pub use pipeline::{
     RunnableStep, StepInfo, Steps,
 };
 #[cfg(feature = "std")]
-pub use pipeline::StepVec;
+pub use pipeline::{StepVec, Split, Join};
 #[cfg(feature = "std")]
 pub use runners::ParallelRunner;
 pub use runners::{Runner, Runners, SequentialRunner};

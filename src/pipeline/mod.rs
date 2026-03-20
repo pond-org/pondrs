@@ -9,6 +9,8 @@ mod into_result;
 mod node;
 mod pipeline;
 mod pipeline_fn;
+#[cfg(feature = "std")]
+mod split_join;
 pub mod stable;
 mod steps;
 mod traits;
@@ -22,6 +24,8 @@ pub use pipeline_fn::PipelineFn;
 pub use steps::{StepInfo, Steps};
 #[cfg(feature = "std")]
 pub use dyn_steps::StepVec;
+#[cfg(feature = "std")]
+pub use split_join::{Split, Join};
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
 pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
