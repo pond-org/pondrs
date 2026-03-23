@@ -89,6 +89,11 @@ pub enum CheckError {
         pipeline_name: &'static str,
         dataset_id: usize,
     },
+    /// A child node consumes an external dataset not declared in the pipeline's inputs.
+    UndeclaredPipelineInput {
+        pipeline_name: &'static str,
+        dataset_id: usize,
+    },
     /// The fixed-capacity dataset buffer overflowed.
     CapacityExceeded,
 }
@@ -110,6 +115,9 @@ impl core::fmt::Display for CheckError {
             }
             CheckError::UnproducedPipelineOutput { pipeline_name, dataset_id } => {
                 write!(f, "Pipeline '{pipeline_name}' declares output {dataset_id:#x}, but none of its children produce it")
+            }
+            CheckError::UndeclaredPipelineInput { pipeline_name, dataset_id } => {
+                write!(f, "Pipeline '{pipeline_name}' has a child that consumes external dataset {dataset_id:#x}, which is not declared in the pipeline's inputs")
             }
             CheckError::CapacityExceeded => {
                 write!(f, "Dataset capacity exceeded; use check_with_capacity::<N>() with a larger N")

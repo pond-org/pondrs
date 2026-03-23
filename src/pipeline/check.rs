@@ -147,8 +147,13 @@ fn check_pipeline<const N: usize>(
 
     // Check pipeline contract: declared inputs must be consumed by children.
     let mut input_err: Result<(), CheckError> = Ok(());
+    let mut declared_inputs = IdSet::<N>::new();
     item.for_each_input(&mut |d: &DatasetRef| {
         if input_err.is_err() {
+            return;
+        }
+        if !declared_inputs.insert(d.id) {
+            input_err = Err(CheckError::CapacityExceeded);
             return;
         }
         if !child_consumed.contains(d.id) {
@@ -158,7 +163,64 @@ fn check_pipeline<const N: usize>(
             });
         }
     });
-    input_err
+    input_err?;
+
+    // Check that children don't consume external datasets not declared in pipeline inputs.
+    // External = consumed but not produced internally and not a param.
+    // We need to walk child_consumed and check each against inner_produced + declared_inputs.
+    // Since IdSet doesn't expose iteration, we re-walk children to find their inputs.
+    let mut undeclared_err: Result<(), CheckError> = Ok(());
+    item.for_each_child(&mut |child| {
+        if undeclared_err.is_err() {
+            return;
+        }
+        check_undeclared_inputs::<N>(child, &inner_produced, &declared_inputs, name, &mut undeclared_err);
+    });
+    undeclared_err
+}
+
+/// Recursively walk a step's inputs to find any external dataset not declared
+/// in the parent pipeline's inputs.
+fn check_undeclared_inputs<const N: usize>(
+    item: &dyn PipelineInfo,
+    inner_produced: &IdSet<N>,
+    declared_inputs: &IdSet<N>,
+    pipeline_name: &'static str,
+    err: &mut Result<(), CheckError>,
+) {
+    if err.is_err() {
+        return;
+    }
+    if item.is_leaf() {
+        item.for_each_input(&mut |d: &DatasetRef| {
+            if err.is_err() {
+                return;
+            }
+            // Skip params, internally produced datasets, and declared inputs
+            if d.meta.is_param() || inner_produced.contains(d.id) || declared_inputs.contains(d.id) {
+                return;
+            }
+            *err = Err(CheckError::UndeclaredPipelineInput {
+                pipeline_name,
+                dataset_id: d.id,
+            });
+        });
+    } else {
+        // For nested pipelines, only check their declared inputs (not their internals —
+        // those are validated when the nested pipeline itself is checked).
+        item.for_each_input(&mut |d: &DatasetRef| {
+            if err.is_err() {
+                return;
+            }
+            if d.meta.is_param() || inner_produced.contains(d.id) || declared_inputs.contains(d.id) {
+                return;
+            }
+            *err = Err(CheckError::UndeclaredPipelineInput {
+                pipeline_name,
+                dataset_id: d.id,
+            });
+        });
+    }
 }
 
 #[cfg(test)]
@@ -353,6 +415,26 @@ mod tests {
             Node { name: "n_after", func: |v| (v,), input: (&b,), output: (&c,) },
         );
         assert!(pipe.check().is_ok());
+    }
+
+    #[test]
+    fn undeclared_pipeline_input() {
+        let a = CellDataset::<i32>::new();
+        let b = CellDataset::<i32>::new();
+
+        // Pipeline child reads `a` from outside, but pipeline doesn't declare it as input
+        let pipe = (
+            Pipeline {
+                name: "inner",
+                steps: (
+                    Node { name: "n1", func: |v| (v,), input: (&a,), output: (&b,) },
+                ),
+                input: (),
+                output: (&b,),
+            },
+        );
+        let err = pipe.check().unwrap_err();
+        assert!(matches!(err, CheckError::UndeclaredPipelineInput { pipeline_name: "inner", .. }));
     }
 
     #[test]
