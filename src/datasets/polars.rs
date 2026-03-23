@@ -198,7 +198,17 @@ impl Dataset for PolarsExcelDataset {
                 fastexcel::FastExcelSeries::Bool(v) => Series::new(name.into(), &v),
                 fastexcel::FastExcelSeries::String(v) => Series::new(name.into(), &v),
                 fastexcel::FastExcelSeries::Int(v) => Series::new(name.into(), &v),
-                fastexcel::FastExcelSeries::Float(v) => Series::new(name.into(), &v),
+                fastexcel::FastExcelSeries::Float(v) => {
+                    if v.iter().all(|x| match x {
+                        Some(f) => *f == (*f as i64) as f64 && f.is_finite(),
+                        None => true,
+                    }) {
+                        let ints: Vec<Option<i64>> = v.iter().map(|x| x.map(|f| f as i64)).collect();
+                        Series::new(name.into(), &ints)
+                    } else {
+                        Series::new(name.into(), &v)
+                    }
+                }
                 fastexcel::FastExcelSeries::Datetime(v) => Series::new(name.into(), &v),
                 fastexcel::FastExcelSeries::Date(v) => Series::new(name.into(), &v),
                 fastexcel::FastExcelSeries::Duration(v) => Series::new(name.into(), &v),
