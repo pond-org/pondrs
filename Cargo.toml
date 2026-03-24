@@ -28,7 +28,7 @@ all = ["std", "json", "polars", "yaml", "plotly", "viz", "image"]
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
 thiserror = { version = "2", default-features = false }
 yaml-rust2 = { version = "0.11.0", optional = true }
-polars = { version = "0.53", features = ["parquet"], optional = true }
+polars = { version = "0.53", default-features = false, features = ["csv", "parquet", "fmt", "dtype-slim"], optional = true }
 fastexcel = { version = "0.15.1", optional = true }
 plotly = { version = "0.14", optional = true }
 serde_json = { version = "1", optional = true }
@@ -39,8 +39,8 @@ env_logger = { version = "0.11.9", optional = true }
 axum = { version = "0.8", features = ["ws"], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"], optional = true }
 rust-embed = { version = "8", optional = true }
-ureq = { version = "3", features = ["json"], optional = true }
-image = { version = "0.25", optional = true }
+ureq = { version = "3", default-features = false, features = ["json"], optional = true }
+image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "tiff", "bmp"] }
 base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
