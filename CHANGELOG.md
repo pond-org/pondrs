@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.3] - 2026-03-24
+
+### Added
+- `FileDataset::ensure_parent_dir()` default method — automatically creates parent directories before saving
+- All built-in file datasets (`TextDataset`, `JsonDataset`, `YamlDataset`, `PolarsCsvDataset`, `PolarsParquetDataset`, `PlotlyDataset`, `ImageDataset`) now call `ensure_parent_dir()` in `save()`
+
 ## [0.2.2] - 2026-03-24
 
 ### Fixed
