@@ -26,10 +26,7 @@ impl ImageDataset {
     fn mime_type(&self) -> &'static str {
         match self.path.rsplit('.').next().unwrap_or("").to_lowercase().as_str() {
             "jpg" | "jpeg" => "image/jpeg",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
             "bmp" => "image/bmp",
-            "ico" => "image/x-icon",
             "tiff" | "tif" => "image/tiff",
             _ => "image/png",
         }
