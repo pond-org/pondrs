@@ -34,6 +34,7 @@ impl Dataset for JsonDataset {
     }
 
     fn save(&self, value: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         std::fs::write(&self.path, serde_json::to_string_pretty(&value)?)?;
         Ok(())
     }

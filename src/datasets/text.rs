@@ -28,6 +28,7 @@ impl Dataset for TextDataset {
     type Error = PondError;
 
     fn save(&self, text: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         std::fs::write(&self.path, text)?;
         Ok(())
     }

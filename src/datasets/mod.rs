@@ -112,6 +112,16 @@ pub trait FileDataset: Dataset + Clone {
     fn path(&self) -> &str;
     /// Redirect this dataset to a different file path.
     fn set_path(&mut self, path: &str);
+
+    /// Creates parent directories for `self.path()` if they don't exist.
+    fn ensure_parent_dir(&self) -> Result<(), std::io::Error> {
+        if let Some(parent) = std::path::Path::new(self.path()).parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

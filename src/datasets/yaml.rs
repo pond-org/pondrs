@@ -29,6 +29,7 @@ impl Dataset for YamlDataset {
     type Error = PondError;
 
     fn save(&self, yaml: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         let mut out_str = String::new();
         let mut emitter = YamlEmitter::new(&mut out_str);
         emitter.dump(&yaml)?;

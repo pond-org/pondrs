@@ -42,6 +42,7 @@ impl Dataset for PlotlyDataset {
     }
 
     fn save(&self, plot: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         std::fs::write(&self.path, plot.to_json())?;
         std::fs::write(self.html_path(), plot.to_html())?;
         Ok(())

@@ -82,6 +82,7 @@ impl Dataset for PolarsCsvDataset {
     type Error = PondError;
 
     fn save(&self, mut df: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         let mut file = std::fs::File::create(&self.path)?;
         CsvWriter::new(&mut file)
             .with_separator(self.separator as u8)
@@ -133,6 +134,7 @@ impl Dataset for PolarsParquetDataset {
     type Error = PondError;
 
     fn save(&self, mut df: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         let mut file = std::fs::File::create(&self.path)?;
         ParquetWriter::new(&mut file).finish(&mut df)?;
         Ok(())

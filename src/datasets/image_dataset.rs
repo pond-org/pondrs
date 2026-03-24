@@ -43,6 +43,7 @@ impl Dataset for ImageDataset {
     }
 
     fn save(&self, img: Self::SaveItem) -> Result<(), PondError> {
+        self.ensure_parent_dir()?;
         img.save(&self.path)?;
         Ok(())
     }
