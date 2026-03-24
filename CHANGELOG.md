@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.2] - 2026-03-24
+
+### Fixed
+- `MemoryDataset<T>` no longer requires `T: Default`
+
+### Changed
+- Trimmed dependency features to reduce compile times:
+  - `polars`: disabled defaults, enabled only `csv`, `parquet`, `fmt`, `dtype-slim`
+  - `image`: disabled defaults, enabled only `png`, `jpeg`, `tiff`, `bmp`
+  - `ureq`: disabled defaults (removed TLS, not needed for localhost)
+- Limited `mold` linker thread count to avoid memory exhaustion
+
 ## [0.2.1] - 2026-03-23
 
 ### Fixed
