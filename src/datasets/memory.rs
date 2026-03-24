@@ -12,6 +12,7 @@ use super::Dataset;
 ///
 /// Starts empty; loading before any save returns `DatasetNotLoaded`.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(bound(deserialize = ""))]
 pub struct MemoryDataset<T: Clone> {
     #[serde(skip_serializing, skip_deserializing)]
     value: Arc<Mutex<Option<T>>>,
