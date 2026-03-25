@@ -83,6 +83,10 @@ $ my_app viz                          # interactive pipeline visualization
 ```
 <!-- ANCHOR_END: example -->
 
+## AI Disclosure
+
+This library was designed and architected by humans. Implementation was carried out by an AI coding agent under close human supervision and review.
+
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
