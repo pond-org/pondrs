@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.4] - 2026-03-25
+
+### Added
+- `CONTRIBUTING.md` with contribution guidelines
+- AI disclosure in README
+- Link to examples repository in README
+
 ## [0.2.3] - 2026-03-24
 
 ### Added
