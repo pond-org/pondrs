@@ -35,6 +35,18 @@ pub enum Command {
         /// Override catalog values (dot notation for nesting, e.g. output.path=/tmp/out.csv).
         #[arg(long = "catalog", value_name = "KEY=VALUE")]
         catalog_overrides: Vec<String>,
+
+        /// Run only the named nodes (comma-separated).
+        #[arg(long, value_delimiter = ',', conflicts_with_all = ["from_nodes", "to_nodes"])]
+        nodes: Vec<String>,
+
+        /// Run from these nodes onwards (comma-separated).
+        #[arg(long, value_delimiter = ',', conflicts_with = "nodes")]
+        from_nodes: Vec<String>,
+
+        /// Run up to and including these nodes (comma-separated).
+        #[arg(long, value_delimiter = ',', conflicts_with = "nodes")]
+        to_nodes: Vec<String>,
     },
 
     /// Validate pipeline structure (dependency ordering, output uniqueness).

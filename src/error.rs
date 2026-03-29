@@ -59,6 +59,10 @@ pub enum PondError {
         expected: std::vec::Vec<std::string::String>,
         actual: std::vec::Vec<std::string::String>,
     },
+
+    #[cfg(feature = "std")]
+    #[error("Node not found: '{0}'")]
+    NodeNotFound(std::string::String),
 }
 
 /// Validation error from [`StepInfo::check`](crate::pipeline::StepInfo::check).

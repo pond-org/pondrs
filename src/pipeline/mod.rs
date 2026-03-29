@@ -3,6 +3,8 @@
 mod check;
 #[cfg(feature = "std")]
 mod dyn_steps;
+#[cfg(feature = "std")]
+mod filter;
 pub(crate) mod id_set;
 mod ident;
 mod into_result;
@@ -24,6 +26,8 @@ pub use pipeline_fn::PipelineFn;
 pub use steps::{StepInfo, Steps};
 #[cfg(feature = "std")]
 pub use dyn_steps::StepVec;
+#[cfg(feature = "std")]
+pub use filter::{NodeFilter, filter_steps};
 #[cfg(feature = "std")]
 pub use split_join::{Split, Join};
 #[cfg(feature = "std")]

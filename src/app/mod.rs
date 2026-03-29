@@ -65,6 +65,8 @@ pub struct App<C, P, H = (), R = DefaultRunners> {
     #[cfg(feature = "std")]
     runner_name: Option<std::string::String>,
     #[cfg(feature = "std")]
+    node_filter: Option<crate::pipeline::NodeFilter>,
+    #[cfg(feature = "std")]
     program_name: std::string::String,
 }
 
@@ -83,6 +85,8 @@ impl<C, P> App<C, P, (), DefaultRunners> {
             command: Command::Run,
             #[cfg(feature = "std")]
             runner_name: None,
+            #[cfg(feature = "std")]
+            node_filter: None,
             #[cfg(feature = "std")]
             program_name: std::string::String::new(),
         }
@@ -103,6 +107,8 @@ impl<C, P, H, R> App<C, P, H, R> {
             #[cfg(feature = "std")]
             runner_name: self.runner_name,
             #[cfg(feature = "std")]
+            node_filter: self.node_filter,
+            #[cfg(feature = "std")]
             program_name: self.program_name,
         }
     }
@@ -117,6 +123,8 @@ impl<C, P, H, R> App<C, P, H, R> {
             command: self.command,
             #[cfg(feature = "std")]
             runner_name: self.runner_name,
+            #[cfg(feature = "std")]
+            node_filter: self.node_filter,
             #[cfg(feature = "std")]
             program_name: self.program_name,
         }
@@ -161,6 +169,16 @@ impl<C: Serialize, P: Serialize, H: Hooks, R: Runners> App<C, P, H, R> {
         let name = self.runner_name.as_deref().unwrap_or(self.runners.first_name());
         #[cfg(not(feature = "std"))]
         let name = self.runners.first_name();
+
+        #[cfg(feature = "std")]
+        if let Some(ref filter) = self.node_filter {
+            let filtered = crate::pipeline::filter_steps(&pipeline, &self.catalog, &self.params, filter)
+                .map_err(E::from)?;
+            return match self.runners.run_by_name(name, &filtered, &self.catalog, &self.params, &self.hooks) {
+                Some(result) => result,
+                None => Err(PondError::RunnerNotFound.into()),
+            };
+        }
 
         match self.runners.run_by_name(name, &pipeline, &self.catalog, &self.params, &self.hooks) {
             Some(result) => result,
@@ -235,17 +253,33 @@ mod std_app {
         Ok(deserialize_config(value)?)
     }
 
-    /// Convert a CLI Command to our core Command, extracting the runner name.
-    fn extract_command(cli_cmd: &CliCommand) -> (Command, Option<String>) {
+    /// Convert a CLI Command to our core Command, extracting the runner name
+    /// and optional node filter.
+    fn extract_command(cli_cmd: &CliCommand) -> (Command, Option<String>, Option<crate::pipeline::NodeFilter>) {
         match cli_cmd {
-            CliCommand::Run { runner, .. } => (Command::Run, runner.clone()),
-            CliCommand::Check => (Command::Check, None),
+            CliCommand::Run { runner, nodes, from_nodes, to_nodes, .. } => {
+                let filter = if !nodes.is_empty() {
+                    Some(crate::pipeline::NodeFilter::Nodes(
+                        nodes.iter().cloned().collect(),
+                    ))
+                } else if !from_nodes.is_empty() || !to_nodes.is_empty() {
+                    Some(crate::pipeline::NodeFilter::FromTo {
+                        from: from_nodes.iter().cloned().collect(),
+                        to: to_nodes.iter().cloned().collect(),
+                    })
+                } else {
+                    None
+                };
+                (Command::Run, runner.clone(), filter)
+            }
+            CliCommand::Check => (Command::Check, None, None),
             CliCommand::Viz { port, output, export } => (
                 Command::Viz {
                     port: *port,
                     output: output.clone(),
                     export: export.clone(),
                 },
+                None,
                 None,
             ),
         }
@@ -278,6 +312,7 @@ mod std_app {
                 runners: DefaultRunners::default(),
                 command: Command::Run,
                 runner_name: None,
+                node_filter: None,
                 program_name: String::new(),
             })
         }
@@ -308,7 +343,7 @@ mod std_app {
             let catalog: C = load_config(catalog_path, catalog_overrides)?;
             let params: P = load_config(params_path, param_overrides)?;
 
-            let (command, runner_name) = extract_command(&cli.command);
+            let (command, runner_name, node_filter) = extract_command(&cli.command);
 
             Ok(App {
                 catalog,
@@ -317,6 +352,7 @@ mod std_app {
                 runners: DefaultRunners::default(),
                 command,
                 runner_name,
+                node_filter,
                 program_name: String::new(),
             })
         }
@@ -385,7 +421,7 @@ mod std_app {
                 serde_yaml::from_value(value).map_err(PondError::SerdeYaml)?
             };
 
-            let (command, runner_name) = extract_command(&cli.command);
+            let (command, runner_name, node_filter) = extract_command(&cli.command);
 
             Ok(App {
                 catalog,
@@ -394,6 +430,7 @@ mod std_app {
                 runners: self.runners,
                 command,
                 runner_name,
+                node_filter,
                 program_name: self.program_name,
             })
         }
@@ -441,7 +478,7 @@ mod std_app {
                 serde_yaml::from_value(value).map_err(PondError::SerdeYaml)?
             };
 
-            let (command, runner_name) = extract_command(&cli.command);
+            let (command, runner_name, node_filter) = extract_command(&cli.command);
 
             Ok(App {
                 catalog: self.catalog,
@@ -450,6 +487,7 @@ mod std_app {
                 runners: self.runners,
                 command,
                 runner_name,
+                node_filter,
                 program_name,
             })
         }

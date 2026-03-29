@@ -97,6 +97,34 @@ pub trait RunnableStep<E>: PipelineInfo {
     }
 }
 
+// --- Blanket impls for references ---
+// These allow `&'a dyn RunnableStep<E>` to be boxed into a `StepVec<'a, E>` directly.
+
+impl<T: PipelineInfo + ?Sized> PipelineInfo for &T {
+    fn name(&self) -> &'static str { (**self).name() }
+    fn is_leaf(&self) -> bool { (**self).is_leaf() }
+    fn type_string(&self) -> &'static str { (**self).type_string() }
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
+        (**self).for_each_child(f);
+    }
+    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        (**self).for_each_input(f);
+    }
+    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        (**self).for_each_output(f);
+    }
+}
+
+impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+        (**self).call(on_event)
+    }
+    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
+        (**self).for_each_child_step(f);
+    }
+    fn as_pipeline_info(&self) -> &dyn PipelineInfo { (**self).as_pipeline_info() }
+}
+
 /// Trait for loading data from input datasets.
 pub trait NodeInput: StableTuple {
     type Args: StableTuple;
