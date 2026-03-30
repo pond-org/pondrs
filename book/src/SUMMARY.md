@@ -54,3 +54,5 @@
   - [Register Pipeline](./examples/register.md)
   - [Dynamic Pipeline](./examples/dyn_steps.md)
   - [Split/Join Pipeline](./examples/split_join.md)
+- [Blog](./blog/README.md)
+  - [2026-03-30 - Pondrs and Kedro](./blog/2026-03-30-pondrs-and-kedro.md)
