@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.5] - 2026-03-30
+
+### Added
+- Node filtering for partial pipeline runs: `--nodes`, `--from-nodes`, `--to-nodes` CLI flags
+- `NodeFilter` enum and `filter_steps()` function for programmatic filtering
+- `PondError::NodeNotFound` variant for invalid node names
+- Blanket `PipelineInfo` and `RunnableStep<E>` impls for references
+
 ## [0.2.4] - 2026-03-25
 
 ### Added
