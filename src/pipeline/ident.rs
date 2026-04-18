@@ -2,7 +2,7 @@
 
 use crate::error::PondError;
 
-use super::traits::{DatasetEvent, DatasetRef, PipelineInfo, RunnableStep};
+use super::traits::{DatasetEvent, DatasetRef, StepInfo, RunnableStep};
 use crate::datasets::Dataset;
 
 /// A no-op node that declares two datasets as linked in the graph
@@ -13,7 +13,7 @@ pub struct Ident<'a, Input: Dataset + Send + Sync, Output: Dataset + Send + Sync
     pub output: &'a Output,
 }
 
-impl<Input, Output> PipelineInfo for Ident<'_, Input, Output>
+impl<Input, Output> StepInfo for Ident<'_, Input, Output>
 where
     Input: Dataset + Send + Sync,
     Output: Dataset + Send + Sync,
@@ -30,7 +30,7 @@ where
         core::any::type_name::<Self>()
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         f(&DatasetRef::from_ref(self.input));
@@ -53,5 +53,5 @@ where
 
     fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
 
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }

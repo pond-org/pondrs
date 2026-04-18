@@ -10,14 +10,14 @@ pub use sequential::SequentialRunner;
 
 use serde::Serialize;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, PipelineInfo, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, StepInfo, Steps};
 use crate::error::PondError;
 use crate::hooks::Hooks;
 
 /// Resolve dataset name from the catalog index and dispatch to hooks.
 #[cfg(feature = "std")]
 pub(crate) fn dispatch_dataset_event(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     ds: &DatasetRef<'_>,
     event: DatasetEvent,
     names: &std::collections::HashMap<usize, std::string::String>,
@@ -29,7 +29,7 @@ pub(crate) fn dispatch_dataset_event(
 
 /// Dispatch a dataset event to all hooks without name resolution.
 pub(crate) fn dispatch_dataset_event_raw(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     ds: &DatasetRef<'_>,
     event: DatasetEvent,
     hooks: &impl Hooks,

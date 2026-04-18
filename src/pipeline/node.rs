@@ -4,7 +4,7 @@ use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
 use super::stable::{StableFn, StableTuple};
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, RunnableStep};
 
 /// Marker trait asserting that a return type is structurally compatible
 /// with an output tuple `O`.
@@ -29,7 +29,7 @@ where
     pub output: Output,
 }
 
-impl<F, Input, Output> PipelineInfo for Node<F, Input, Output>
+impl<F, Input, Output> StepInfo for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
@@ -48,7 +48,7 @@ where
         core::any::type_name::<F>()
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         self.input.for_each_input(f);
@@ -77,5 +77,5 @@ where
 
     fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
 
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }

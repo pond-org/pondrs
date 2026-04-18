@@ -19,7 +19,7 @@ Error: Pipeline validation failed:
 
 ## What it validates
 
-`check` calls `StepInfo::check()` on the pipeline, which verifies:
+`check` calls `PipelineInfo::check()` on the pipeline, which verifies:
 
 - **Sequential ordering** — no node reads a dataset produced by a later node
 - **No duplicate outputs** — each dataset is produced by at most one node
@@ -30,7 +30,7 @@ See [Check](../pipelines/check.md) for the full list of `CheckError` variants.
 
 ## Programmatic use
 
-You can call `check()` directly on any `StepInfo`:
+You can call `check()` directly on any `PipelineInfo`:
 
 ```rust,ignore
 let steps = pipeline(&catalog, &params);

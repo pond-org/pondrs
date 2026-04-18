@@ -39,8 +39,8 @@ pub use error::{CheckError, PondError};
 pub use graph::{PipelineGraph, build_pipeline_graph};
 pub use hooks::{Hook, Hooks};
 pub use pipeline::{
-    DatasetEvent, DatasetRef, Ident, IntoNodeResult, Node, Pipeline, PipelineFn, PipelineInfo,
-    RunnableStep, StepInfo, Steps,
+    DatasetEvent, DatasetRef, Ident, IntoNodeResult, Node, Pipeline, PipelineFn, StepInfo,
+    RunnableStep, PipelineInfo, Steps,
 };
 #[cfg(feature = "std")]
 pub use pipeline::{StepVec, Split, Join};

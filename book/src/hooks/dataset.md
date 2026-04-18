@@ -5,10 +5,10 @@ Dataset hooks fire during the load and save operations inside `Node::call()`. Ea
 ## Methods
 
 ```rust,ignore
-fn before_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
-fn after_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
-fn before_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
-fn after_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
+fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
+fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
+fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
+fn after_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
 ```
 
 ## Arguments
@@ -48,11 +48,11 @@ struct IoTimingHook {
 }
 
 impl Hook for IoTimingHook {
-    fn before_dataset_loaded(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
+    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
         self.starts.lock().unwrap().insert(ds.id, Instant::now());
     }
 
-    fn after_dataset_loaded(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
+    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
         if let Some(start) = self.starts.lock().unwrap().remove(&ds.id) {
             let name = ds.name.unwrap_or("<unknown>");
             println!("  loaded {} in {:.1}ms", name, start.elapsed().as_secs_f64() * 1000.0);

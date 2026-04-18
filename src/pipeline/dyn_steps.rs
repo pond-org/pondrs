@@ -4,8 +4,8 @@ use std::prelude::v1::*;
 
 use crate::error::PondError;
 
-use super::steps::{StepInfo, Steps};
-use super::traits::{PipelineInfo, RunnableStep};
+use super::steps::{PipelineInfo, Steps};
+use super::traits::{StepInfo, RunnableStep};
 
 /// A type-erased, heap-allocated sequence of pipeline steps.
 ///
@@ -29,8 +29,8 @@ use super::traits::{PipelineInfo, RunnableStep};
 /// ```
 pub type StepVec<'a, E = PondError> = Vec<Box<dyn RunnableStep<E> + Send + Sync + 'a>>;
 
-impl<'a, E> StepInfo for Vec<Box<dyn RunnableStep<E> + Send + Sync + 'a>> {
-    fn for_each_info<'s>(&'s self, f: &mut dyn FnMut(&'s dyn PipelineInfo)) {
+impl<'a, E> PipelineInfo for Vec<Box<dyn RunnableStep<E> + Send + Sync + 'a>> {
+    fn for_each_info<'s>(&'s self, f: &mut dyn FnMut(&'s dyn StepInfo)) {
         for item in self {
             f(item.as_pipeline_info());
         }

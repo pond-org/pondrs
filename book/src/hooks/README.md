@@ -7,20 +7,20 @@ Hooks let you observe pipeline execution events without modifying the pipeline i
 ```rust,ignore
 pub trait Hook: Sync {
     // Pipeline lifecycle
-    fn before_pipeline_run(&self, p: &dyn PipelineInfo) {}
-    fn after_pipeline_run(&self, p: &dyn PipelineInfo) {}
-    fn on_pipeline_error(&self, p: &dyn PipelineInfo, error: &str) {}
+    fn before_pipeline_run(&self, p: &dyn StepInfo) {}
+    fn after_pipeline_run(&self, p: &dyn StepInfo) {}
+    fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {}
 
     // Node lifecycle
-    fn before_node_run(&self, n: &dyn PipelineInfo) {}
-    fn after_node_run(&self, n: &dyn PipelineInfo) {}
-    fn on_node_error(&self, n: &dyn PipelineInfo, error: &str) {}
+    fn before_node_run(&self, n: &dyn StepInfo) {}
+    fn after_node_run(&self, n: &dyn StepInfo) {}
+    fn on_node_error(&self, n: &dyn StepInfo, error: &str) {}
 
     // Dataset lifecycle (fired per-dataset during Node::call)
-    fn before_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
-    fn after_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
-    fn before_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
-    fn after_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef) {}
+    fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
+    fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
+    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
+    fn after_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef) {}
 }
 ```
 
@@ -55,7 +55,7 @@ App::new(catalog, params)
 
 ## Hook arguments
 
-All hook methods receive `&dyn PipelineInfo`, which provides:
+All hook methods receive `&dyn StepInfo`, which provides:
 
 - `name()` — the node or pipeline name (`&'static str`)
 - `is_leaf()` — `true` for nodes, `false` for pipelines

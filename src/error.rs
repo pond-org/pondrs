@@ -65,7 +65,7 @@ pub enum PondError {
     NodeNotFound(std::string::String),
 }
 
-/// Validation error from [`StepInfo::check`](crate::pipeline::StepInfo::check).
+/// Validation error from [`PipelineInfo::check`](crate::pipeline::PipelineInfo::check).
 #[derive(Debug)]
 pub enum CheckError {
     /// A node reads a dataset that is produced by a later node (wrong order).

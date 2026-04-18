@@ -8,7 +8,7 @@ use yaml_rust2::Yaml;
 use pondrs::datasets::{MemoryDataset, Param, PolarsCsvDataset, YamlDataset};
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
-use pondrs::{Dataset, Node, Pipeline, Runner, SequentialRunner, StepInfo};
+use pondrs::{Dataset, Node, Pipeline, Runner, SequentialRunner, PipelineInfo};
 
 // ---------------------------------------------------------------------------
 // Test 1: CSV pipeline

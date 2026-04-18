@@ -4,7 +4,7 @@ use std::prelude::v1::*;
 
 use serde::{Deserialize, Serialize};
 
-use crate::pipeline::{DatasetRef, PipelineInfo};
+use crate::pipeline::{DatasetRef, StepInfo};
 use crate::hooks::Hook;
 use crate::hooks::timing::TimingTracker;
 
@@ -69,7 +69,7 @@ impl VizHook {
 }
 
 impl Hook for VizHook {
-    fn before_pipeline_run(&self, p: &dyn PipelineInfo) {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) {
         let name = p.name();
         self.timings.start(name.to_string());
         self.send(&VizEvent {
@@ -82,7 +82,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_pipeline_run(&self, p: &dyn PipelineInfo) {
+    fn after_pipeline_run(&self, p: &dyn StepInfo) {
         let name = p.name();
         let duration_ms = self.timings.elapsed_ms(&name.to_string());
         self.send(&VizEvent {
@@ -95,7 +95,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn on_pipeline_error(&self, p: &dyn PipelineInfo, error: &str) {
+    fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {
         let name = p.name();
         self.timings.elapsed_ms(&name.to_string()); // clean up timing entry
         self.send(&VizEvent {
@@ -108,7 +108,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_node_run(&self, n: &dyn PipelineInfo) {
+    fn before_node_run(&self, n: &dyn StepInfo) {
         let name = n.name();
         self.timings.start(name.to_string());
         self.send(&VizEvent {
@@ -121,7 +121,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_node_run(&self, n: &dyn PipelineInfo) {
+    fn after_node_run(&self, n: &dyn StepInfo) {
         let name = n.name();
         let duration_ms = self.timings.elapsed_ms(&name.to_string());
         self.send(&VizEvent {
@@ -134,7 +134,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn on_node_error(&self, n: &dyn PipelineInfo, error: &str) {
+    fn on_node_error(&self, n: &dyn StepInfo, error: &str) {
         let name = n.name();
         self.timings.elapsed_ms(&name.to_string()); // clean up timing entry
         self.send(&VizEvent {
@@ -147,7 +147,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+    fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
         self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::BeforeDatasetLoaded,
@@ -159,7 +159,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_loaded(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+    fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
         let duration_ms = self.timings.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::AfterDatasetLoaded,
@@ -171,7 +171,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
         self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::BeforeDatasetSaved,
@@ -183,7 +183,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_saved(&self, n: &dyn PipelineInfo, ds: &DatasetRef<'_>) {
+    fn after_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
         let duration_ms = self.timings.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::AfterDatasetSaved,

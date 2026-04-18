@@ -41,7 +41,7 @@ impl Runner for ParallelRunner {
     where
         E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
     {
-        // Build graph using PipelineInfo (non-generic) for dependency analysis
+        // Build graph using StepInfo (non-generic) for dependency analysis
         let graph = build_pipeline_graph(pipe, catalog, params);
 
         if graph.node_indices.is_empty() {

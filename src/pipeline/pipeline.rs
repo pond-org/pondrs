@@ -1,21 +1,21 @@
 //! Pipeline struct - a container for multiple steps.
 
-use super::steps::{StepInfo, Steps};
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
+use super::steps::{PipelineInfo, Steps};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, RunnableStep};
 
 /// A named group of steps with declared input/output dataset contracts.
 ///
 /// Pipelines are containers — they delegate execution to their child steps
 /// and are never called directly by runners.
-pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
+pub struct Pipeline<S: PipelineInfo, Input: NodeInput, Output: NodeOutput> {
     pub name: &'static str,
     pub steps: S,
     pub input: Input,
     pub output: Output,
 }
 
-impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
-    PipelineInfo for Pipeline<S, Input, Output>
+impl<S: PipelineInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
+    StepInfo for Pipeline<S, Input, Output>
 {
     fn name(&self) -> &'static str {
         self.name
@@ -29,7 +29,7 @@ impl<S: StepInfo + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutp
         "pipeline"
     }
 
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
         self.steps.for_each_info(f);
     }
 
@@ -57,5 +57,5 @@ where
         self.steps.for_each_item(f);
     }
 
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }

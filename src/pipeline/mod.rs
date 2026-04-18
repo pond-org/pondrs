@@ -23,7 +23,7 @@ pub use into_result::IntoNodeResult;
 pub use node::{CompatibleOutput, Node};
 pub use pipeline::Pipeline;
 pub use pipeline_fn::PipelineFn;
-pub use steps::{StepInfo, Steps};
+pub use steps::{PipelineInfo, Steps};
 #[cfg(feature = "std")]
 pub use dyn_steps::StepVec;
 #[cfg(feature = "std")]
@@ -32,4 +32,4 @@ pub use filter::{NodeFilter, filter_steps};
 pub use split_join::{Split, Join};
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
-pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, PipelineInfo, RunnableStep};
+pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, RunnableStep};

@@ -1,6 +1,6 @@
 # Check
 
-Pipeline validation catches structural errors before execution. The `check()` method on `StepInfo` walks the pipeline and verifies several invariants.
+Pipeline validation catches structural errors before execution. The `check()` method on `PipelineInfo` walks the pipeline and verifies several invariants.
 
 ## Usage
 

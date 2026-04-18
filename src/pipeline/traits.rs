@@ -58,7 +58,7 @@ pub enum DatasetEvent {
 ///
 /// Used by hooks, graph building, and validation. Leaf items are nodes;
 /// non-leaf items are pipelines (containers with children).
-pub trait PipelineInfo: Send + Sync {
+pub trait StepInfo: Send + Sync {
     /// Human-readable name for this item.
     fn name(&self) -> &'static str;
     /// `true` for nodes, `false` for pipelines.
@@ -66,7 +66,7 @@ pub trait PipelineInfo: Send + Sync {
     /// The Rust type name of the underlying function or `"pipeline"`.
     fn type_string(&self) -> &'static str;
     /// Iterate over child items (empty for leaf nodes).
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo));
     /// Iterate over input dataset references.
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
     /// Iterate over output dataset references.
@@ -74,18 +74,18 @@ pub trait PipelineInfo: Send + Sync {
 }
 
 /// Generic execution trait, parameterized by the pipeline error type `E`.
-pub trait RunnableStep<E>: PipelineInfo {
+pub trait RunnableStep<E>: StepInfo {
     /// Execute this item, firing dataset events via the callback.
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E>;
     /// Iterate over child steps (empty for leaf nodes).
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 
-    /// Upcast to `&dyn PipelineInfo`.
+    /// Upcast to `&dyn StepInfo`.
     ///
     /// Rust 1.85 does not support automatic trait-object upcasting, so this
-    /// method is required to obtain a `&dyn PipelineInfo` from a
-    /// `&dyn RunnableStep<E>`. Implement as `fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }`.
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo;
+    /// method is required to obtain a `&dyn StepInfo` from a
+    /// `&dyn RunnableStep<E>`. Implement as `fn as_pipeline_info(&self) -> &dyn StepInfo { self }`.
+    fn as_pipeline_info(&self) -> &dyn StepInfo;
 
     /// Box this step for use in a [`StepVec`](crate::StepVec).
     #[cfg(feature = "std")]
@@ -100,11 +100,11 @@ pub trait RunnableStep<E>: PipelineInfo {
 // --- Blanket impls for references ---
 // These allow `&'a dyn RunnableStep<E>` to be boxed into a `StepVec<'a, E>` directly.
 
-impl<T: PipelineInfo + ?Sized> PipelineInfo for &T {
+impl<T: StepInfo + ?Sized> StepInfo for &T {
     fn name(&self) -> &'static str { (**self).name() }
     fn is_leaf(&self) -> bool { (**self).is_leaf() }
     fn type_string(&self) -> &'static str { (**self).type_string() }
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
         (**self).for_each_child(f);
     }
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
@@ -122,7 +122,7 @@ impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
         (**self).for_each_child_step(f);
     }
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo { (**self).as_pipeline_info() }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { (**self).as_pipeline_info() }
 }
 
 /// Trait for loading data from input datasets.

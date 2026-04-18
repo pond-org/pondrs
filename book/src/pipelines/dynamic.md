@@ -8,7 +8,7 @@ Sometimes the set of steps in a pipeline isn't known at compile time. A config f
 pub type StepVec<'a, E = PondError> = Vec<Box<dyn RunnableStep<E> + Send + Sync + 'a>>;
 ```
 
-It implements `StepInfo` and `Steps<E>`, so it works everywhere tuples do — as the return type of a pipeline function, as the `steps` field of a `Pipeline`, and with `check()`, runners, and visualization.
+It implements `PipelineInfo` and `Steps<E>`, so it works everywhere tuples do — as the return type of a pipeline function, as the `steps` field of a `Pipeline`, and with `check()`, runners, and visualization.
 
 Use `RunnableStep::boxed()` to convert a `Node` or `Pipeline` into a boxed trait object:
 

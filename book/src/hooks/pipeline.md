@@ -5,9 +5,9 @@ Pipeline hooks fire at the boundaries of `Pipeline` structs (not flat tuples). T
 ## Methods
 
 ```rust,ignore
-fn before_pipeline_run(&self, p: &dyn PipelineInfo) {}
-fn after_pipeline_run(&self, p: &dyn PipelineInfo) {}
-fn on_pipeline_error(&self, p: &dyn PipelineInfo, error: &str) {}
+fn before_pipeline_run(&self, p: &dyn StepInfo) {}
+fn after_pipeline_run(&self, p: &dyn StepInfo) {}
+fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {}
 ```
 
 ## Arguments
@@ -52,11 +52,11 @@ struct PipelineTimer {
 }
 
 impl Hook for PipelineTimer {
-    fn before_pipeline_run(&self, p: &dyn PipelineInfo) {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) {
         self.timings.lock().unwrap().insert(p.name(), Instant::now());
     }
 
-    fn after_pipeline_run(&self, p: &dyn PipelineInfo) {
+    fn after_pipeline_run(&self, p: &dyn StepInfo) {
         if let Some(start) = self.timings.lock().unwrap().remove(p.name()) {
             println!("[{}] completed in {:.1}ms", p.name(), start.elapsed().as_secs_f64() * 1000.0);
         }

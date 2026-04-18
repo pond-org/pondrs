@@ -2,7 +2,7 @@
 
 use log::{debug, info, warn};
 
-use crate::pipeline::{DatasetRef, PipelineInfo};
+use crate::pipeline::{DatasetRef, StepInfo};
 
 use super::Hook;
 use super::timing::TimingTracker;
@@ -29,8 +29,8 @@ impl Default for LoggingHook {
 }
 
 /// Use the data pointer of a trait object as a unique key for timing.
-fn item_key(item: &dyn PipelineInfo) -> usize {
-    item as *const dyn PipelineInfo as *const () as usize
+fn item_key(item: &dyn StepInfo) -> usize {
+    item as *const dyn StepInfo as *const () as usize
 }
 
 fn ds_name<'a>(ds: &'a DatasetRef) -> &'a str {
@@ -38,12 +38,12 @@ fn ds_name<'a>(ds: &'a DatasetRef) -> &'a str {
 }
 
 impl Hook for LoggingHook {
-    fn before_pipeline_run(&self, p: &dyn PipelineInfo) {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) {
         info!("[pipeline] {} - starting", p.name());
         self.timings.start(item_key(p));
     }
 
-    fn after_pipeline_run(&self, p: &dyn PipelineInfo) {
+    fn after_pipeline_run(&self, p: &dyn StepInfo) {
         if let Some(ms) = self.timings.elapsed_ms(&item_key(p)) {
             info!("[pipeline] {} - completed ({:.1}ms)", p.name(), ms);
         } else {
@@ -51,17 +51,17 @@ impl Hook for LoggingHook {
         }
     }
 
-    fn on_pipeline_error(&self, p: &dyn PipelineInfo, error: &str) {
+    fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {
         self.timings.elapsed_ms(&item_key(p)); // clean up timing entry
         warn!("[pipeline] {} - error: {}", p.name(), error);
     }
 
-    fn before_node_run(&self, n: &dyn PipelineInfo) {
+    fn before_node_run(&self, n: &dyn StepInfo) {
         info!("[node] {} - starting", n.name());
         self.timings.start(item_key(n));
     }
 
-    fn after_node_run(&self, n: &dyn PipelineInfo) {
+    fn after_node_run(&self, n: &dyn StepInfo) {
         if let Some(ms) = self.timings.elapsed_ms(&item_key(n)) {
             info!("[node] {} - completed ({:.1}ms)", n.name(), ms);
         } else {
@@ -69,17 +69,17 @@ impl Hook for LoggingHook {
         }
     }
 
-    fn on_node_error(&self, n: &dyn PipelineInfo, error: &str) {
+    fn on_node_error(&self, n: &dyn StepInfo, error: &str) {
         self.timings.elapsed_ms(&item_key(n)); // clean up timing entry
         warn!("[node] {} - error: {}", n.name(), error);
     }
 
-    fn before_dataset_loaded(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
+    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
         debug!("  loading {}", ds_name(ds));
         self.timings.start(ds.id);
     }
 
-    fn after_dataset_loaded(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
+    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
         if let Some(ms) = self.timings.elapsed_ms(&ds.id) {
             debug!("  loaded {} ({:.1}ms)", ds_name(ds), ms);
         } else {
@@ -87,12 +87,12 @@ impl Hook for LoggingHook {
         }
     }
 
-    fn before_dataset_saved(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
+    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
         debug!("  saving {}", ds_name(ds));
         self.timings.start(ds.id);
     }
 
-    fn after_dataset_saved(&self, _n: &dyn PipelineInfo, ds: &DatasetRef) {
+    fn after_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
         if let Some(ms) = self.timings.elapsed_ms(&ds.id) {
             debug!("  saved {} ({:.1}ms)", ds_name(ds), ms);
         } else {

@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use crate::error::PondError;
 use crate::hooks::Hooks;
-use crate::pipeline::{PipelineFn, StepInfo};
+use crate::pipeline::{PipelineFn, PipelineInfo};
 use crate::runners::{Runners, SequentialRunner};
 
 // --- Command enum (no_std core) ---

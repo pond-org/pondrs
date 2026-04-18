@@ -5,9 +5,9 @@ Node hooks fire when a runner starts and finishes executing a node, or when a no
 ## Methods
 
 ```rust,ignore
-fn before_node_run(&self, n: &dyn PipelineInfo) {}
-fn after_node_run(&self, n: &dyn PipelineInfo) {}
-fn on_node_error(&self, n: &dyn PipelineInfo, error: &str) {}
+fn before_node_run(&self, n: &dyn StepInfo) {}
+fn after_node_run(&self, n: &dyn StepInfo) {}
+fn on_node_error(&self, n: &dyn StepInfo, error: &str) {}
 ```
 
 ## Arguments
@@ -49,12 +49,12 @@ struct NodeCounter {
 }
 
 impl Hook for NodeCounter {
-    fn after_node_run(&self, n: &dyn PipelineInfo) {
+    fn after_node_run(&self, n: &dyn StepInfo) {
         let i = self.count.fetch_add(1, Ordering::Relaxed) + 1;
         println!("Completed node {} ({}/total)", n.name(), i);
     }
 
-    fn on_node_error(&self, n: &dyn PipelineInfo, error: &str) {
+    fn on_node_error(&self, n: &dyn StepInfo, error: &str) {
         eprintln!("Node {} failed: {}", n.name(), error);
     }
 }

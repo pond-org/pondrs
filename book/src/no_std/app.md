@@ -39,12 +39,12 @@ The `Hook` and `Hooks` traits work in `no_std`, but there are no built-in hook i
 struct UartLogger;
 
 impl Hook for UartLogger {
-    fn before_node_run(&self, n: &dyn PipelineInfo) {
+    fn before_node_run(&self, n: &dyn StepInfo) {
         // write to UART, toggle debug pin, etc.
         uart_print(n.name());
     }
 
-    fn on_node_error(&self, n: &dyn PipelineInfo, _error: &str) {
+    fn on_node_error(&self, n: &dyn StepInfo, _error: &str) {
         uart_print("ERROR: ");
         uart_print(n.name());
     }

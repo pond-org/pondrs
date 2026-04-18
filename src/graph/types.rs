@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::prelude::v1::*;
 
-use crate::pipeline::{DatasetRef, PipelineInfo};
+use crate::pipeline::{DatasetRef, StepInfo};
 
 /// Pre-computed DAG representation of a pipeline, used by the parallel
 /// runner and the visualization server.
@@ -24,7 +24,7 @@ pub struct GraphNode<'a> {
     pub outputs: Vec<DatasetRef<'a>>,
     pub pipe_children: Vec<usize>,
     pub parent_pipe: Option<usize>,
-    pub item: &'a dyn PipelineInfo,
+    pub item: &'a dyn StepInfo,
 }
 
 /// A data dependency edge: one node's output feeds another node's input.

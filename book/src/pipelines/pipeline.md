@@ -5,7 +5,7 @@ The `Pipeline` struct groups related steps into a named container with declared 
 ## Definition
 
 ```rust,ignore
-pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
+pub struct Pipeline<S: PipelineInfo, Input: NodeInput, Output: NodeOutput> {
     pub name: &'static str,
     pub steps: S,
     pub input: Input,
@@ -18,7 +18,7 @@ pub struct Pipeline<S: StepInfo, Input: NodeInput, Output: NodeOutput> {
 - **`input`** — datasets this pipeline expects to be available when it runs
 - **`output`** — datasets this pipeline guarantees to produce
 
-Pipelines are containers — runners never call them directly. Instead, they recurse into the pipeline's steps. The `PipelineInfo::is_leaf()` method returns `false` for pipelines, signaling the runner to descend into children.
+Pipelines are containers — runners never call them directly. Instead, they recurse into the pipeline's steps. The `StepInfo::is_leaf()` method returns `false` for pipelines, signaling the runner to descend into children.
 
 ## Example
 

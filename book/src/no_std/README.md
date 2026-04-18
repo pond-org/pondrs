@@ -6,8 +6,8 @@ pondrs is a `#![no_std]` crate at its core. The `std` feature adds filesystem I/
 
 | Component | no_std | std |
 |-----------|--------|-----|
-| `Node`, `Pipeline`, `Steps`, `StepInfo` | yes | yes |
-| `PipelineInfo`, `RunnableStep` | yes | yes |
+| `Node`, `Pipeline`, `Steps`, `PipelineInfo` | yes | yes |
+| `StepInfo`, `RunnableStep` | yes | yes |
 | `check()` validation | yes | yes |
 | `Param<T>` | yes | yes |
 | `CellDataset<T>` | yes | yes |

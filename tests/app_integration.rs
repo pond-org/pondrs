@@ -12,7 +12,7 @@ use pondrs::error::PondError;
 use pondrs::graph::build_pipeline_graph;
 use pondrs::hooks::LoggingHook;
 use pondrs::runners::{SequentialRunner, ParallelRunner};
-use pondrs::{Dataset, Node, Pipeline, StepInfo, Steps};
+use pondrs::{Dataset, Node, Pipeline, PipelineInfo, Steps};
 
 // ---------------------------------------------------------------------------
 // Shared test types

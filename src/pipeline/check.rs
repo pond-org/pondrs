@@ -1,12 +1,12 @@
 //! Sequential pipeline validation (no_std compatible).
 
 use super::id_set::IdSet;
-use super::traits::{DatasetRef, PipelineInfo};
+use super::traits::{DatasetRef, StepInfo};
 pub use crate::CheckError;
 
 /// Collect all output dataset IDs from all leaf nodes (recursively).
 pub(crate) fn collect_all_outputs<const N: usize>(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     all_produced: &mut IdSet<N>,
 ) {
     if item.is_leaf() {
@@ -29,7 +29,7 @@ pub(crate) fn collect_all_outputs<const N: usize>(
 /// `produced` tracks what has been produced by earlier nodes so far.
 /// `consumed` tracks what has been consumed (for pipeline contract checks).
 pub(crate) fn check_item<const N: usize>(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     all_produced: &IdSet<N>,
     produced: &mut IdSet<N>,
     consumed: &mut IdSet<N>,
@@ -42,7 +42,7 @@ pub(crate) fn check_item<const N: usize>(
 }
 
 fn check_leaf<const N: usize>(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     all_produced: &IdSet<N>,
     produced: &mut IdSet<N>,
     consumed: &mut IdSet<N>,
@@ -98,7 +98,7 @@ fn check_leaf<const N: usize>(
 }
 
 fn check_pipeline<const N: usize>(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     all_produced: &IdSet<N>,
     produced: &mut IdSet<N>,
     consumed: &mut IdSet<N>,
@@ -182,7 +182,7 @@ fn check_pipeline<const N: usize>(
 /// Recursively walk a step's inputs to find any external dataset not declared
 /// in the parent pipeline's inputs.
 fn check_undeclared_inputs<const N: usize>(
-    item: &dyn PipelineInfo,
+    item: &dyn StepInfo,
     inner_produced: &IdSet<N>,
     declared_inputs: &IdSet<N>,
     pipeline_name: &'static str,
@@ -226,7 +226,7 @@ fn check_undeclared_inputs<const N: usize>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::{Node, Pipeline, StepInfo};
+    use crate::pipeline::{Node, Pipeline, PipelineInfo};
     use crate::datasets::{CellDataset, Param};
 
     #[test]

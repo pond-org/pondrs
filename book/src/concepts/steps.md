@@ -30,7 +30,7 @@ For grouping related nodes with declared contracts, see [Pipeline](../pipelines/
 
 ## Validation
 
-`StepInfo::check()` validates the pipeline structure without executing it:
+`PipelineInfo::check()` validates the pipeline structure without executing it:
 
 - No node reads a dataset before it is produced by an earlier node
 - No dataset is produced by more than one node

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::datasets::{Dataset, TemplatedCatalog};
 use crate::error::PondError;
 
-use super::traits::{DatasetEvent, DatasetRef, PipelineInfo, RunnableStep};
+use super::traits::{DatasetEvent, DatasetRef, StepInfo, RunnableStep};
 
 /// A leaf node that distributes a `HashMap` across a `TemplatedCatalog`.
 ///
@@ -24,7 +24,7 @@ where
     pub field: fn(&S) -> &D,
 }
 
-impl<Input, S, D, T> PipelineInfo for Split<'_, Input, S, D, T>
+impl<Input, S, D, T> StepInfo for Split<'_, Input, S, D, T>
 where
     Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
     D: Dataset<SaveItem = T> + Send + Sync,
@@ -43,7 +43,7 @@ where
         core::any::type_name::<Self>()
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         f(&DatasetRef::from_ref(self.input));
@@ -96,7 +96,7 @@ where
 
     fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
 
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
 
 /// A leaf node that collects values from a `TemplatedCatalog` into a `HashMap`.
@@ -115,7 +115,7 @@ where
     pub output: &'a Output,
 }
 
-impl<S, D, Output, T> PipelineInfo for Join<'_, S, D, Output, T>
+impl<S, D, Output, T> StepInfo for Join<'_, S, D, Output, T>
 where
     D: Dataset<LoadItem = T> + Send + Sync,
     Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
@@ -134,7 +134,7 @@ where
         core::any::type_name::<Self>()
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn PipelineInfo)) {}
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         for (_, entry) in self.catalog.iter() {
@@ -179,14 +179,14 @@ where
 
     fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
 
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo { self }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::datasets::MemoryDataset;
-    use crate::pipeline::{StepInfo, StepVec, Node, ptr_to_id};
+    use crate::pipeline::{PipelineInfo, StepVec, Node, ptr_to_id};
 
     #[derive(Debug, serde::Deserialize, serde::Serialize)]
     struct ItemCatalog {

@@ -9,8 +9,8 @@ use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 
 use super::dyn_steps::StepVec;
-use super::traits::{ptr_to_id, DatasetEvent, DatasetRef, PipelineInfo, RunnableStep};
-use super::steps::{StepInfo, Steps};
+use super::traits::{ptr_to_id, DatasetEvent, DatasetRef, StepInfo, RunnableStep};
+use super::steps::{PipelineInfo, Steps};
 
 /// Specifies which nodes to include in a filtered pipeline run.
 pub enum NodeFilter {
@@ -223,7 +223,7 @@ struct DynPipeline<'a, E> {
 unsafe impl<E> Send for DynPipeline<'_, E> {}
 unsafe impl<E> Sync for DynPipeline<'_, E> {}
 
-impl<E> PipelineInfo for DynPipeline<'_, E>
+impl<E> StepInfo for DynPipeline<'_, E>
 where
     E: Send + Sync + 'static,
 {
@@ -239,7 +239,7 @@ where
         "pipeline"
     }
 
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
         self.steps.for_each_info(f);
     }
 
@@ -268,7 +268,7 @@ where
         self.steps.for_each_item(f);
     }
 
-    fn as_pipeline_info(&self) -> &dyn PipelineInfo {
+    fn as_pipeline_info(&self) -> &dyn StepInfo {
         self
     }
 }

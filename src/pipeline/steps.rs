@@ -2,15 +2,15 @@
 
 use super::check::{CheckError, check_item, collect_all_outputs};
 use super::id_set::IdSet;
-use super::traits::{PipelineInfo, RunnableStep};
+use super::traits::{StepInfo, RunnableStep};
 
 /// Non-generic trait for a sequence of pipeline items (metadata only).
 ///
-/// Implemented for tuples of `PipelineInfo` items. Provides pipeline
-/// validation via [`check`](StepInfo::check).
-pub trait StepInfo {
+/// Implemented for tuples of `StepInfo` items. Provides pipeline
+/// validation via [`check`](PipelineInfo::check).
+pub trait PipelineInfo {
     /// Iterate over each item's metadata.
-    fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo));
+    fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo));
 
     /// Validate sequential ordering and pipeline contracts.
     ///
@@ -51,16 +51,16 @@ pub trait StepInfo {
 
 /// Generic trait for a sequence of executable pipeline items.
 ///
-/// Extends [`StepInfo`] with the ability to iterate over runnable steps.
-pub trait Steps<E>: StepInfo {
+/// Extends [`PipelineInfo`] with the ability to iterate over runnable steps.
+pub trait Steps<E>: PipelineInfo {
     /// Iterate over each executable step.
     fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 }
 
 macro_rules! impl_steps {
     ($($N:ident $idx:tt),+) => {
-        impl<$($N: PipelineInfo),+> StepInfo for ($($N,)+) {
-            fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn PipelineInfo)) {
+        impl<$($N: StepInfo),+> PipelineInfo for ($($N,)+) {
+            fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
                 $(f(&self.$idx);)+
             }
         }
