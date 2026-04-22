@@ -4,7 +4,7 @@
 
 [Repo](https://github.com/pond-org/pondrs) | [Crate](https://crates.io/crates/pondrs) | [Docs](https://docs.rs/pondrs/latest/pondrs) | [Book](https://pond-org.github.io/pondrs) | [Examples](https://github.com/pond-org/pondrs-examples)
 
-**Pipelines of Nodes & Datasets** — a Rust pipeline execution library, heavily inspired by [Kedro](https://github.com/kedro-org/kedro).
+**Pipelines over Nodes & Datasets** — a Rust pipeline execution library, heavily inspired by [Kedro](https://github.com/kedro-org/kedro).
 
 <!-- ANCHOR: example -->
 ## Example
