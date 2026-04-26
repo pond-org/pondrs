@@ -11,6 +11,8 @@ mod cache;
 mod memory;
 mod param;
 mod register;
+#[cfg(feature = "std")]
+mod lazy;
 #[cfg(feature = "polars")]
 mod partitioned;
 #[cfg(feature = "polars")]
@@ -36,10 +38,12 @@ pub use cache::CacheDataset;
 pub use memory::MemoryDataset;
 pub use param::Param;
 pub use register::RegisterDataset;
+#[cfg(feature = "std")]
+pub use lazy::{Lazy, LazyDataset};
 #[cfg(feature = "polars")]
-pub use partitioned::Lazy;
+pub use lazy::LazyPartitionedDataset;
 #[cfg(feature = "polars")]
-pub use partitioned::{LazyPartitionedDataset, PartitionedDataset};
+pub use partitioned::PartitionedDataset;
 #[cfg(feature = "polars")]
 pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
 #[cfg(feature = "json")]

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use polars::frame::DataFrame;
 use pondrs::datasets::{
-    Lazy, LazyPartitionedDataset, MemoryDataset, Param, PartitionedDataset, PolarsCsvDataset,
-    PolarsParquetDataset,
+    Lazy, LazyDataset, LazyPartitionedDataset, MemoryDataset, Param, PartitionedDataset,
+    PolarsCsvDataset, PolarsParquetDataset,
 };
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
@@ -102,14 +102,14 @@ fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps<PondErr
 struct IrisCatalog {
     input: LazyPartitionedDataset<PolarsParquetDataset>,
     output: PartitionedDataset<PolarsParquetDataset>,
-    output_csv: LazyPartitionedDataset<PolarsCsvDataset>,
+    output_csv: PartitionedDataset<PolarsCsvDataset>,
 }
 
-fn copy_iris(input: HashMap<String, Lazy<DataFrame>>) -> Result<(HashMap<String, DataFrame>,), PondError> {
+fn copy_iris(input: HashMap<String, Lazy<DataFrame, PondError>>) -> Result<(HashMap<String, DataFrame>,), PondError> {
     let mut output = HashMap::<String, DataFrame>::new();
     for (name, df) in input {
         println!("Read {name}!");
-        output.insert(name, df.load()?);
+        output.insert(name, df()?);
     }
     Ok((output,))
 }
@@ -128,8 +128,10 @@ fn iris_test() {
         input: LazyPartitionedDataset::<PolarsParquetDataset> {
             path: "iris".to_string(),
             ext: "parquet".into(),
-            dataset: PolarsParquetDataset {
-                path: String::new(),
+            dataset: LazyDataset {
+                dataset: PolarsParquetDataset {
+                    path: String::new(),
+                },
             },
         },
         output: PartitionedDataset::<PolarsParquetDataset> {
@@ -139,7 +141,7 @@ fn iris_test() {
                 path: String::new(),
             },
         },
-        output_csv: LazyPartitionedDataset::<PolarsCsvDataset> {
+        output_csv: PartitionedDataset::<PolarsCsvDataset> {
             path: "iris_csv".to_string(),
             ext: "csv".into(),
             dataset: PolarsCsvDataset::new(""),
