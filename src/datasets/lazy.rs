@@ -1,13 +1,15 @@
 //! Lazy dataset wrapper — defers load and save to call time.
 
 use std::prelude::v1::*;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
 /// A deferred computation that produces a value on demand.
-pub type Lazy<T, E> = Box<dyn FnOnce() -> Result<T, E>>;
+pub type Lazy<T, E> = Box<dyn FnOnce() -> Result<T, E> + Send>;
 
 /// Lazy wrapper around any dataset — defers load and save to call time.
 ///
@@ -19,7 +21,10 @@ pub struct LazyDataset<D> {
     pub dataset: D,
 }
 
-impl<D: Dataset + Clone + 'static> Dataset for LazyDataset<D> {
+impl<D: Dataset + Clone + Send + 'static> Dataset for LazyDataset<D>
+where
+    D::Error: Send,
+{
     type LoadItem = Lazy<D::LoadItem, D::Error>;
     type SaveItem = Lazy<D::SaveItem, D::Error>;
     type Error = D::Error;
@@ -43,13 +48,44 @@ impl<D: Dataset + Clone + 'static> Dataset for LazyDataset<D> {
     }
 }
 
-impl<D: FileDataset + 'static> FileDataset for LazyDataset<D> {
+impl<D: FileDataset + Send + Sync + 'static> FileDataset for LazyDataset<D>
+where
+    D::Error: Send,
+    D::SaveItem: Send,
+{
     fn path(&self) -> &str {
         self.dataset.path()
     }
 
     fn set_path(&mut self, path: &str) {
         self.dataset.set_path(path);
+    }
+
+    fn save_partitioned(
+        &self,
+        entries: HashMap<String, Self::SaveItem>,
+        dir: &std::path::Path,
+        ext: &str,
+    ) -> Result<(), PondError>
+    where
+        PondError: From<Self::Error>,
+        Self: Send + Sync,
+        Self::SaveItem: Send,
+        Self::Error: Send,
+    {
+        if rayon::current_thread_index().is_some() {
+            use rayon::iter::{IntoParallelIterator, ParallelIterator};
+            entries.into_par_iter().try_for_each(|(name, thunk)| {
+                let value = thunk()?;
+                let path = dir.join(format!("{name}.{ext}"));
+                let mut ds = self.dataset.clone();
+                ds.set_path(path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
+                ds.save(value)?;
+                Ok(())
+            })
+        } else {
+            <Self as FileDataset>::default_save_partitioned(self, entries, dir, ext)
+        }
     }
 }
 

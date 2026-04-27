@@ -208,5 +208,5 @@ fn main() {
 
     println!("\n--- Parallel Runner ---");
     let hooks = (LoggingHook::new(),);
-    ParallelRunner.run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
+    ParallelRunner::default().run::<PondError>(&pipe, &catalog, &params, &hooks).unwrap();
 }

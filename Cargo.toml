@@ -15,7 +15,7 @@ categories = ["data-structures", "concurrency", "no-std", "command-line-utilitie
 
 [features]
 default = ["all"]
-std = ["serde/std", "dep:serde_yaml", "dep:log", "dep:clap", "dep:env_logger"]
+std = ["serde/std", "dep:serde_yaml", "dep:log", "dep:clap", "dep:env_logger", "dep:rayon"]
 polars = ["std", "dep:polars", "dep:fastexcel"]
 yaml = ["std", "dep:yaml-rust2"]
 json = ["std", "dep:serde_json"]
@@ -42,6 +42,7 @@ rust-embed = { version = "8", optional = true }
 ureq = { version = "3", default-features = false, features = ["json"], optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg", "tiff", "bmp"] }
 base64 = { version = "0.22", optional = true }
+rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

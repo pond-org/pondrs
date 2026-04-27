@@ -126,6 +126,47 @@ pub trait FileDataset: Dataset + Clone {
         }
         Ok(())
     }
+
+    /// Save multiple partitioned entries sequentially. Exposed so overrides
+    /// can delegate back to it as a fallback.
+    fn default_save_partitioned(
+        &self,
+        entries: std::collections::HashMap<String, Self::SaveItem>,
+        dir: &std::path::Path,
+        ext: &str,
+    ) -> Result<(), crate::error::PondError>
+    where
+        crate::error::PondError: From<Self::Error>,
+        Self: Send + Sync,
+        Self::SaveItem: Send,
+        Self::Error: Send,
+    {
+        for (name, data) in entries {
+            let path = dir.join(format!("{name}.{ext}"));
+            let mut ds = self.clone();
+            ds.set_path(path.to_str().ok_or_else(|| crate::error::PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
+            ds.save(data)?;
+        }
+        Ok(())
+    }
+
+    /// Save multiple partitioned entries. Default delegates to the sequential
+    /// [`default_save_partitioned`](FileDataset::default_save_partitioned);
+    /// `LazyDataset` overrides with parallel save via rayon.
+    fn save_partitioned(
+        &self,
+        entries: std::collections::HashMap<String, Self::SaveItem>,
+        dir: &std::path::Path,
+        ext: &str,
+    ) -> Result<(), crate::error::PondError>
+    where
+        crate::error::PondError: From<Self::Error>,
+        Self: Send + Sync,
+        Self::SaveItem: Send,
+        Self::Error: Send,
+    {
+        self.default_save_partitioned(entries, dir, ext)
+    }
 }
 
 #[cfg(test)]

@@ -44,9 +44,11 @@ pub struct PartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
     pub dataset: D,
 }
 
-impl<D: FileDataset + Serialize + DeserializeOwned + 'static> Dataset for PartitionedDataset<D>
+impl<D: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static> Dataset for PartitionedDataset<D>
 where
     PondError: From<D::Error>,
+    D::SaveItem: Send,
+    D::Error: Send,
 {
     type LoadItem = HashMap<String, D::LoadItem>;
     type SaveItem = HashMap<String, D::SaveItem>;
@@ -55,14 +57,7 @@ where
     fn save(&self, datasets: Self::SaveItem) -> Result<(), PondError> {
         std::fs::create_dir_all(&self.path)?;
         let dir = std::path::Path::new(&self.path);
-        for (name, data) in datasets {
-            let ext = &self.ext;
-            let path = dir.join(format!("{name}.{ext}"));
-            let mut dataset = self.dataset.clone();
-            dataset.set_path(path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
-            dataset.save(data)?;
-        }
-        Ok(())
+        self.dataset.save_partitioned(datasets, dir, &self.ext)
     }
 
     fn load(&self) -> Result<Self::LoadItem, PondError> {

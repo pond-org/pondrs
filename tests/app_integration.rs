@@ -304,7 +304,7 @@ fn test_app_run_parallel() {
     let params: TestParams = deserialize_config(load_yaml(&params_path).unwrap()).unwrap();
 
     let app = App::new(catalog, params)
-        .with_runners((ParallelRunner,));
+        .with_runners((ParallelRunner::default(),));
     app.execute(par_pipeline).unwrap();
 
     // scale=7, offset=3 → a = 7*2 = 14, b = 3+100 = 103, c = 14+103 = 117
@@ -370,7 +370,7 @@ fn test_app_nested_pipeline_parallel() {
     let params: TestParams = deserialize_config(load_yaml(&params_path).unwrap()).unwrap();
 
     let app = App::new(catalog, params)
-        .with_runners((ParallelRunner,));
+        .with_runners((ParallelRunner::default(),));
     app.execute(nested_pipeline).unwrap();
 
     assert_eq!(app.catalog().c.load().unwrap(), 20);
@@ -406,7 +406,7 @@ fn test_app_error_propagation_parallel() {
     let params: TestParams = deserialize_config(load_yaml(&params_path).unwrap()).unwrap();
 
     let app = App::new(catalog, params)
-        .with_runners((ParallelRunner,));
+        .with_runners((ParallelRunner::default(),));
     let result = app.execute(error_pipeline);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("intentional failure"));
