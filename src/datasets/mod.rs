@@ -127,12 +127,59 @@ pub trait FileDataset: Dataset + Clone {
         Ok(())
     }
 
-    /// Save multiple partitioned entries sequentially. Exposed so overrides
-    /// can delegate back to it as a fallback.
+    /// List entry names in a partition. Default scans the directory at `path`
+    /// for files matching `ext` and returns their stems, sorted.
+    fn list_entries(
+        &self,
+        path: &str,
+        ext: &str,
+    ) -> Result<Vec<String>, crate::error::PondError> {
+        let dir = std::path::Path::new(path);
+        let mut names: Vec<String> = std::fs::read_dir(dir)?
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let file_name = e.file_name().to_string_lossy().into_owned();
+                if file_name.ends_with(ext) {
+                    let entry_path = e.path();
+                    entry_path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        names.sort();
+        Ok(names)
+    }
+
+    /// Load all partitioned entries. Lists entries via
+    /// [`list_entries`](FileDataset::list_entries), clones `self` for each,
+    /// and loads sequentially.
+    fn load_partitioned(
+        &self,
+        path: &str,
+        ext: &str,
+    ) -> Result<std::collections::HashMap<String, Self::LoadItem>, crate::error::PondError>
+    where
+        crate::error::PondError: From<Self::Error>,
+    {
+        let dir = std::path::Path::new(path);
+        let mut items = std::collections::HashMap::new();
+        for name in self.list_entries(path, ext)? {
+            let file_path = dir.join(format!("{name}.{ext}"));
+            let mut ds = self.clone();
+            ds.set_path(file_path.to_str().ok_or_else(|| crate::error::PondError::Custom(format!("non-UTF-8 path: {}", file_path.display())))?);
+            items.insert(name, ds.load()?);
+        }
+        Ok(items)
+    }
+
+    /// Save multiple partitioned entries sequentially. Creates the directory
+    /// at `path` and delegates to each clone. Exposed so overrides can
+    /// delegate back to it as a fallback.
     fn default_save_partitioned(
         &self,
         entries: std::collections::HashMap<String, Self::SaveItem>,
-        dir: &std::path::Path,
+        path: &str,
         ext: &str,
     ) -> Result<(), crate::error::PondError>
     where
@@ -141,10 +188,12 @@ pub trait FileDataset: Dataset + Clone {
         Self::SaveItem: Send,
         Self::Error: Send,
     {
+        let dir = std::path::Path::new(path);
+        std::fs::create_dir_all(dir)?;
         for (name, data) in entries {
-            let path = dir.join(format!("{name}.{ext}"));
+            let file_path = dir.join(format!("{name}.{ext}"));
             let mut ds = self.clone();
-            ds.set_path(path.to_str().ok_or_else(|| crate::error::PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
+            ds.set_path(file_path.to_str().ok_or_else(|| crate::error::PondError::Custom(format!("non-UTF-8 path: {}", file_path.display())))?);
             ds.save(data)?;
         }
         Ok(())
@@ -156,7 +205,7 @@ pub trait FileDataset: Dataset + Clone {
     fn save_partitioned(
         &self,
         entries: std::collections::HashMap<String, Self::SaveItem>,
-        dir: &std::path::Path,
+        path: &str,
         ext: &str,
     ) -> Result<(), crate::error::PondError>
     where
@@ -165,7 +214,7 @@ pub trait FileDataset: Dataset + Clone {
         Self::SaveItem: Send,
         Self::Error: Send,
     {
-        self.default_save_partitioned(entries, dir, ext)
+        self.default_save_partitioned(entries, path, ext)
     }
 }
 

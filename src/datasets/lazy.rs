@@ -64,7 +64,7 @@ where
     fn save_partitioned(
         &self,
         entries: HashMap<String, Self::SaveItem>,
-        dir: &std::path::Path,
+        path: &str,
         ext: &str,
     ) -> Result<(), PondError>
     where
@@ -75,16 +75,18 @@ where
     {
         if rayon::current_thread_index().is_some() {
             use rayon::iter::{IntoParallelIterator, ParallelIterator};
+            let dir = std::path::Path::new(path);
+            std::fs::create_dir_all(dir)?;
             entries.into_par_iter().try_for_each(|(name, thunk)| {
                 let value = thunk()?;
-                let path = dir.join(format!("{name}.{ext}"));
+                let file_path = dir.join(format!("{name}.{ext}"));
                 let mut ds = self.dataset.clone();
-                ds.set_path(path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", path.display())))?);
+                ds.set_path(file_path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", file_path.display())))?);
                 ds.save(value)?;
                 Ok(())
             })
         } else {
-            <Self as FileDataset>::default_save_partitioned(self, entries, dir, ext)
+            <Self as FileDataset>::default_save_partitioned(self, entries, path, ext)
         }
     }
 }
