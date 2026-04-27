@@ -89,5 +89,4 @@ where
     }
 }
 
-#[cfg(feature = "polars")]
 pub type LazyPartitionedDataset<D> = super::PartitionedDataset<LazyDataset<D>>;

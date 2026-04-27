@@ -13,7 +13,7 @@ mod param;
 mod register;
 #[cfg(feature = "std")]
 mod lazy;
-#[cfg(feature = "polars")]
+#[cfg(feature = "std")]
 mod partitioned;
 #[cfg(feature = "polars")]
 mod polars;
@@ -40,9 +40,9 @@ pub use param::Param;
 pub use register::RegisterDataset;
 #[cfg(feature = "std")]
 pub use lazy::{Lazy, LazyDataset};
-#[cfg(feature = "polars")]
+#[cfg(feature = "std")]
 pub use lazy::LazyPartitionedDataset;
-#[cfg(feature = "polars")]
+#[cfg(feature = "std")]
 pub use partitioned::PartitionedDataset;
 #[cfg(feature = "polars")]
 pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
