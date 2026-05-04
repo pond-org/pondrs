@@ -1,11 +1,9 @@
 //! Lazy dataset wrapper — defers load and save to call time.
 
 use std::prelude::v1::*;
-use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
 /// A deferred computation that produces a value on demand.
@@ -61,34 +59,7 @@ where
         self.dataset.set_path(path);
     }
 
-    fn save_partitioned(
-        &self,
-        entries: HashMap<String, Self::SaveItem>,
-        path: &str,
-        ext: &str,
-    ) -> Result<(), PondError>
-    where
-        PondError: From<Self::Error>,
-        Self: Send + Sync,
-        Self::SaveItem: Send,
-        Self::Error: Send,
-    {
-        if rayon::current_thread_index().is_some() {
-            use rayon::iter::{IntoParallelIterator, ParallelIterator};
-            let dir = std::path::Path::new(path);
-            std::fs::create_dir_all(dir)?;
-            entries.into_par_iter().try_for_each(|(name, thunk)| {
-                let value = thunk()?;
-                let file_path = dir.join(format!("{name}.{ext}"));
-                let mut ds = self.dataset.clone();
-                ds.set_path(file_path.to_str().ok_or_else(|| PondError::Custom(format!("non-UTF-8 path: {}", file_path.display())))?);
-                ds.save(value)?;
-                Ok(())
-            })
-        } else {
-            <Self as FileDataset>::default_save_partitioned(self, entries, path, ext)
-        }
-    }
+    fn prefer_parallel(&self) -> bool { true }
 }
 
 pub type LazyPartitionedDataset<D> = super::PartitionedDataset<LazyDataset<D>>;

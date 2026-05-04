@@ -6,12 +6,13 @@ use tempfile::TempDir;
 use pondrs::datasets::{Lazy, LazyDataset, LazyPartitionedDataset, TextDataset};
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
-use pondrs::{Node, ParallelRunner, Runner};
+use pondrs::{Node, PartitionedNode, ParallelRunner, Runner};
 
 #[derive(Serialize)]
 struct Catalog {
     input: LazyPartitionedDataset<TextDataset>,
     output: LazyPartitionedDataset<TextDataset>,
+    output_pnode: LazyPartitionedDataset<TextDataset>,
 }
 
 fn copy_texts(
@@ -21,7 +22,6 @@ fn copy_texts(
         .into_iter()
         .map(|(name, load_thunk)| {
             let save_thunk: Lazy<String, PondError> = Box::new(move || {
-                // std::thread::sleep(std::time::Duration::from_millis(50));
                 let text = load_thunk()?;
                 Ok(text.to_uppercase())
             });
@@ -31,11 +31,16 @@ fn copy_texts(
     (output,)
 }
 
+fn uppercase(text: String) -> (String,) {
+    (text.to_uppercase(),)
+}
+
 #[test]
 fn lazy_partitioned_parallel() {
     let dir = TempDir::new().unwrap();
     let input_dir = dir.path().join("input");
     let output_dir = dir.path().join("output");
+    let output_pnode_dir = dir.path().join("output_pnode");
     std::fs::create_dir_all(&input_dir).unwrap();
 
     let n = 100;
@@ -59,14 +64,30 @@ fn lazy_partitioned_parallel() {
                 dataset: TextDataset::new(""),
             },
         },
+        output_pnode: LazyPartitionedDataset::<TextDataset> {
+            path: output_pnode_dir.to_str().unwrap().to_string(),
+            ext: "txt".into(),
+            dataset: LazyDataset {
+                dataset: TextDataset::new(""),
+            },
+        },
     };
 
-    let pipe = (Node {
-        name: "copy_texts",
-        func: copy_texts,
-        input: (&catalog.input,),
-        output: (&catalog.output,),
-    },);
+    let pipe = (
+        Node {
+            name: "copy_texts",
+            func: copy_texts,
+            input: (&catalog.input,),
+            output: (&catalog.output,),
+        },
+        PartitionedNode {
+            name: "uppercase",
+            func: uppercase,
+            input: &catalog.input,
+            output: &catalog.output_pnode,
+            _marker: Default::default(),
+        },
+    );
 
     let params = ();
     let hooks = (LoggingHook::new(),);
@@ -75,8 +96,11 @@ fn lazy_partitioned_parallel() {
         .unwrap();
 
     for i in 0..n {
-        let path = output_dir.join(format!("file_{i:03}.txt"));
-        let content = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(content, format!("CONTENT OF FILE {i:03}"));
+        let node_path = output_dir.join(format!("file_{i:03}.txt"));
+        let pnode_path = output_pnode_dir.join(format!("file_{i:03}.txt"));
+        let node_content = std::fs::read_to_string(&node_path).unwrap();
+        let pnode_content = std::fs::read_to_string(&pnode_path).unwrap();
+        assert_eq!(node_content, format!("CONTENT OF FILE {i:03}"));
+        assert_eq!(node_content, pnode_content);
     }
 }

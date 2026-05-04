@@ -15,6 +15,8 @@ mod register;
 mod lazy;
 #[cfg(feature = "std")]
 mod partitioned;
+#[cfg(feature = "std")]
+mod thunk;
 #[cfg(feature = "polars")]
 mod polars;
 #[cfg(feature = "json")]
@@ -44,6 +46,8 @@ pub use lazy::{Lazy, LazyDataset};
 pub use lazy::LazyPartitionedDataset;
 #[cfg(feature = "std")]
 pub use partitioned::PartitionedDataset;
+#[cfg(feature = "std")]
+pub use thunk::{Thunk, IntoThunk, FromThunk};
 #[cfg(feature = "polars")]
 pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
 #[cfg(feature = "json")]
@@ -117,6 +121,10 @@ pub trait FileDataset: Dataset + Clone {
     /// Redirect this dataset to a different file path.
     fn set_path(&mut self, path: &str);
 
+    /// Whether `PartitionedDataset` should use rayon for parallel save.
+    /// Default: `false`. `LazyDataset` overrides to `true`.
+    fn prefer_parallel(&self) -> bool { false }
+
     /// Creates parent directories for `self.path()` if they don't exist.
     fn ensure_parent_dir(&self) -> Result<(), std::io::Error> {
         if let Some(parent) = std::path::Path::new(self.path()).parent() {
@@ -149,72 +157,6 @@ pub trait FileDataset: Dataset + Clone {
             .collect();
         names.sort();
         Ok(names)
-    }
-
-    /// Load all partitioned entries. Lists entries via
-    /// [`list_entries`](FileDataset::list_entries), clones `self` for each,
-    /// and loads sequentially.
-    fn load_partitioned(
-        &self,
-        path: &str,
-        ext: &str,
-    ) -> Result<std::collections::HashMap<String, Self::LoadItem>, crate::error::PondError>
-    where
-        crate::error::PondError: From<Self::Error>,
-    {
-        let dir = std::path::Path::new(path);
-        let mut items = std::collections::HashMap::new();
-        for name in self.list_entries(path, ext)? {
-            let file_path = dir.join(format!("{name}.{ext}"));
-            let mut ds = self.clone();
-            ds.set_path(file_path.to_str().ok_or_else(|| crate::error::PondError::Custom(format!("non-UTF-8 path: {}", file_path.display())))?);
-            items.insert(name, ds.load()?);
-        }
-        Ok(items)
-    }
-
-    /// Save multiple partitioned entries sequentially. Creates the directory
-    /// at `path` and delegates to each clone. Exposed so overrides can
-    /// delegate back to it as a fallback.
-    fn default_save_partitioned(
-        &self,
-        entries: std::collections::HashMap<String, Self::SaveItem>,
-        path: &str,
-        ext: &str,
-    ) -> Result<(), crate::error::PondError>
-    where
-        crate::error::PondError: From<Self::Error>,
-        Self: Send + Sync,
-        Self::SaveItem: Send,
-        Self::Error: Send,
-    {
-        let dir = std::path::Path::new(path);
-        std::fs::create_dir_all(dir)?;
-        for (name, data) in entries {
-            let file_path = dir.join(format!("{name}.{ext}"));
-            let mut ds = self.clone();
-            ds.set_path(file_path.to_str().ok_or_else(|| crate::error::PondError::Custom(format!("non-UTF-8 path: {}", file_path.display())))?);
-            ds.save(data)?;
-        }
-        Ok(())
-    }
-
-    /// Save multiple partitioned entries. Default delegates to the sequential
-    /// [`default_save_partitioned`](FileDataset::default_save_partitioned);
-    /// `LazyDataset` overrides with parallel save via rayon.
-    fn save_partitioned(
-        &self,
-        entries: std::collections::HashMap<String, Self::SaveItem>,
-        path: &str,
-        ext: &str,
-    ) -> Result<(), crate::error::PondError>
-    where
-        crate::error::PondError: From<Self::Error>,
-        Self: Send + Sync,
-        Self::SaveItem: Send,
-        Self::Error: Send,
-    {
-        self.default_save_partitioned(entries, path, ext)
     }
 }
 

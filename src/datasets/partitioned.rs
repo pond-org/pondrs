@@ -1,5 +1,3 @@
-//! Partitioned dataset types.
-
 use std::prelude::v1::*;
 use std::collections::HashMap;
 
@@ -8,10 +6,6 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
-/// A directory of files where each file is eagerly loaded into memory.
-///
-/// On load, returns a `HashMap<filename_stem, D::LoadItem>`.
-/// On save, writes each entry as `{name}.{ext}` in the directory.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(serialize = "D: Serialize", deserialize = "D: DeserializeOwned"))]
 pub struct PartitionedDataset<D: FileDataset + Serialize + DeserializeOwned> {
@@ -30,12 +24,40 @@ where
     type SaveItem = HashMap<String, D::SaveItem>;
     type Error = PondError;
 
-    fn save(&self, datasets: Self::SaveItem) -> Result<(), PondError> {
-        self.dataset.save_partitioned(datasets, &self.path, &self.ext)
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
+        let mut items = HashMap::new();
+        for name in self.dataset.list_entries(&self.path, &self.ext)? {
+            let file_path = format!("{}/{name}.{}", self.path, self.ext);
+            let mut ds = self.dataset.clone();
+            ds.set_path(&file_path);
+            items.insert(name, ds.load()?);
+        }
+        Ok(items)
     }
 
-    fn load(&self) -> Result<Self::LoadItem, PondError> {
-        self.dataset.load_partitioned(&self.path, &self.ext)
+    fn save(&self, entries: Self::SaveItem) -> Result<(), PondError> {
+        let mut ds = self.dataset.clone();
+        ds.set_path(&format!("{}/_.{}", self.path, self.ext));
+        ds.ensure_parent_dir()?;
+
+        if self.dataset.prefer_parallel() && rayon::current_thread_index().is_some() {
+            use rayon::iter::{IntoParallelIterator, ParallelIterator};
+            entries.into_par_iter().try_for_each(|(name, value)| {
+                let file_path = format!("{}/{name}.{}", self.path, self.ext);
+                let mut ds = self.dataset.clone();
+                ds.set_path(&file_path);
+                ds.save(value)?;
+                Ok(())
+            })
+        } else {
+            for (name, value) in entries {
+                let file_path = format!("{}/{name}.{}", self.path, self.ext);
+                let mut ds = self.dataset.clone();
+                ds.set_path(&file_path);
+                ds.save(value)?;
+            }
+            Ok(())
+        }
     }
 
     #[cfg(feature = "std")]
