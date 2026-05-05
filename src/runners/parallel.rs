@@ -4,7 +4,6 @@ use std::prelude::v1::*;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::thread;
 
 use serde::Serialize;
 
@@ -15,12 +14,25 @@ use crate::hooks::Hooks;
 
 use super::Runner;
 
-/// Runs pipeline nodes concurrently using scoped threads.
+/// Runs pipeline nodes concurrently using a rayon thread pool.
 ///
 /// Builds a dependency graph from the pipeline and schedules nodes
 /// as soon as their input datasets are produced. Requires `std`.
-#[derive(Default)]
-pub struct ParallelRunner;
+pub struct ParallelRunner {
+    pub num_threads: usize,
+}
+
+impl ParallelRunner {
+    pub fn new(num_threads: usize) -> Self {
+        Self { num_threads }
+    }
+}
+
+impl Default for ParallelRunner {
+    fn default() -> Self {
+        Self { num_threads: 0 }
+    }
+}
 
 /// Collect callable items by walking the tree in the same order as graph building.
 fn collect_items<'a, E>(items: &mut Vec<&'a dyn RunnableStep<E>>, item: &'a dyn RunnableStep<E>) {
@@ -41,6 +53,11 @@ impl Runner for ParallelRunner {
     where
         E: From<PondError> + Send + Sync + core::fmt::Display + core::fmt::Debug + 'static,
     {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(self.num_threads)
+            .build_global()
+            .ok();
+
         // Build graph using StepInfo (non-generic) for dependency analysis
         let graph = build_pipeline_graph(pipe, catalog, params);
 
@@ -72,7 +89,7 @@ impl Runner for ParallelRunner {
         let first_error: Mutex<Option<E>> = Mutex::new(None);
         let has_error = AtomicBool::new(false);
 
-        thread::scope(|s| {
+        rayon::scope(|s| {
             loop {
                 // If an error occurred, stop scheduling new nodes
                 if has_error.load(Ordering::Acquire) {
@@ -124,7 +141,7 @@ impl Runner for ParallelRunner {
                         let graph_nodes = &graph.nodes;
 
                         let names = &graph.dataset_names;
-                        s.spawn(move || {
+                        s.spawn(move |_| {
                             hooks.for_each_hook(&mut |h| h.before_node_run(item));
                             let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent| {
                                 super::dispatch_dataset_event(item, ds, event, names, hooks);
@@ -162,7 +179,7 @@ impl Runner for ParallelRunner {
 
                 // If no progress was made, yield to let running threads complete
                 if !any_started {
-                    thread::yield_now();
+                    std::thread::yield_now();
                 }
             }
         });

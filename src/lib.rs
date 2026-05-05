@@ -43,7 +43,7 @@ pub use pipeline::{
     RunnableStep, PipelineInfo, Steps,
 };
 #[cfg(feature = "std")]
-pub use pipeline::{StepVec, Split, Join};
+pub use pipeline::{StepVec, Split, Join, PartitionedNode};
 #[cfg(feature = "std")]
 pub use runners::ParallelRunner;
 pub use runners::{Runner, Runners, SequentialRunner};

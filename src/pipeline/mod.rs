@@ -9,6 +9,8 @@ pub(crate) mod id_set;
 mod ident;
 mod into_result;
 mod node;
+#[cfg(feature = "std")]
+mod partitioned_node;
 mod pipeline;
 mod pipeline_fn;
 #[cfg(feature = "std")]
@@ -28,6 +30,8 @@ pub use steps::{PipelineInfo, Steps};
 pub use dyn_steps::StepVec;
 #[cfg(feature = "std")]
 pub use filter::{NodeFilter, filter_steps};
+#[cfg(feature = "std")]
+pub use partitioned_node::PartitionedNode;
 #[cfg(feature = "std")]
 pub use split_join::{Split, Join};
 #[cfg(feature = "std")]

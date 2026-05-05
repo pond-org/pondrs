@@ -9,5 +9,6 @@ The `Dataset` trait is introduced in [A minimal pipeline — Datasets](../concep
 - **[Memory Dataset](./memory.md)** — thread-safe in-memory storage
 - **[Cell Dataset](./cell.md)** — stack-friendly `no_std` storage
 - **[Partitioned Dataset](./partitioned.md)** — directory of files loaded as a map
+- **[Lazy Dataset](./lazy.md)** — deferred loading with `LazyDataset`, `LazyPartitionedDataset`, and `PartitionedNode`
 - **[Cache Dataset](./cache.md)** — caching wrapper for any dataset
 - **[List of Datasets](./other.md)** — quick reference for all built-in types

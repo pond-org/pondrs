@@ -11,8 +11,12 @@ mod cache;
 mod memory;
 mod param;
 mod register;
-#[cfg(feature = "polars")]
+#[cfg(feature = "std")]
+mod lazy;
+#[cfg(feature = "std")]
 mod partitioned;
+#[cfg(feature = "std")]
+mod thunk;
 #[cfg(feature = "polars")]
 mod polars;
 #[cfg(feature = "json")]
@@ -36,10 +40,14 @@ pub use cache::CacheDataset;
 pub use memory::MemoryDataset;
 pub use param::Param;
 pub use register::RegisterDataset;
-#[cfg(feature = "polars")]
-pub use partitioned::Lazy;
-#[cfg(feature = "polars")]
-pub use partitioned::{LazyPartitionedDataset, PartitionedDataset};
+#[cfg(feature = "std")]
+pub use lazy::{Lazy, LazyDataset};
+#[cfg(feature = "std")]
+pub use lazy::LazyPartitionedDataset;
+#[cfg(feature = "std")]
+pub use partitioned::PartitionedDataset;
+#[cfg(feature = "std")]
+pub use thunk::{Thunk, IntoThunk, FromThunk};
 #[cfg(feature = "polars")]
 pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
 #[cfg(feature = "json")]
@@ -113,6 +121,10 @@ pub trait FileDataset: Dataset + Clone {
     /// Redirect this dataset to a different file path.
     fn set_path(&mut self, path: &str);
 
+    /// Whether `PartitionedDataset` should use rayon for parallel save.
+    /// Default: `false`. `LazyDataset` overrides to `true`.
+    fn prefer_parallel(&self) -> bool { false }
+
     /// Creates parent directories for `self.path()` if they don't exist.
     fn ensure_parent_dir(&self) -> Result<(), std::io::Error> {
         if let Some(parent) = std::path::Path::new(self.path()).parent() {
@@ -121,6 +133,30 @@ pub trait FileDataset: Dataset + Clone {
             }
         }
         Ok(())
+    }
+
+    /// List entry names in a partition. Default scans the directory at `path`
+    /// for files matching `ext` and returns their stems, sorted.
+    fn list_entries(
+        &self,
+        path: &str,
+        ext: &str,
+    ) -> Result<Vec<String>, crate::error::PondError> {
+        let dir = std::path::Path::new(path);
+        let mut names: Vec<String> = std::fs::read_dir(dir)?
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let file_name = e.file_name().to_string_lossy().into_owned();
+                if file_name.ends_with(ext) {
+                    let entry_path = e.path();
+                    entry_path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        names.sort();
+        Ok(names)
     }
 }
 

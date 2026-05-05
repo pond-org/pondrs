@@ -36,6 +36,7 @@
   - [Memory Dataset](./datasets/memory.md)
   - [Cell Dataset](./datasets/cell.md)
   - [Partitioned Dataset](./datasets/partitioned.md)
+  - [Lazy Dataset](./datasets/lazy.md)
   - [Cache Dataset](./datasets/cache.md)
   - [List of Datasets](./datasets/other.md)
 - [App](./app/README.md)
