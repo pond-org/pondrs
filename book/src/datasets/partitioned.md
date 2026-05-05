@@ -1,12 +1,10 @@
 # Partitioned Dataset
 
-`PartitionedDataset` and `LazyPartitionedDataset` represent a directory of files where each file is treated as a separate partition.
+`PartitionedDataset` represents a directory of files where each file is treated as a separate partition.
 
-*Requires the `polars` feature.*
+*Requires the `std` feature.*
 
-## `PartitionedDataset`
-
-Eagerly loads all files in a directory into a `HashMap<String, D::LoadItem>`:
+## Definition
 
 ```rust,ignore
 pub struct PartitionedDataset<D: FileDataset> {
@@ -17,10 +15,10 @@ pub struct PartitionedDataset<D: FileDataset> {
 ```
 
 - **`path`** — the directory to read from / write to
-- **`ext`** — file extension to filter by (e.g. `"csv"`, `"parquet"`)
+- **`ext`** — file extension to filter by (e.g. `"csv"`, `"parquet"`, `"txt"`)
 - **`dataset`** — a template dataset that is cloned and pointed at each file
 
-### Loading
+## Loading
 
 Returns `HashMap<String, D::LoadItem>` where keys are filename stems:
 
@@ -32,12 +30,16 @@ data/partitions/
 ```
 
 ```rust,ignore
-// loads as HashMap { "january" => DataFrame, "february" => DataFrame, "march" => DataFrame }
+// loads as HashMap { "february" => ..., "january" => ..., "march" => ... }
 ```
 
-### Saving
+The template dataset is cloned for each file, its path is set to the full file path, and `load()` is called on the clone.
 
-Accepts `HashMap<String, D::SaveItem>` and writes each entry as `{name}.{ext}`:
+## Saving
+
+Accepts `HashMap<String, D::SaveItem>` and writes each entry as `{path}/{name}.{ext}`. Parent directories are created automatically.
+
+When the inner dataset's `prefer_parallel()` returns `true` and the pipeline is running inside a rayon thread pool (e.g. via `ParallelRunner`), partition saves are distributed across threads. This is the default behavior for [`LazyDataset`](./lazy.md) wrappers.
 
 ```rust,ignore
 Node {
@@ -50,24 +52,23 @@ Node {
 }
 ```
 
-## `LazyPartitionedDataset`
+## `FileDataset` requirement
 
-Same as `PartitionedDataset` but returns `HashMap<String, Lazy<D::LoadItem>>` — each partition is loaded on demand:
+The inner dataset type must implement `FileDataset`:
 
 ```rust,ignore
-Node {
-    name: "process",
-    func: |partitions: HashMap<String, Lazy<DataFrame>>| {
-        // only load the partitions you need
-        let jan = partitions["january"].load().unwrap();
-        // ...
-    },
-    input: (&cat.monthly,),
-    output: (&cat.result,),
+pub trait FileDataset: Dataset + Clone {
+    fn path(&self) -> &str;
+    fn set_path(&mut self, path: &str);
+    fn prefer_parallel(&self) -> bool { false }
+    fn ensure_parent_dir(&self) -> Result<(), std::io::Error> { ... }
+    fn list_entries(&self, path: &str, ext: &str) -> Result<Vec<String>, PondError> { ... }
 }
 ```
 
-`Lazy<T>` wraps a closure that calls `dataset.load()` when `.load()` is called on it.
+`list_entries` scans the directory for files matching `ext` and returns their stems, sorted. You can override it for non-filesystem storage.
+
+Built-in types that implement `FileDataset`: `PolarsCsvDataset`, `PolarsParquetDataset`, `TextDataset`, `JsonDataset`, `ImageDataset`, `LazyDataset<D>` (for any `D: FileDataset`).
 
 ## YAML configuration
 
@@ -82,15 +83,6 @@ monthly:
 
 The `dataset` field configures the template dataset that is cloned for each partition file.
 
-## `FileDataset` requirement
+## Lazy partitions
 
-The inner dataset type must implement `FileDataset`:
-
-```rust,ignore
-pub trait FileDataset: Dataset + Clone {
-    fn path(&self) -> &str;
-    fn set_path(&mut self, path: &str);
-}
-```
-
-Built-in types that implement `FileDataset`: `PolarsCsvDataset`, `PolarsParquetDataset`, `TextDataset`, `JsonDataset`.
+For deferred, parallel partition processing, wrap the inner dataset in `LazyDataset`. See [Lazy Dataset](./lazy.md) for details on `LazyPartitionedDataset` and `PartitionedNode`.
