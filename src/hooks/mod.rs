@@ -8,7 +8,19 @@ pub(crate) mod timing;
 #[cfg(feature = "std")]
 pub use logging::LoggingHook;
 
+#[cfg(feature = "std")]
+mod cache;
+#[cfg(feature = "std")]
+pub use cache::CacheHook;
+
 use crate::pipeline::{DatasetRef, StepInfo};
+
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeControl {
+    Run,
+    Skip,
+}
 
 /// Trait for individual hooks that respond to pipeline events.
 pub trait Hook: Sync {
@@ -19,8 +31,10 @@ pub trait Hook: Sync {
 
     // Node hooks
     fn before_node_run(&self, _n: &dyn StepInfo) {}
-    fn after_node_run(&self, _n: &dyn StepInfo) {}
+    fn after_node_run(&self, _n: &dyn StepInfo, _skipped: bool) {}
     fn on_node_error(&self, _n: &dyn StepInfo, _error: &str) {}
+
+    fn node_control(&self, _n: &dyn StepInfo) -> NodeControl { NodeControl::Run }
 
     // Dataset hooks — fired per-dataset during Node::call()
     fn before_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}

@@ -121,7 +121,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_node_run(&self, n: &dyn StepInfo) {
+    fn after_node_run(&self, n: &dyn StepInfo, _skipped: bool) {
         let name = n.name();
         let duration_ms = self.timings.elapsed_ms(&name.to_string());
         self.send(&VizEvent {

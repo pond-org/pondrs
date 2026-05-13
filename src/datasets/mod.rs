@@ -79,6 +79,8 @@ pub trait Dataset: serde::Serialize {
     fn load(&self) -> Result<Self::LoadItem, Self::Error>;
     fn save(&self, output: Self::SaveItem) -> Result<(), Self::Error>;
     fn is_param(&self) -> bool { false }
+    fn content_hash(&self) -> Option<u64> { None }
+    fn is_persistent(&self) -> bool { false }
 
     /// Returns the dataset's HTML representation, if available.
     /// Override in datasets that can produce HTML (e.g. `PlotlyDataset`).
@@ -90,6 +92,8 @@ pub trait Dataset: serde::Serialize {
 /// Enables collecting `&dyn DatasetMeta` references without knowing concrete types.
 pub trait DatasetMeta: Send + Sync {
     fn is_param(&self) -> bool;
+    fn content_hash(&self) -> Option<u64>;
+    fn is_persistent(&self) -> bool;
     fn type_string(&self) -> &'static str;
 
     #[cfg(feature = "std")]
@@ -101,6 +105,8 @@ pub trait DatasetMeta: Send + Sync {
 
 impl<T: Dataset + Send + Sync> DatasetMeta for T {
     fn is_param(&self) -> bool { <T as Dataset>::is_param(self) }
+    fn content_hash(&self) -> Option<u64> { <T as Dataset>::content_hash(self) }
+    fn is_persistent(&self) -> bool { <T as Dataset>::is_persistent(self) }
     fn type_string(&self) -> &'static str { core::any::type_name::<T>() }
 
     #[cfg(feature = "std")]
@@ -124,6 +130,19 @@ pub trait FileDataset: Dataset + Clone {
     /// Whether `PartitionedDataset` should use rayon for parallel save.
     /// Default: `false`. `LazyDataset` overrides to `true`.
     fn prefer_parallel(&self) -> bool { false }
+
+    fn file_content_hash(&self) -> Option<u64> {
+        let meta = std::fs::metadata(self.path()).ok()?;
+        let mtime = meta.modified().ok()?
+            .duration_since(std::time::UNIX_EPOCH).ok()?
+            .as_nanos();
+        use core::hash::{Hash, Hasher};
+        let mut hasher = std::hash::DefaultHasher::new();
+        let canonical = std::fs::canonicalize(self.path()).ok()?;
+        canonical.hash(&mut hasher);
+        mtime.hash(&mut hasher);
+        Some(hasher.finish())
+    }
 
     /// Creates parent directories for `self.path()` if they don't exist.
     fn ensure_parent_dir(&self) -> Result<(), std::io::Error> {
@@ -262,5 +281,93 @@ mod tests {
         assert_eq!(meta_map[&ptr_to_id(&param)], true);
         assert_eq!(meta_map[&ptr_to_id(&a)], false);
         assert_eq!(meta_map[&ptr_to_id(&b)], false);
+    }
+
+    // ── content_hash / is_persistent ────────────────────────────────────────
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn param_content_hash_deterministic() {
+        let p = Param(42i32);
+        let h1 = Dataset::content_hash(&p);
+        let h2 = Dataset::content_hash(&p);
+        assert!(h1.is_some());
+        assert_eq!(h1, h2);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn param_content_hash_differs_for_different_values() {
+        assert_ne!(Dataset::content_hash(&Param(42i32)), Dataset::content_hash(&Param(43i32)));
+    }
+
+    #[test]
+    fn param_is_persistent() {
+        assert!(Dataset::is_persistent(&Param(42i32)));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn memory_dataset_content_hash_is_none() {
+        assert!(Dataset::content_hash(&MemoryDataset::<i32>::new()).is_none());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn memory_dataset_not_persistent() {
+        assert!(!Dataset::is_persistent(&MemoryDataset::<i32>::new()));
+    }
+
+    #[test]
+    fn cell_dataset_content_hash_is_none() {
+        assert!(Dataset::content_hash(&CellDataset::<i32>::new()).is_none());
+    }
+
+    #[test]
+    fn cell_dataset_not_persistent() {
+        assert!(!Dataset::is_persistent(&CellDataset::<i32>::new()));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn text_dataset_content_hash_none_before_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let ds = TextDataset::new(dir.path().join("x.txt").to_str().unwrap());
+        assert!(Dataset::content_hash(&ds).is_none());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn text_dataset_content_hash_some_after_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let ds = TextDataset::new(dir.path().join("x.txt").to_str().unwrap());
+        ds.save("hello".into()).unwrap();
+        assert!(Dataset::content_hash(&ds).is_some());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn text_dataset_is_persistent() {
+        let ds = TextDataset::new("/tmp/nonexistent.txt");
+        assert!(Dataset::is_persistent(&ds));
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn dataset_meta_delegates_content_hash_and_persistent() {
+        let p = Param(42i32);
+        let meta: &dyn DatasetMeta = &p;
+        assert_eq!(meta.content_hash(), Dataset::content_hash(&p));
+        assert_eq!(meta.is_persistent(), Dataset::is_persistent(&p));
+
+        let ds = TextDataset::new("/tmp/nonexistent.txt");
+        let meta: &dyn DatasetMeta = &ds;
+        assert_eq!(meta.content_hash(), Dataset::content_hash(&ds));
+        assert_eq!(meta.is_persistent(), Dataset::is_persistent(&ds));
+
+        let m = MemoryDataset::<i32>::new();
+        let meta: &dyn DatasetMeta = &m;
+        assert_eq!(meta.content_hash(), Dataset::content_hash(&m));
+        assert_eq!(meta.is_persistent(), Dataset::is_persistent(&m));
     }
 }

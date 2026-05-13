@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
 use crate::error::PondError;
-use crate::hooks::Hooks;
+use crate::hooks::{Hooks, NodeControl};
 
 use super::Runner;
 
@@ -44,13 +44,23 @@ impl SequentialRunner {
     {
         if item.is_leaf() {
             hooks.for_each_hook(&mut |h| h.before_node_run(item));
+            let mut skip = false;
+            hooks.for_each_hook(&mut |h| {
+                if h.node_control(item) == NodeControl::Skip {
+                    skip = true;
+                }
+            });
+            if skip {
+                hooks.for_each_hook(&mut |h| h.after_node_run(item, true));
+                return Ok(());
+            }
             #[cfg(feature = "std")]
             let mut on_event = Self::make_dataset_callback(item, names, hooks);
             #[cfg(not(feature = "std"))]
             let mut on_event = Self::make_dataset_callback(item, hooks);
             match item.call(&mut on_event) {
                 Ok(()) => {
-                    hooks.for_each_hook(&mut |h| h.after_node_run(item));
+                    hooks.for_each_hook(&mut |h| h.after_node_run(item, false));
                     Ok(())
                 }
                 Err(e) => {

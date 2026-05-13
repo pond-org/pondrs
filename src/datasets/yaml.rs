@@ -43,6 +43,9 @@ impl Dataset for YamlDataset {
         Ok(docs[0].clone())
     }
 
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
+
     fn html(&self) -> Option<String> {
         let contents = std::fs::read_to_string(&self.path).ok()?;
         Some(format!(

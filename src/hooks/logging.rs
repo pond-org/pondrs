@@ -61,8 +61,11 @@ impl Hook for LoggingHook {
         self.timings.start(item_key(n));
     }
 
-    fn after_node_run(&self, n: &dyn StepInfo) {
-        if let Some(ms) = self.timings.elapsed_ms(&item_key(n)) {
+    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) {
+        if skipped {
+            self.timings.elapsed_ms(&item_key(n));
+            info!("[node] {} - skipped (cached)", n.name());
+        } else if let Some(ms) = self.timings.elapsed_ms(&item_key(n)) {
             info!("[node] {} - completed ({:.1}ms)", n.name(), ms);
         } else {
             info!("[node] {} - completed", n.name());

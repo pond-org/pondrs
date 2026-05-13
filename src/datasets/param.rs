@@ -30,6 +30,16 @@ impl<T: Clone + Serialize> Dataset for Param<T> {
     }
 
     fn is_param(&self) -> bool { true }
+    fn is_persistent(&self) -> bool { true }
+
+    #[cfg(feature = "std")]
+    fn content_hash(&self) -> Option<u64> {
+        let yaml = serde_yaml::to_string(&self.0).ok()?;
+        use core::hash::{Hash, Hasher};
+        let mut hasher = std::hash::DefaultHasher::new();
+        yaml.hash(&mut hasher);
+        Some(hasher.finish())
+    }
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> {

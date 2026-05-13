@@ -8,4 +8,5 @@
 /examples/split_join_data/
 /book/book/
 /book/src/assets/
+.pondcache/
 /*.md

@@ -102,6 +102,9 @@ impl Dataset for PolarsCsvDataset {
         Ok(df)
     }
 
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
+
     fn html(&self) -> Option<String> {
         self.load().ok().map(|df| dataframe_to_html(&df))
     }
@@ -145,6 +148,9 @@ impl Dataset for PolarsParquetDataset {
         let df = ParquetReader::new(file).finish()?;
         Ok(df)
     }
+
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
 
     fn html(&self) -> Option<String> {
         self.load().ok().map(|df| dataframe_to_html(&df))
@@ -225,6 +231,9 @@ impl Dataset for PolarsExcelDataset {
     fn save(&self, _df: Self::SaveItem) -> Result<(), PondError> {
         unimplemented!("PolarsExcelDataset is read-only")
     }
+
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
 
     fn html(&self) -> Option<String> {
         self.load().ok().map(|df| dataframe_to_html(&df))
