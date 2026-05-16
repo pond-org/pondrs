@@ -23,8 +23,8 @@ impl SequentialRunner {
         #[cfg(feature = "std")]
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
-    ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
-        move |ds: &DatasetRef<'_>, event: DatasetEvent| {
+    ) -> impl FnMut(&DatasetRef, DatasetEvent<'_>) + 'a {
+        move |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
             #[cfg(feature = "std")]
             super::dispatch_dataset_event(item, ds, event, names, hooks);
             #[cfg(not(feature = "std"))]

@@ -32,7 +32,7 @@ impl<T: Clone> Default for MemoryDataset<T> {
     }
 }
 
-impl<T: Clone> Dataset for MemoryDataset<T> {
+impl<T: Clone + 'static> Dataset for MemoryDataset<T> {
     type LoadItem = T;
     type SaveItem = T;
     type Error = PondError;

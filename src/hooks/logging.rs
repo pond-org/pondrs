@@ -82,7 +82,7 @@ impl Hook for LoggingHook {
         self.timings.start(ds.id);
     }
 
-    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
+    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) {
         if let Some(ms) = self.timings.elapsed_ms(&ds.id) {
             debug!("  loaded {} ({:.1}ms)", ds_name(ds), ms);
         } else {
@@ -90,7 +90,7 @@ impl Hook for LoggingHook {
         }
     }
 
-    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
+    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) {
         debug!("  saving {}", ds_name(ds));
         self.timings.start(ds.id);
     }

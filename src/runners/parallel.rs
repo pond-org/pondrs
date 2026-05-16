@@ -154,7 +154,7 @@ impl Runner for ParallelRunner {
                                 produced.lock().unwrap().extend(output_ids);
                                 return;
                             }
-                            let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent| {
+                            let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
                                 super::dispatch_dataset_event(item, ds, event, names, hooks);
                             };
                             match item.call(&mut on_event) {

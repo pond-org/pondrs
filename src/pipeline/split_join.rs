@@ -61,16 +61,16 @@ where
     Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
     D: Dataset<SaveItem = T> + Send + Sync,
     S: Send + Sync,
-    T: Send + Sync,
+    T: Send + Sync + 'static,
     E: From<PondError>,
     PondError: From<Input::Error> + From<D::Error>,
 {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
         // Load the input HashMap.
         let input_ref = DatasetRef::from_ref(self.input);
         on_event(&input_ref, DatasetEvent::BeforeLoad);
         let mut map = self.input.load().map_err(|e| E::from(PondError::from(e)))?;
-        on_event(&input_ref, DatasetEvent::AfterLoad);
+        on_event(&input_ref, DatasetEvent::AfterLoad(&map));
 
         // Validate keys match.
         let mut expected: Vec<String> = self.catalog.keys().to_vec();
@@ -86,7 +86,7 @@ where
             let value = map.remove(key).expect("key validated above");
             let ds = (self.field)(entry);
             let ds_ref = DatasetRef::from_ref(ds);
-            on_event(&ds_ref, DatasetEvent::BeforeSave);
+            on_event(&ds_ref, DatasetEvent::BeforeSave(&value));
             ds.save(value).map_err(|e| E::from(PondError::from(e)))?;
             on_event(&ds_ref, DatasetEvent::AfterSave);
         }
@@ -152,11 +152,11 @@ where
     D: Dataset<LoadItem = T> + Send + Sync,
     Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
     S: Send + Sync,
-    T: Send + Sync,
+    T: Send + Sync + 'static,
     E: From<PondError>,
     PondError: From<D::Error> + From<Output::Error>,
 {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
         // Load from each catalog entry.
         let mut map = HashMap::with_capacity(self.catalog.len());
         for (key, entry) in self.catalog.iter() {
@@ -164,13 +164,13 @@ where
             let ds_ref = DatasetRef::from_ref(ds);
             on_event(&ds_ref, DatasetEvent::BeforeLoad);
             let value = ds.load().map_err(|e| E::from(PondError::from(e)))?;
-            on_event(&ds_ref, DatasetEvent::AfterLoad);
+            on_event(&ds_ref, DatasetEvent::AfterLoad(&value));
             map.insert(key.to_string(), value);
         }
 
         // Save the collected HashMap.
         let output_ref = DatasetRef::from_ref(self.output);
-        on_event(&output_ref, DatasetEvent::BeforeSave);
+        on_event(&output_ref, DatasetEvent::BeforeSave(&map));
         self.output.save(map).map_err(|e| E::from(PondError::from(e)))?;
         on_event(&output_ref, DatasetEvent::AfterSave);
 

@@ -47,7 +47,7 @@ where
     Output: Dataset + Send + Sync,
     E: From<PondError>,
 {
-    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
         Ok(())
     }
 

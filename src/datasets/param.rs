@@ -14,7 +14,7 @@ use super::Dataset;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Param<T: Clone>(pub T);
 
-impl<T: Clone + Serialize> Dataset for Param<T> {
+impl<T: Clone + Serialize + 'static> Dataset for Param<T> {
     type LoadItem = T;
     type SaveItem = ();
     type Error = Infallible;

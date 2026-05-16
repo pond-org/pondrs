@@ -19,7 +19,7 @@ use crate::hooks::Hooks;
 pub(crate) fn dispatch_dataset_event(
     item: &dyn StepInfo,
     ds: &DatasetRef<'_>,
-    event: DatasetEvent,
+    event: DatasetEvent<'_>,
     names: &std::collections::HashMap<usize, std::string::String>,
     hooks: &impl Hooks,
 ) {
@@ -31,13 +31,13 @@ pub(crate) fn dispatch_dataset_event(
 pub(crate) fn dispatch_dataset_event_raw(
     item: &dyn StepInfo,
     ds: &DatasetRef<'_>,
-    event: DatasetEvent,
+    event: DatasetEvent<'_>,
     hooks: &impl Hooks,
 ) {
     match event {
         DatasetEvent::BeforeLoad => hooks.for_each_hook(&mut |h| h.before_dataset_loaded(item, ds)),
-        DatasetEvent::AfterLoad => hooks.for_each_hook(&mut |h| h.after_dataset_loaded(item, ds)),
-        DatasetEvent::BeforeSave => hooks.for_each_hook(&mut |h| h.before_dataset_saved(item, ds)),
+        DatasetEvent::AfterLoad(value) => hooks.for_each_hook(&mut |h| h.after_dataset_loaded(item, ds, value)),
+        DatasetEvent::BeforeSave(value) => hooks.for_each_hook(&mut |h| h.before_dataset_saved(item, ds, value)),
         DatasetEvent::AfterSave => hooks.for_each_hook(&mut |h| h.after_dataset_saved(item, ds)),
     }
 }

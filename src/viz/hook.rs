@@ -159,7 +159,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
+    fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>, _value: &dyn core::any::Any) {
         let duration_ms = self.timings.elapsed_ms(&Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::AfterDatasetLoaded,
@@ -171,7 +171,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
+    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>, _value: &dyn core::any::Any) {
         self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::BeforeDatasetSaved,

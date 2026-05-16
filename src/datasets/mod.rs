@@ -72,8 +72,8 @@ pub use templated::TemplatedCatalog;
 /// `Serialize` is a supertrait so that `DatasetMeta::yaml()` can automatically
 /// serialize any dataset's configuration to YAML.
 pub trait Dataset: serde::Serialize {
-    type LoadItem;
-    type SaveItem;
+    type LoadItem: 'static;
+    type SaveItem: 'static;
     type Error;
 
     fn load(&self) -> Result<Self::LoadItem, Self::Error>;

@@ -96,7 +96,7 @@ where
     F::Output: IntoNodeResult<(T2,), PondError> + CompatibleOutput<(T2,)>,
     E: From<PondError>,
 {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
         let (input_map,) = (self.input,).load_data(on_event).map_err(E::from)?;
 
         let output_map = input_map

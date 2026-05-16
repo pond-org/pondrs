@@ -49,7 +49,7 @@ where
 {
     /// Pipeline is a container — execution happens via `for_each_child_step`.
     /// Runners should never call this directly; they check `is_leaf()` first.
-    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
         unreachable!("Pipeline::call() should not be invoked directly — use for_each_child_step")
     }
 

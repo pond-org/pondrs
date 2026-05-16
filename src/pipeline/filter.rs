@@ -260,7 +260,7 @@ impl<E> RunnableStep<E> for DynPipeline<'_, E>
 where
     E: From<PondError> + Send + Sync + 'static,
 {
-    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent)) -> Result<(), E> {
+    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
         unreachable!("DynPipeline::call() should not be invoked directly")
     }
 

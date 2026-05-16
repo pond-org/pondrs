@@ -13,6 +13,9 @@ mod cache;
 #[cfg(feature = "std")]
 pub use cache::CacheHook;
 
+mod typed;
+pub use typed::{TypedHook, TypedHookAdapter, IntoTypedHook};
+
 use crate::pipeline::{DatasetRef, StepInfo};
 
 #[non_exhaustive]
@@ -38,8 +41,8 @@ pub trait Hook: Sync {
 
     // Dataset hooks — fired per-dataset during Node::call()
     fn before_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}
-    fn after_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}
-    fn before_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}
+    fn after_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) {}
+    fn before_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) {}
     fn after_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}
 }
 
