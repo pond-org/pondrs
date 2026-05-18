@@ -7,7 +7,7 @@ use log::info;
 
 use crate::pipeline::StepInfo;
 
-use super::{Hook, NodeControl};
+use super::{Hook, HookControl};
 
 pub struct CacheHook {
     cache_dir: PathBuf,
@@ -101,17 +101,17 @@ impl CacheHook {
 }
 
 impl Hook for CacheHook {
-    fn node_control(&self, n: &dyn StepInfo) -> NodeControl {
+    fn before_node_run(&self, n: &dyn StepInfo) -> HookControl {
         if !Self::outputs_are_persistent(n) {
-            return NodeControl::Run;
+            return HookControl::Continue;
         }
         let key = match self.compute_cache_key(n) {
             Some(k) => k,
-            None => return NodeControl::Run,
+            None => return HookControl::Continue,
         };
         match self.read_cached_key(n.name()) {
-            Some(cached) if cached == key => NodeControl::Skip,
-            _ => NodeControl::Run,
+            Some(cached) if cached == key => HookControl::Skip,
+            _ => HookControl::Continue,
         }
     }
 

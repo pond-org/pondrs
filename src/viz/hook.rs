@@ -69,7 +69,7 @@ impl VizHook {
 }
 
 impl Hook for VizHook {
-    fn before_pipeline_run(&self, p: &dyn StepInfo) {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) -> crate::hooks::HookControl {
         let name = p.name();
         self.timings.start(name.to_string());
         self.send(&VizEvent {
@@ -80,6 +80,7 @@ impl Hook for VizHook {
             dataset_id: None,
             dataset_name: None,
         });
+        crate::hooks::HookControl::Continue
     }
 
     fn after_pipeline_run(&self, p: &dyn StepInfo) {
@@ -108,7 +109,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_node_run(&self, n: &dyn StepInfo) {
+    fn before_node_run(&self, n: &dyn StepInfo) -> crate::hooks::HookControl {
         let name = n.name();
         self.timings.start(name.to_string());
         self.send(&VizEvent {
@@ -119,6 +120,7 @@ impl Hook for VizHook {
             dataset_id: None,
             dataset_name: None,
         });
+        crate::hooks::HookControl::Continue
     }
 
     fn after_node_run(&self, n: &dyn StepInfo, _skipped: bool) {
@@ -147,7 +149,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {
+    fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) -> crate::hooks::HookControl {
         self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::BeforeDatasetLoaded,
@@ -157,6 +159,7 @@ impl Hook for VizHook {
             dataset_id: Some(ds.id),
             dataset_name: ds.name.map(|s| s.to_string()),
         });
+        crate::hooks::HookControl::Continue
     }
 
     fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>, _value: &dyn core::any::Any) {
@@ -171,7 +174,7 @@ impl Hook for VizHook {
         });
     }
 
-    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>, _value: &dyn core::any::Any) {
+    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>, _value: &dyn core::any::Any) -> crate::hooks::HookControl {
         self.timings.start(Self::ds_timing_key(ds));
         self.send(&VizEvent {
             kind: VizEventKind::BeforeDatasetSaved,
@@ -181,6 +184,7 @@ impl Hook for VizHook {
             dataset_id: Some(ds.id),
             dataset_name: ds.name.map(|s| s.to_string()),
         });
+        crate::hooks::HookControl::Continue
     }
 
     fn after_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef<'_>) {

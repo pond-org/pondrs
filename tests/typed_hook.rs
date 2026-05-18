@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use pondrs::datasets::MemoryDataset;
 use pondrs::error::PondError;
-use pondrs::{Dataset, IntoTypedHook, Node, Runner, SequentialRunner, TypedHook};
+use pondrs::{Dataset, Hook, HookControl, IntoTypedHook, Node, Runner, SequentialRunner, TypedHook};
 use pondrs::pipeline::{DatasetRef, StepInfo};
 
 #[derive(Serialize)]
@@ -29,8 +29,9 @@ impl TypedHook<i32> for I32Recorder {
     fn after_load(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) {
         self.0.lock().unwrap().loaded.push(*value);
     }
-    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) {
+    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> HookControl {
         self.0.lock().unwrap().saved.push(*value);
+        HookControl::Continue
     }
 }
 
@@ -78,4 +79,107 @@ fn typed_hook_fires_only_for_matching_type() {
     assert_eq!(r.loaded, vec![42]);
     // before_save fires for i32 datasets only: 84 (output_i32 saved by node2)
     assert_eq!(r.saved, vec![84]);
+}
+
+// --- Abort test: a typed hook that rejects negative values ---
+
+struct RejectNegative;
+
+impl TypedHook<i32> for RejectNegative {
+    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> HookControl {
+        if *value < 0 {
+            HookControl::Abort("negative value rejected")
+        } else {
+            HookControl::Continue
+        }
+    }
+}
+
+#[test]
+fn typed_hook_abort_stops_pipeline() {
+    let catalog = Catalog {
+        input_i32: MemoryDataset::new(),
+        mid_string: MemoryDataset::new(),
+        output_i32: MemoryDataset::new(),
+    };
+    catalog.input_i32.save(42).unwrap();
+
+    let params = Params;
+
+    let pipe = (
+        Node {
+            name: "negate",
+            func: |v: i32| (-v,),
+            input: (&catalog.input_i32,),
+            output: (&catalog.output_i32,),
+        },
+    );
+
+    let hooks = (RejectNegative.typed(),);
+    let result = SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks);
+
+    assert!(matches!(result, Err(PondError::HookAbort("negative value rejected"))));
+}
+
+#[test]
+fn typed_hook_abort_allows_positive() {
+    let catalog = Catalog {
+        input_i32: MemoryDataset::new(),
+        mid_string: MemoryDataset::new(),
+        output_i32: MemoryDataset::new(),
+    };
+    catalog.input_i32.save(42).unwrap();
+
+    let params = Params;
+
+    let pipe = (
+        Node {
+            name: "double",
+            func: |v: i32| (v * 2,),
+            input: (&catalog.input_i32,),
+            output: (&catalog.output_i32,),
+        },
+    );
+
+    let hooks = (RejectNegative.typed(),);
+    SequentialRunner
+        .run::<PondError>(&pipe, &catalog, &params, &hooks)
+        .unwrap();
+
+    assert_eq!(catalog.output_i32.load().unwrap(), 84);
+}
+
+// --- Direct Hook Abort from before_node_run ---
+
+struct AbortAlways;
+
+impl Hook for AbortAlways {
+    fn before_node_run(&self, _n: &dyn StepInfo) -> HookControl {
+        HookControl::Abort("always abort")
+    }
+}
+
+#[test]
+fn hook_abort_from_before_node_run() {
+    let catalog = Catalog {
+        input_i32: MemoryDataset::new(),
+        mid_string: MemoryDataset::new(),
+        output_i32: MemoryDataset::new(),
+    };
+    catalog.input_i32.save(1).unwrap();
+
+    let params = Params;
+
+    let pipe = (
+        Node {
+            name: "identity",
+            func: |v: i32| (v,),
+            input: (&catalog.input_i32,),
+            output: (&catalog.output_i32,),
+        },
+    );
+
+    let hooks = (AbortAlways,);
+    let result = SequentialRunner.run::<PondError>(&pipe, &catalog, &params, &hooks);
+    assert!(matches!(result, Err(PondError::HookAbort("always abort"))));
 }

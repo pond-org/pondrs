@@ -1,6 +1,7 @@
 //! Core traits for pipeline items and data flow.
 
 use crate::datasets::{Dataset, DatasetMeta};
+use crate::hooks::HookControl;
 
 use super::stable::StableTuple;
 use crate::error::PondError;
@@ -75,7 +76,7 @@ pub trait StepInfo: Send + Sync {
 /// Generic execution trait, parameterized by the pipeline error type `E`.
 pub trait RunnableStep<E>: StepInfo {
     /// Execute this item, firing dataset events via the callback.
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E>;
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), E>;
     /// Iterate over child steps (empty for leaf nodes).
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
 
@@ -115,7 +116,7 @@ impl<T: StepInfo + ?Sized> StepInfo for &T {
 }
 
 impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), E> {
         (**self).call(on_event)
     }
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
@@ -127,13 +128,13 @@ impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
 /// Trait for loading data from input datasets.
 pub trait NodeInput: StableTuple {
     type Args: StableTuple;
-    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<Self::Args, PondError>;
+    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<Self::Args, PondError>;
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
 impl NodeInput for () {
     type Args = ();
-    fn load_data(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<Self::Args, PondError> {
+    fn load_data(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<Self::Args, PondError> {
         Ok(())
     }
     fn for_each_input<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
@@ -147,10 +148,13 @@ macro_rules! impl_node_input {
         {
             type Args = ($($T::LoadItem,)+);
             #[allow(non_snake_case)]
-            fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<Self::Args, PondError> {
+            fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<Self::Args, PondError> {
                 $(
                     let ds = DatasetRef::from_ref(self.$idx);
-                    on_event(&ds, DatasetEvent::BeforeLoad);
+                    let control = on_event(&ds, DatasetEvent::BeforeLoad);
+                    if let HookControl::Abort(msg) = control {
+                        return Err(PondError::HookAbort(msg));
+                    }
                     let $T = self.$idx.load()?;
                     on_event(&ds, DatasetEvent::AfterLoad(&$T));
                 )+
@@ -177,13 +181,13 @@ impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 /// Trait for saving data to output datasets.
 pub trait NodeOutput: StableTuple {
     type Output: StableTuple;
-    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), PondError>;
+    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), PondError>;
     fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
 impl NodeOutput for () {
     type Output = ();
-    fn save_data(&self, _output: Self::Output, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), PondError> {
+    fn save_data(&self, _output: Self::Output, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), PondError> {
         Ok(())
     }
     fn for_each_output<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
@@ -196,12 +200,17 @@ macro_rules! impl_node_output {
             $(PondError: From<$T::Error>,)+
         {
             type Output = ($($T::SaveItem,)+);
-            fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), PondError> {
+            fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), PondError> {
                 $({
                     let ds = DatasetRef::from_ref(self.$idx);
-                    on_event(&ds, DatasetEvent::BeforeSave(&output.$idx));
-                    self.$idx.save(output.$idx)?;
-                    on_event(&ds, DatasetEvent::AfterSave);
+                    let control = on_event(&ds, DatasetEvent::BeforeSave(&output.$idx));
+                    if let HookControl::Abort(msg) = control {
+                        return Err(PondError::HookAbort(msg));
+                    }
+                    if control != HookControl::Skip {
+                        self.$idx.save(output.$idx)?;
+                        on_event(&ds, DatasetEvent::AfterSave);
+                    }
                 })+
                 Ok(())
             }

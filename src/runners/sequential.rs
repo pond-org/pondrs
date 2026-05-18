@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
 use crate::error::PondError;
-use crate::hooks::{Hooks, NodeControl};
+use crate::hooks::{HookControl, Hooks};
 
 use super::Runner;
 
@@ -23,12 +23,12 @@ impl SequentialRunner {
         #[cfg(feature = "std")]
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
-    ) -> impl FnMut(&DatasetRef, DatasetEvent<'_>) + 'a {
+    ) -> impl FnMut(&DatasetRef, DatasetEvent<'_>) -> HookControl + 'a {
         move |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
             #[cfg(feature = "std")]
-            super::dispatch_dataset_event(item, ds, event, names, hooks);
+            { super::dispatch_dataset_event(item, ds, event, names, hooks) }
             #[cfg(not(feature = "std"))]
-            super::dispatch_dataset_event_raw(item, ds, event, hooks);
+            { super::dispatch_dataset_event_raw(item, ds, event, hooks) }
         }
     }
 
@@ -43,14 +43,15 @@ impl SequentialRunner {
         E: From<PondError> + core::fmt::Display + core::fmt::Debug,
     {
         if item.is_leaf() {
-            hooks.for_each_hook(&mut |h| h.before_node_run(item));
-            let mut skip = false;
+            let mut control = HookControl::Continue;
             hooks.for_each_hook(&mut |h| {
-                if h.node_control(item) == NodeControl::Skip {
-                    skip = true;
-                }
+                control = control.clone().merge(h.before_node_run(item));
             });
-            if skip {
+            if let HookControl::Abort(msg) = control {
+                hooks.for_each_hook(&mut |h| h.on_node_error(item, msg));
+                return Err(E::from(PondError::HookAbort(msg)));
+            }
+            if control == HookControl::Skip {
                 hooks.for_each_hook(&mut |h| h.after_node_run(item, true));
                 return Ok(());
             }
@@ -73,7 +74,14 @@ impl SequentialRunner {
                 }
             }
         } else {
-            hooks.for_each_hook(&mut |h| h.before_pipeline_run(item));
+            let mut control = HookControl::Continue;
+            hooks.for_each_hook(&mut |h| {
+                control = control.clone().merge(h.before_pipeline_run(item));
+            });
+            if let HookControl::Abort(msg) = control {
+                hooks.for_each_hook(&mut |h| h.on_pipeline_error(item, msg));
+                return Err(E::from(PondError::HookAbort(msg)));
+            }
             let mut result = Ok(());
             item.for_each_child_step(&mut |child| {
                 if result.is_ok() {

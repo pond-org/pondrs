@@ -2,11 +2,11 @@ use core::marker::PhantomData;
 
 use crate::pipeline::{DatasetRef, StepInfo};
 
-use super::Hook;
+use super::{Hook, HookControl};
 
 pub trait TypedHook<T: 'static>: Sync {
     fn after_load(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &T) {}
-    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &T) {}
+    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &T) -> HookControl { HookControl::Continue }
 }
 
 pub struct TypedHookAdapter<T, H>(H, PhantomData<fn() -> T>);
@@ -18,9 +18,11 @@ impl<T: 'static, H: TypedHook<T> + Sync> Hook for TypedHookAdapter<T, H> {
         }
     }
 
-    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn core::any::Any) {
+    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn core::any::Any) -> HookControl {
         if let Some(v) = value.downcast_ref::<T>() {
-            self.0.before_save(n, ds, v);
+            self.0.before_save(n, ds, v)
+        } else {
+            HookControl::Continue
         }
     }
 }

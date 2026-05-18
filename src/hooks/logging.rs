@@ -38,9 +38,10 @@ fn ds_name<'a>(ds: &'a DatasetRef) -> &'a str {
 }
 
 impl Hook for LoggingHook {
-    fn before_pipeline_run(&self, p: &dyn StepInfo) {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) -> super::HookControl {
         info!("[pipeline] {} - starting", p.name());
         self.timings.start(item_key(p));
+        super::HookControl::Continue
     }
 
     fn after_pipeline_run(&self, p: &dyn StepInfo) {
@@ -56,9 +57,10 @@ impl Hook for LoggingHook {
         warn!("[pipeline] {} - error: {}", p.name(), error);
     }
 
-    fn before_node_run(&self, n: &dyn StepInfo) {
+    fn before_node_run(&self, n: &dyn StepInfo) -> super::HookControl {
         info!("[node] {} - starting", n.name());
         self.timings.start(item_key(n));
+        super::HookControl::Continue
     }
 
     fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) {
@@ -77,9 +79,10 @@ impl Hook for LoggingHook {
         warn!("[node] {} - error: {}", n.name(), error);
     }
 
-    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
+    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) -> super::HookControl {
         debug!("  loading {}", ds_name(ds));
         self.timings.start(ds.id);
+        super::HookControl::Continue
     }
 
     fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) {
@@ -90,9 +93,10 @@ impl Hook for LoggingHook {
         }
     }
 
-    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) {
+    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) -> super::HookControl {
         debug!("  saving {}", ds_name(ds));
         self.timings.start(ds.id);
+        super::HookControl::Continue
     }
 
     fn after_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef) {

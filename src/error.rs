@@ -39,6 +39,9 @@ pub enum PondError {
     #[error("Dataset not loaded: no data available")]
     DatasetNotLoaded,
 
+    #[error("Hook aborted: {0}")]
+    HookAbort(&'static str),
+
     #[error("Runner not found")]
     RunnerNotFound,
 

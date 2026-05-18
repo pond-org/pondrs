@@ -4,6 +4,7 @@ use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
 use super::stable::{StableFn, StableTuple};
+use crate::hooks::HookControl;
 use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, RunnableStep};
 
 /// Marker trait asserting that a return type is structurally compatible
@@ -67,7 +68,7 @@ where
     R: IntoNodeResult<Output::Output, E> + CompatibleOutput<Output::Output>,
     E: From<PondError>,
 {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>)) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), E> {
         let args = self.input.load_data(on_event).map_err(E::from)?;
         let result = StableFn::call(&self.func, args);
         let output = result.into_node_result()?;

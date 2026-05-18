@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
-use crate::hooks::{Hooks, NodeControl};
+use crate::hooks::{HookControl, Hooks};
 
 use super::Runner;
 
@@ -107,7 +107,18 @@ impl Runner for ParallelRunner {
                         && pipe_node.inputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_started[pi].store(true, Ordering::Release);
-                        hooks.for_each_hook(&mut |h| h.before_pipeline_run(pipe_node.item));
+                        let mut control = HookControl::Continue;
+                        hooks.for_each_hook(&mut |h| {
+                            control = control.clone().merge(h.before_pipeline_run(pipe_node.item));
+                        });
+                        if let HookControl::Abort(msg) = control {
+                            hooks.for_each_hook(&mut |h| h.on_pipeline_error(pipe_node.item, msg));
+                            let mut guard = first_error.lock().unwrap();
+                            if guard.is_none() {
+                                *guard = Some(E::from(PondError::HookAbort(msg)));
+                            }
+                            has_error.store(true, Ordering::Release);
+                        }
                     }
 
                     // after_pipeline_run: all outputs produced
@@ -142,20 +153,26 @@ impl Runner for ParallelRunner {
 
                         let names = &graph.dataset_names;
                         s.spawn(move |_| {
-                            hooks.for_each_hook(&mut |h| h.before_node_run(item));
-                            let mut skip = false;
+                            let mut control = HookControl::Continue;
                             hooks.for_each_hook(&mut |h| {
-                                if h.node_control(item) == NodeControl::Skip {
-                                    skip = true;
-                                }
+                                control = control.clone().merge(h.before_node_run(item));
                             });
-                            if skip {
+                            if let HookControl::Abort(msg) = control {
+                                hooks.for_each_hook(&mut |h| h.on_node_error(item, msg));
+                                let mut guard = first_error.lock().unwrap();
+                                if guard.is_none() {
+                                    *guard = Some(E::from(PondError::HookAbort(msg)));
+                                }
+                                has_error.store(true, Ordering::Release);
+                                return;
+                            }
+                            if control == HookControl::Skip {
                                 hooks.for_each_hook(&mut |h| h.after_node_run(item, true));
                                 produced.lock().unwrap().extend(output_ids);
                                 return;
                             }
                             let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
-                                super::dispatch_dataset_event(item, ds, event, names, hooks);
+                                super::dispatch_dataset_event(item, ds, event, names, hooks)
                             };
                             match item.call(&mut on_event) {
                                 Ok(()) => {
@@ -165,7 +182,6 @@ impl Runner for ParallelRunner {
                                 Err(e) => {
                                     let msg = e.to_string();
                                     hooks.for_each_hook(&mut |h| h.on_node_error(item, &msg));
-                                    // Fire on_pipeline_error for ancestor pipelines
                                     let mut parent = graph_nodes[node_idx].parent_pipe;
                                     while let Some(pipe_idx) = parent {
                                         let pipe = &graph_nodes[pipe_idx];

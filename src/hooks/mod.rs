@@ -19,30 +19,42 @@ pub use typed::{TypedHook, TypedHookAdapter, IntoTypedHook};
 use crate::pipeline::{DatasetRef, StepInfo};
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeControl {
-    Run,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookControl {
+    Continue,
     Skip,
+    Abort(&'static str),
+}
+
+impl Default for HookControl {
+    fn default() -> Self {
+        HookControl::Continue
+    }
+}
+
+impl HookControl {
+    pub fn merge(self, other: HookControl) -> HookControl {
+        match (self, other) {
+            (HookControl::Abort(msg), _) | (_, HookControl::Abort(msg)) => HookControl::Abort(msg),
+            (HookControl::Skip, _) | (_, HookControl::Skip) => HookControl::Skip,
+            _ => HookControl::Continue,
+        }
+    }
 }
 
 /// Trait for individual hooks that respond to pipeline events.
 pub trait Hook: Sync {
-    // Pipeline hooks
-    fn before_pipeline_run(&self, _p: &dyn StepInfo) {}
+    fn before_pipeline_run(&self, _p: &dyn StepInfo) -> HookControl { HookControl::Continue }
     fn after_pipeline_run(&self, _p: &dyn StepInfo) {}
     fn on_pipeline_error(&self, _p: &dyn StepInfo, _error: &str) {}
 
-    // Node hooks
-    fn before_node_run(&self, _n: &dyn StepInfo) {}
+    fn before_node_run(&self, _n: &dyn StepInfo) -> HookControl { HookControl::Continue }
     fn after_node_run(&self, _n: &dyn StepInfo, _skipped: bool) {}
     fn on_node_error(&self, _n: &dyn StepInfo, _error: &str) {}
 
-    fn node_control(&self, _n: &dyn StepInfo) -> NodeControl { NodeControl::Run }
-
-    // Dataset hooks — fired per-dataset during Node::call()
-    fn before_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}
+    fn before_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef) -> HookControl { HookControl::Continue }
     fn after_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) {}
-    fn before_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) {}
+    fn before_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) -> HookControl { HookControl::Continue }
     fn after_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef) {}
 }
 
