@@ -138,3 +138,9 @@ impl From<core::convert::Infallible> for PondError {
         match x {}
     }
 }
+
+impl From<crate::hooks::HookAbort> for PondError {
+    fn from(e: crate::hooks::HookAbort) -> Self {
+        PondError::HookAbort(e.0)
+    }
+}

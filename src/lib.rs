@@ -37,7 +37,7 @@ pub use datasets::TemplatedCatalog;
 pub use error::{CheckError, PondError};
 #[cfg(feature = "std")]
 pub use graph::{PipelineGraph, build_pipeline_graph};
-pub use hooks::{Hook, Hooks, HookControl, TypedHook, TypedHookAdapter, IntoTypedHook};
+pub use hooks::{Hook, Hooks, HookAbort, HookControl, TypedHook, TypedHookAdapter, IntoTypedHook};
 #[cfg(feature = "std")]
 pub use hooks::CacheHook;
 pub use pipeline::{

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::datasets::{Dataset, TemplatedCatalog};
 use crate::error::PondError;
 
-use crate::hooks::HookControl;
+use crate::hooks::{HookAbort, HookControl};
 use super::traits::{DatasetEvent, DatasetRef, StepInfo, RunnableStep};
 
 /// A leaf node that distributes a `HashMap` across a `TemplatedCatalog`.
@@ -66,15 +66,12 @@ where
     E: From<PondError>,
     PondError: From<Input::Error> + From<D::Error>,
 {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
         // Load the input HashMap.
         let input_ref = DatasetRef::from_ref(self.input);
-        let control = on_event(&input_ref, DatasetEvent::BeforeLoad);
-        if let HookControl::Abort(msg) = control {
-            return Err(E::from(PondError::HookAbort(msg)));
-        }
+        on_event(&input_ref, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
         let mut map = self.input.load().map_err(|e| E::from(PondError::from(e)))?;
-        on_event(&input_ref, DatasetEvent::AfterLoad(&map));
+        on_event(&input_ref, DatasetEvent::AfterLoad(&map)).map_err(|e| E::from(PondError::from(e)))?;
 
         // Validate keys match.
         let mut expected: Vec<String> = self.catalog.keys().to_vec();
@@ -90,13 +87,10 @@ where
             let value = map.remove(key).expect("key validated above");
             let ds = (self.field)(entry);
             let ds_ref = DatasetRef::from_ref(ds);
-            let control = on_event(&ds_ref, DatasetEvent::BeforeSave(&value));
-            if let HookControl::Abort(msg) = control {
-                return Err(E::from(PondError::HookAbort(msg)));
-            }
+            let control = on_event(&ds_ref, DatasetEvent::BeforeSave(&value)).map_err(|e| E::from(PondError::from(e)))?;
             if control != HookControl::Skip {
                 ds.save(value).map_err(|e| E::from(PondError::from(e)))?;
-                on_event(&ds_ref, DatasetEvent::AfterSave);
+                on_event(&ds_ref, DatasetEvent::AfterSave).map_err(|e| E::from(PondError::from(e)))?;
             }
         }
 
@@ -165,30 +159,24 @@ where
     E: From<PondError>,
     PondError: From<D::Error> + From<Output::Error>,
 {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> HookControl) -> Result<(), E> {
+    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
         // Load from each catalog entry.
         let mut map = HashMap::with_capacity(self.catalog.len());
         for (key, entry) in self.catalog.iter() {
             let ds = (self.field)(entry);
             let ds_ref = DatasetRef::from_ref(ds);
-            let control = on_event(&ds_ref, DatasetEvent::BeforeLoad);
-            if let HookControl::Abort(msg) = control {
-                return Err(E::from(PondError::HookAbort(msg)));
-            }
+            on_event(&ds_ref, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
             let value = ds.load().map_err(|e| E::from(PondError::from(e)))?;
-            on_event(&ds_ref, DatasetEvent::AfterLoad(&value));
+            on_event(&ds_ref, DatasetEvent::AfterLoad(&value)).map_err(|e| E::from(PondError::from(e)))?;
             map.insert(key.to_string(), value);
         }
 
         // Save the collected HashMap.
         let output_ref = DatasetRef::from_ref(self.output);
-        let control = on_event(&output_ref, DatasetEvent::BeforeSave(&map));
-        if let HookControl::Abort(msg) = control {
-            return Err(E::from(PondError::HookAbort(msg)));
-        }
+        let control = on_event(&output_ref, DatasetEvent::BeforeSave(&map)).map_err(|e| E::from(PondError::from(e)))?;
         if control != HookControl::Skip {
             self.output.save(map).map_err(|e| E::from(PondError::from(e)))?;
-            on_event(&output_ref, DatasetEvent::AfterSave);
+            on_event(&output_ref, DatasetEvent::AfterSave).map_err(|e| E::from(PondError::from(e)))?;
         }
 
         Ok(())
@@ -279,7 +267,7 @@ names: [alpha, beta]
             field: |s: &ItemCatalog| &s.raw,
         };
 
-        let result: Result<(), PondError> = split.call(&mut |_, _| HookControl::Continue);
+        let result: Result<(), PondError> = split.call(&mut |_, _| Ok(HookControl::Continue));
         assert!(result.is_ok());
 
         assert_eq!(catalog.get("alpha").unwrap().raw.load().unwrap(), 10);
@@ -303,7 +291,7 @@ names: [alpha, beta]
             field: |s: &ItemCatalog| &s.raw,
         };
 
-        let result: Result<(), PondError> = split.call(&mut |_, _| HookControl::Continue);
+        let result: Result<(), PondError> = split.call(&mut |_, _| Ok(HookControl::Continue));
         assert!(matches!(result, Err(PondError::KeyMismatch { .. })));
     }
 
@@ -359,7 +347,7 @@ names: [alpha, beta]
             output: &result_ds,
         };
 
-        let result: Result<(), PondError> = join.call(&mut |_, _| HookControl::Continue);
+        let result: Result<(), PondError> = join.call(&mut |_, _| Ok(HookControl::Continue));
         assert!(result.is_ok());
 
         let output = result_ds.load().unwrap();
@@ -396,13 +384,13 @@ names: [alpha, beta]
         };
 
         // Execute split, then process, then join.
-        let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| HookControl::Continue;
+        let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
         RunnableStep::<PondError>::call(&split, noop).unwrap();
         for (_, item) in catalog.iter() {
             let v = item.raw.load().unwrap();
             item.processed.save(v * 2).unwrap();
         }
-        let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| HookControl::Continue;
+        let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
         RunnableStep::<PondError>::call(&join, noop).unwrap();
 
         let output = result_ds.load().unwrap();

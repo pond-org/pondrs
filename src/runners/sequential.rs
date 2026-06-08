@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
 use crate::error::PondError;
-use crate::hooks::{HookControl, Hooks};
+use crate::hooks::{HookAbort, HookControl, Hooks};
 
 use super::Runner;
 
@@ -23,7 +23,7 @@ impl SequentialRunner {
         #[cfg(feature = "std")]
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
-    ) -> impl FnMut(&DatasetRef, DatasetEvent<'_>) -> HookControl + 'a {
+    ) -> impl FnMut(&DatasetRef, DatasetEvent<'_>) -> Result<HookControl, HookAbort> + 'a {
         move |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
             #[cfg(feature = "std")]
             { super::dispatch_dataset_event(item, ds, event, names, hooks) }
@@ -44,15 +44,18 @@ impl SequentialRunner {
     {
         if item.is_leaf() {
             let mut control = HookControl::Continue;
-            hooks.for_each_hook(&mut |h| {
-                control = control.clone().merge(h.before_node_run(item));
+            let result = hooks.for_each_hook(&mut |h| {
+                control = control.merge(h.before_node_run(item)?);
+                Ok(())
             });
-            if let HookControl::Abort(msg) = control {
-                hooks.for_each_hook(&mut |h| h.on_node_error(item, msg));
-                return Err(E::from(PondError::HookAbort(msg)));
+            if let Err(e) = result {
+                hooks.for_each_hook(&mut |h| { h.on_node_error(item, e.0); Ok(()) }).ok();
+                return Err(E::from(PondError::from(e)));
             }
             if control == HookControl::Skip {
-                hooks.for_each_hook(&mut |h| h.after_node_run(item, true));
+                if let Err(e) = hooks.for_each_hook(&mut |h| h.after_node_run(item, true)) {
+                    return Err(E::from(PondError::from(e)));
+                }
                 return Ok(());
             }
             #[cfg(feature = "std")]
@@ -61,7 +64,9 @@ impl SequentialRunner {
             let mut on_event = Self::make_dataset_callback(item, hooks);
             match item.call(&mut on_event) {
                 Ok(()) => {
-                    hooks.for_each_hook(&mut |h| h.after_node_run(item, false));
+                    if let Err(e) = hooks.for_each_hook(&mut |h| h.after_node_run(item, false)) {
+                        return Err(E::from(PondError::from(e)));
+                    }
                     Ok(())
                 }
                 Err(e) => {
@@ -69,18 +74,19 @@ impl SequentialRunner {
                     let msg = e.to_string();
                     #[cfg(not(feature = "std"))]
                     let msg = "node error";
-                    hooks.for_each_hook(&mut |h| h.on_node_error(item, &msg));
+                    hooks.for_each_hook(&mut |h| { h.on_node_error(item, &msg); Ok(()) }).ok();
                     Err(e)
                 }
             }
         } else {
             let mut control = HookControl::Continue;
-            hooks.for_each_hook(&mut |h| {
-                control = control.clone().merge(h.before_pipeline_run(item));
+            let result = hooks.for_each_hook(&mut |h| {
+                control = control.merge(h.before_pipeline_run(item)?);
+                Ok(())
             });
-            if let HookControl::Abort(msg) = control {
-                hooks.for_each_hook(&mut |h| h.on_pipeline_error(item, msg));
-                return Err(E::from(PondError::HookAbort(msg)));
+            if let Err(e) = result {
+                hooks.for_each_hook(&mut |h| { h.on_pipeline_error(item, e.0); Ok(()) }).ok();
+                return Err(E::from(PondError::from(e)));
             }
             let mut result = Ok(());
             item.for_each_child_step(&mut |child| {
@@ -93,14 +99,16 @@ impl SequentialRunner {
             });
             match &result {
                 Ok(()) => {
-                    hooks.for_each_hook(&mut |h| h.after_pipeline_run(item));
+                    if let Err(e) = hooks.for_each_hook(&mut |h| h.after_pipeline_run(item)) {
+                        return Err(E::from(PondError::from(e)));
+                    }
                 }
                 Err(_e) => {
                     #[cfg(feature = "std")]
                     let msg = _e.to_string();
                     #[cfg(not(feature = "std"))]
                     let msg = "pipeline error";
-                    hooks.for_each_hook(&mut |h| h.on_pipeline_error(item, &msg));
+                    hooks.for_each_hook(&mut |h| { h.on_pipeline_error(item, &msg); Ok(()) }).ok();
                 }
             }
             result

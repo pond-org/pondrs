@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use pondrs::datasets::MemoryDataset;
 use pondrs::error::PondError;
-use pondrs::{Dataset, Hook, HookControl, IntoTypedHook, Node, Runner, SequentialRunner, TypedHook};
+use pondrs::{Dataset, Hook, HookAbort, HookControl, IntoTypedHook, Node, Runner, SequentialRunner, TypedHook};
 use pondrs::pipeline::{DatasetRef, StepInfo};
 
 #[derive(Serialize)]
@@ -26,12 +26,13 @@ struct Recorded {
 struct I32Recorder(Arc<Mutex<Recorded>>);
 
 impl TypedHook<i32> for I32Recorder {
-    fn after_load(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) {
+    fn after_load(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> Result<(), HookAbort> {
         self.0.lock().unwrap().loaded.push(*value);
+        Ok(())
     }
-    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> HookControl {
+    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> Result<HookControl, HookAbort> {
         self.0.lock().unwrap().saved.push(*value);
-        HookControl::Continue
+        Ok(HookControl::Continue)
     }
 }
 
@@ -86,11 +87,11 @@ fn typed_hook_fires_only_for_matching_type() {
 struct RejectNegative;
 
 impl TypedHook<i32> for RejectNegative {
-    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> HookControl {
+    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> Result<HookControl, HookAbort> {
         if *value < 0 {
-            HookControl::Abort("negative value rejected")
+            Err(HookAbort("negative value rejected"))
         } else {
-            HookControl::Continue
+            Ok(HookControl::Continue)
         }
     }
 }
@@ -154,8 +155,8 @@ fn typed_hook_abort_allows_positive() {
 struct AbortAlways;
 
 impl Hook for AbortAlways {
-    fn before_node_run(&self, _n: &dyn StepInfo) -> HookControl {
-        HookControl::Abort("always abort")
+    fn before_node_run(&self, _n: &dyn StepInfo) -> Result<HookControl, HookAbort> {
+        Err(HookAbort("always abort"))
     }
 }
 

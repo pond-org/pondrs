@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::pipeline::{DatasetEvent, DatasetRef, StepInfo, Steps};
 use crate::error::PondError;
-use crate::hooks::{HookControl, Hooks};
+use crate::hooks::{HookAbort, HookControl, Hooks};
 
 /// Resolve dataset name from the catalog index and dispatch to hooks.
 #[cfg(feature = "std")]
@@ -22,7 +22,7 @@ pub(crate) fn dispatch_dataset_event(
     event: DatasetEvent<'_>,
     names: &std::collections::HashMap<usize, std::string::String>,
     hooks: &impl Hooks,
-) -> HookControl {
+) -> Result<HookControl, HookAbort> {
     let ds = DatasetRef { name: names.get(&ds.id).map(|s: &std::string::String| s.as_str()), ..*ds };
     dispatch_dataset_event_raw(item, &ds, event, hooks)
 }
@@ -33,29 +33,31 @@ pub(crate) fn dispatch_dataset_event_raw(
     ds: &DatasetRef<'_>,
     event: DatasetEvent<'_>,
     hooks: &impl Hooks,
-) -> HookControl {
+) -> Result<HookControl, HookAbort> {
     match event {
         DatasetEvent::BeforeLoad => {
             let mut control = HookControl::Continue;
             hooks.for_each_hook(&mut |h| {
-                control = control.clone().merge(h.before_dataset_loaded(item, ds));
-            });
-            control
+                control = control.merge(h.before_dataset_loaded(item, ds)?);
+                Ok(())
+            })?;
+            Ok(control)
         }
         DatasetEvent::AfterLoad(value) => {
-            hooks.for_each_hook(&mut |h| h.after_dataset_loaded(item, ds, value));
-            HookControl::Continue
+            hooks.for_each_hook(&mut |h| h.after_dataset_loaded(item, ds, value))?;
+            Ok(HookControl::Continue)
         }
         DatasetEvent::BeforeSave(value) => {
             let mut control = HookControl::Continue;
             hooks.for_each_hook(&mut |h| {
-                control = control.clone().merge(h.before_dataset_saved(item, ds, value));
-            });
-            control
+                control = control.merge(h.before_dataset_saved(item, ds, value)?);
+                Ok(())
+            })?;
+            Ok(control)
         }
         DatasetEvent::AfterSave => {
-            hooks.for_each_hook(&mut |h| h.after_dataset_saved(item, ds));
-            HookControl::Continue
+            hooks.for_each_hook(&mut |h| h.after_dataset_saved(item, ds))?;
+            Ok(HookControl::Continue)
         }
     }
 }

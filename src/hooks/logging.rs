@@ -38,18 +38,19 @@ fn ds_name<'a>(ds: &'a DatasetRef) -> &'a str {
 }
 
 impl Hook for LoggingHook {
-    fn before_pipeline_run(&self, p: &dyn StepInfo) -> super::HookControl {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) -> Result<super::HookControl, super::HookAbort> {
         info!("[pipeline] {} - starting", p.name());
         self.timings.start(item_key(p));
-        super::HookControl::Continue
+        Ok(super::HookControl::Continue)
     }
 
-    fn after_pipeline_run(&self, p: &dyn StepInfo) {
+    fn after_pipeline_run(&self, p: &dyn StepInfo) -> Result<(), super::HookAbort> {
         if let Some(ms) = self.timings.elapsed_ms(&item_key(p)) {
             info!("[pipeline] {} - completed ({:.1}ms)", p.name(), ms);
         } else {
             info!("[pipeline] {} - completed", p.name());
         }
+        Ok(())
     }
 
     fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {
@@ -57,13 +58,13 @@ impl Hook for LoggingHook {
         warn!("[pipeline] {} - error: {}", p.name(), error);
     }
 
-    fn before_node_run(&self, n: &dyn StepInfo) -> super::HookControl {
+    fn before_node_run(&self, n: &dyn StepInfo) -> Result<super::HookControl, super::HookAbort> {
         info!("[node] {} - starting", n.name());
         self.timings.start(item_key(n));
-        super::HookControl::Continue
+        Ok(super::HookControl::Continue)
     }
 
-    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) {
+    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) -> Result<(), super::HookAbort> {
         if skipped {
             self.timings.elapsed_ms(&item_key(n));
             info!("[node] {} - skipped (cached)", n.name());
@@ -72,6 +73,7 @@ impl Hook for LoggingHook {
         } else {
             info!("[node] {} - completed", n.name());
         }
+        Ok(())
     }
 
     fn on_node_error(&self, n: &dyn StepInfo, error: &str) {
@@ -79,31 +81,33 @@ impl Hook for LoggingHook {
         warn!("[node] {} - error: {}", n.name(), error);
     }
 
-    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) -> super::HookControl {
+    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef) -> Result<super::HookControl, super::HookAbort> {
         debug!("  loading {}", ds_name(ds));
         self.timings.start(ds.id);
-        super::HookControl::Continue
+        Ok(super::HookControl::Continue)
     }
 
-    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) {
+    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) -> Result<(), super::HookAbort> {
         if let Some(ms) = self.timings.elapsed_ms(&ds.id) {
             debug!("  loaded {} ({:.1}ms)", ds_name(ds), ms);
         } else {
             debug!("  loaded {}", ds_name(ds));
         }
+        Ok(())
     }
 
-    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) -> super::HookControl {
+    fn before_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn core::any::Any) -> Result<super::HookControl, super::HookAbort> {
         debug!("  saving {}", ds_name(ds));
         self.timings.start(ds.id);
-        super::HookControl::Continue
+        Ok(super::HookControl::Continue)
     }
 
-    fn after_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef) {
+    fn after_dataset_saved(&self, _n: &dyn StepInfo, ds: &DatasetRef) -> Result<(), super::HookAbort> {
         if let Some(ms) = self.timings.elapsed_ms(&ds.id) {
             debug!("  saved {} ({:.1}ms)", ds_name(ds), ms);
         } else {
             debug!("  saved {}", ds_name(ds));
         }
+        Ok(())
     }
 }

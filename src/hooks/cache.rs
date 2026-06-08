@@ -101,21 +101,21 @@ impl CacheHook {
 }
 
 impl Hook for CacheHook {
-    fn before_node_run(&self, n: &dyn StepInfo) -> HookControl {
+    fn before_node_run(&self, n: &dyn StepInfo) -> Result<HookControl, super::HookAbort> {
         if !Self::outputs_are_persistent(n) {
-            return HookControl::Continue;
+            return Ok(HookControl::Continue);
         }
         let key = match self.compute_cache_key(n) {
             Some(k) => k,
-            None => return HookControl::Continue,
+            None => return Ok(HookControl::Continue),
         };
         match self.read_cached_key(n.name()) {
-            Some(cached) if cached == key => HookControl::Skip,
-            _ => HookControl::Continue,
+            Some(cached) if cached == key => Ok(HookControl::Skip),
+            _ => Ok(HookControl::Continue),
         }
     }
 
-    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) {
+    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) -> Result<(), super::HookAbort> {
         if let Some(key) = self.compute_cache_key(n) {
             if skipped {
                 info!("[cache] {} - skipped (inputs unchanged)", n.name());
@@ -124,5 +124,6 @@ impl Hook for CacheHook {
             }
             self.record_node_key(n, key);
         }
+        Ok(())
     }
 }
