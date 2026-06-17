@@ -60,6 +60,24 @@ where
         }
     }
 
+    fn is_persistent(&self) -> bool { true }
+
+    fn content_hash(&self) -> Option<u64> {
+        use core::hash::{Hash, Hasher};
+        let mut hasher = std::hash::DefaultHasher::new();
+        let canonical = std::fs::canonicalize(&self.path).ok()?;
+        canonical.hash(&mut hasher);
+        let entries = self.dataset.list_entries(&self.path, &self.ext).ok()?;
+        for name in &entries {
+            let file_path = format!("{}/{name}.{}", self.path, self.ext);
+            let mut ds = self.dataset.clone();
+            ds.set_path(&file_path);
+            let entry_hash = ds.file_content_hash()?;
+            entry_hash.hash(&mut hasher);
+        }
+        Some(hasher.finish())
+    }
+
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> {
         let entries = self.dataset.list_entries(&self.path, &self.ext).ok()?;

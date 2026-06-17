@@ -34,7 +34,7 @@ impl<T: Copy> Default for CellDataset<T> {
     }
 }
 
-impl<T: Copy> Dataset for CellDataset<T> {
+impl<T: Copy + 'static> Dataset for CellDataset<T> {
     type LoadItem = T;
     type SaveItem = T;
     type Error = PondError;

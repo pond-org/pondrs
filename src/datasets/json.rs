@@ -39,6 +39,9 @@ impl Dataset for JsonDataset {
         Ok(())
     }
 
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
+
     fn html(&self) -> Option<String> {
         let content = std::fs::read_to_string(&self.path).ok()?;
         let value: Value = serde_json::from_str(&content).ok()?;

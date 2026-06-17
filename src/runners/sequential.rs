@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
 use crate::error::PondError;
-use crate::hooks::Hooks;
+use crate::hooks::{HookAbort, HookControl, Hooks};
 
 use super::Runner;
 
@@ -23,12 +23,12 @@ impl SequentialRunner {
         #[cfg(feature = "std")]
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
-    ) -> impl FnMut(&DatasetRef, DatasetEvent) + 'a {
-        move |ds: &DatasetRef<'_>, event: DatasetEvent| {
+    ) -> impl FnMut(&DatasetRef, DatasetEvent<'_>) -> Result<HookControl, HookAbort> + 'a {
+        move |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
             #[cfg(feature = "std")]
-            super::dispatch_dataset_event(item, ds, event, names, hooks);
+            { super::dispatch_dataset_event(item, ds, event, names, hooks) }
             #[cfg(not(feature = "std"))]
-            super::dispatch_dataset_event_raw(item, ds, event, hooks);
+            { super::dispatch_dataset_event_raw(item, ds, event, hooks) }
         }
     }
 
@@ -43,14 +43,18 @@ impl SequentialRunner {
         E: From<PondError> + core::fmt::Display + core::fmt::Debug,
     {
         if item.is_leaf() {
-            hooks.for_each_hook(&mut |h| h.before_node_run(item));
+            let control = super::fire_before_node(hooks, item)?;
+            if control == HookControl::Skip {
+                super::fire_after_node(hooks, item, true)?;
+                return Ok(());
+            }
             #[cfg(feature = "std")]
             let mut on_event = Self::make_dataset_callback(item, names, hooks);
             #[cfg(not(feature = "std"))]
             let mut on_event = Self::make_dataset_callback(item, hooks);
             match item.call(&mut on_event) {
                 Ok(()) => {
-                    hooks.for_each_hook(&mut |h| h.after_node_run(item));
+                    super::fire_after_node(hooks, item, false)?;
                     Ok(())
                 }
                 Err(e) => {
@@ -58,12 +62,12 @@ impl SequentialRunner {
                     let msg = e.to_string();
                     #[cfg(not(feature = "std"))]
                     let msg = "node error";
-                    hooks.for_each_hook(&mut |h| h.on_node_error(item, &msg));
+                    super::fire_node_error(hooks, item, &msg);
                     Err(e)
                 }
             }
         } else {
-            hooks.for_each_hook(&mut |h| h.before_pipeline_run(item));
+            super::fire_before_pipeline(hooks, item)?;
             let mut result = Ok(());
             item.for_each_child_step(&mut |child| {
                 if result.is_ok() {
@@ -75,14 +79,14 @@ impl SequentialRunner {
             });
             match &result {
                 Ok(()) => {
-                    hooks.for_each_hook(&mut |h| h.after_pipeline_run(item));
+                    super::fire_after_pipeline(hooks, item)?;
                 }
                 Err(_e) => {
                     #[cfg(feature = "std")]
                     let msg = _e.to_string();
                     #[cfg(not(feature = "std"))]
                     let msg = "pipeline error";
-                    hooks.for_each_hook(&mut |h| h.on_pipeline_error(item, &msg));
+                    super::fire_pipeline_error(hooks, item, &msg);
                 }
             }
             result

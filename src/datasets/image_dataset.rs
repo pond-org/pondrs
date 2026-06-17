@@ -48,6 +48,9 @@ impl Dataset for ImageDataset {
         Ok(())
     }
 
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
+
     fn html(&self) -> Option<String> {
         let bytes = std::fs::read(&self.path).ok()?;
         let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);

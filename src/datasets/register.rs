@@ -54,7 +54,7 @@ impl<T: Copy> RegisterDataset<T> {
     }
 }
 
-impl<T: Copy> Dataset for RegisterDataset<T> {
+impl<T: Copy + 'static> Dataset for RegisterDataset<T> {
     type LoadItem = T;
     type SaveItem = T;
     type Error = PondError;

@@ -39,6 +39,9 @@ pub enum PondError {
     #[error("Dataset not loaded: no data available")]
     DatasetNotLoaded,
 
+    #[error("Hook aborted: {0}")]
+    HookAbort(&'static str),
+
     #[error("Runner not found")]
     RunnerNotFound,
 
@@ -133,5 +136,11 @@ impl core::fmt::Display for CheckError {
 impl From<core::convert::Infallible> for PondError {
     fn from(x: core::convert::Infallible) -> Self {
         match x {}
+    }
+}
+
+impl From<crate::hooks::HookAbort> for PondError {
+    fn from(e: crate::hooks::HookAbort) -> Self {
+        PondError::HookAbort(e.0)
     }
 }

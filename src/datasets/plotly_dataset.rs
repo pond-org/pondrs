@@ -48,6 +48,9 @@ impl Dataset for PlotlyDataset {
         Ok(())
     }
 
+    fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
+    fn is_persistent(&self) -> bool { true }
+
     fn html(&self) -> Option<String> {
         std::fs::read_to_string(self.html_path()).ok()
     }
