@@ -6,10 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
-
 /// Plain text file dataset. Loads/saves the entire file as a `String`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TextDataset {
@@ -44,7 +40,7 @@ impl Dataset for TextDataset {
         let contents = std::fs::read_to_string(&self.path).ok()?;
         Some(format!(
             "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">{}</pre>",
-            html_escape(&contents)
+            super::html_escape(&contents)
         ))
     }
 }

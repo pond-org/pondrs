@@ -44,9 +44,10 @@ impl<T: Clone + Serialize + 'static> Dataset for Param<T> {
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> {
         let yaml = serde_yaml::to_string(&self.0).ok()?;
+        let escaped = super::html_escape(&yaml);
         Some(format!(
             "<pre style=\"font-family:monospace;font-size:13px;background:#f5f5f5;\
-             border:1px solid #ccc;padding:8px;overflow:auto\">{yaml}</pre>"
+             border:1px solid #ccc;padding:8px;overflow:auto\">{escaped}</pre>"
         ))
     }
 }

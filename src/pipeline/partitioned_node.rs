@@ -93,7 +93,7 @@ where
     T1: Send + Sync + 'static,
     T2: Send + Sync + 'static,
     F: StableFn<(T1,)> + Clone + Send + Sync + 'static,
-    F::Output: IntoNodeResult<(T2,), PondError> + CompatibleOutput<(T2,)>,
+    F::Output: IntoNodeResult<(T2,), PondError>,
     E: From<PondError>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<crate::hooks::HookControl, crate::hooks::HookAbort>) -> Result<(), E> {

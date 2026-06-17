@@ -65,7 +65,7 @@ where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
     F: StableFn<Input::Args, Output = R> + Send + Sync,
-    R: IntoNodeResult<Output::Output, E> + CompatibleOutput<Output::Output>,
+    R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
