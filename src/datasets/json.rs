@@ -7,10 +7,6 @@ use serde_json::Value;
 use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
-
 /// JSON file dataset. Loads/saves `serde_json::Value`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JsonDataset {
@@ -48,7 +44,7 @@ impl Dataset for JsonDataset {
         let pretty = serde_json::to_string_pretty(&value).ok()?;
         Some(format!(
             "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">{}</pre>",
-            html_escape(&pretty)
+            super::html_escape(&pretty)
         ))
     }
 }

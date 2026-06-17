@@ -7,10 +7,6 @@ use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 use crate::error::PondError;
 use super::{Dataset, FileDataset};
 
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
-}
-
 /// YAML file dataset. Loads the first document as `yaml_rust2::Yaml`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct YamlDataset {
@@ -50,7 +46,7 @@ impl Dataset for YamlDataset {
         let contents = std::fs::read_to_string(&self.path).ok()?;
         Some(format!(
             "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">{}</pre>",
-            html_escape(&contents)
+            super::html_escape(&contents)
         ))
     }
 }

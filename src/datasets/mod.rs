@@ -3,6 +3,11 @@
 #[cfg(feature = "std")]
 use std::prelude::v1::*;
 
+#[cfg(feature = "std")]
+pub(crate) fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
 mod cell;
 mod gpio;
 #[cfg(feature = "std")]
