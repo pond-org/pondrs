@@ -5,7 +5,7 @@ use std::prelude::v1::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, StepKind, Steps};
 use crate::error::PondError;
 use crate::hooks::{HookAbort, HookControl, Hooks};
 
@@ -42,54 +42,57 @@ impl SequentialRunner {
     where
         E: From<PondError> + core::fmt::Display + core::fmt::Debug,
     {
-        if item.is_leaf() {
-            let control = super::fire_before_node(hooks, item)?;
-            if control == HookControl::Skip {
-                super::fire_after_node(hooks, item, true)?;
-                return Ok(());
-            }
-            #[cfg(feature = "std")]
-            let mut on_event = Self::make_dataset_callback(item, names, hooks);
-            #[cfg(not(feature = "std"))]
-            let mut on_event = Self::make_dataset_callback(item, hooks);
-            match item.call(&mut on_event) {
-                Ok(()) => {
-                    super::fire_after_node(hooks, item, false)?;
-                    Ok(())
+        match item.kind() {
+            StepKind::Leaf(leaf) => {
+                let control = super::fire_before_node(hooks, item)?;
+                if control == HookControl::Skip {
+                    super::fire_after_node(hooks, item, true)?;
+                    return Ok(());
                 }
-                Err(e) => {
-                    #[cfg(feature = "std")]
-                    let msg = e.to_string();
-                    #[cfg(not(feature = "std"))]
-                    let msg = "node error";
-                    super::fire_node_error(hooks, item, &msg);
-                    Err(e)
-                }
-            }
-        } else {
-            super::fire_before_pipeline(hooks, item)?;
-            let mut result = Ok(());
-            item.for_each_child_step(&mut |child| {
-                if result.is_ok() {
-                    #[cfg(feature = "std")]
-                    { result = self.run_item(child, names, hooks); }
-                    #[cfg(not(feature = "std"))]
-                    { result = self.run_item(child, hooks); }
-                }
-            });
-            match &result {
-                Ok(()) => {
-                    super::fire_after_pipeline(hooks, item)?;
-                }
-                Err(_e) => {
-                    #[cfg(feature = "std")]
-                    let msg = _e.to_string();
-                    #[cfg(not(feature = "std"))]
-                    let msg = "pipeline error";
-                    super::fire_pipeline_error(hooks, item, &msg);
+                #[cfg(feature = "std")]
+                let mut on_event = Self::make_dataset_callback(item, names, hooks);
+                #[cfg(not(feature = "std"))]
+                let mut on_event = Self::make_dataset_callback(item, hooks);
+                match leaf.call(&mut on_event) {
+                    Ok(()) => {
+                        super::fire_after_node(hooks, item, false)?;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        #[cfg(feature = "std")]
+                        let msg = e.to_string();
+                        #[cfg(not(feature = "std"))]
+                        let msg = "node error";
+                        super::fire_node_error(hooks, item, &msg);
+                        Err(e)
+                    }
                 }
             }
-            result
+            StepKind::Group(group) => {
+                super::fire_before_pipeline(hooks, item)?;
+                let mut result = Ok(());
+                group.for_each_child_step(&mut |child| {
+                    if result.is_ok() {
+                        #[cfg(feature = "std")]
+                        { result = self.run_item(child, names, hooks); }
+                        #[cfg(not(feature = "std"))]
+                        { result = self.run_item(child, hooks); }
+                    }
+                });
+                match &result {
+                    Ok(()) => {
+                        super::fire_after_pipeline(hooks, item)?;
+                    }
+                    Err(_e) => {
+                        #[cfg(feature = "std")]
+                        let msg = _e.to_string();
+                        #[cfg(not(feature = "std"))]
+                        let msg = "pipeline error";
+                        super::fire_pipeline_error(hooks, item, &msg);
+                    }
+                }
+                result
+            }
         }
     }
 }

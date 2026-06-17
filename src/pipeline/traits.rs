@@ -73,18 +73,32 @@ pub trait StepInfo: Send + Sync {
     fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-/// Generic execution trait, parameterized by the pipeline error type `E`.
-pub trait RunnableStep<E>: StepInfo {
-    /// Execute this item, firing dataset events via the callback.
+/// Executable leaf step (node). Has a `call()` method for actual computation.
+pub trait LeafStep<E>: StepInfo {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E>;
-    /// Iterate over child steps (empty for leaf nodes).
+}
+
+/// Container step (pipeline). Has children that are themselves `RunnableStep`s.
+pub trait GroupStep<E>: StepInfo {
     fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
+}
+
+/// Discriminated union of leaf and group steps.
+pub enum StepKind<'a, E> {
+    Leaf(&'a dyn LeafStep<E>),
+    Group(&'a dyn GroupStep<E>),
+}
+
+/// Generic execution trait, parameterized by the pipeline error type `E`.
+///
+/// Implementors are either leaves ([`LeafStep`]) or groups ([`GroupStep`]).
+/// Use [`kind()`](RunnableStep::kind) to match and access the appropriate interface.
+pub trait RunnableStep<E>: StepInfo {
+    /// Returns whether this step is a leaf or a group, with access to the
+    /// appropriate trait object for calling `call()` or iterating children.
+    fn kind(&self) -> StepKind<'_, E>;
 
     /// Upcast to `&dyn StepInfo`.
-    ///
-    /// Rust 1.85 does not support automatic trait-object upcasting, so this
-    /// method is required to obtain a `&dyn StepInfo` from a
-    /// `&dyn RunnableStep<E>`. Implement as `fn as_pipeline_info(&self) -> &dyn StepInfo { self }`.
     fn as_pipeline_info(&self) -> &dyn StepInfo;
 
     /// Box this step for use in a [`StepVec`](crate::StepVec).
@@ -116,12 +130,7 @@ impl<T: StepInfo + ?Sized> StepInfo for &T {
 }
 
 impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
-        (**self).call(on_event)
-    }
-    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
-        (**self).for_each_child_step(f);
-    }
+    fn kind(&self) -> StepKind<'_, E> { (**self).kind() }
     fn as_pipeline_info(&self) -> &dyn StepInfo { (**self).as_pipeline_info() }
 }
 

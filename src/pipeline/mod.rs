@@ -36,4 +36,4 @@ pub use partitioned_node::PartitionedNode;
 pub use split_join::{Split, Join};
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
-pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, RunnableStep};
+pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep};

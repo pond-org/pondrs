@@ -9,7 +9,7 @@ use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 
 use super::dyn_steps::StepVec;
-use super::traits::{ptr_to_id, DatasetEvent, DatasetRef, StepInfo, RunnableStep};
+use super::traits::{ptr_to_id, DatasetRef, StepInfo, GroupStep, RunnableStep, StepKind};
 use super::steps::{PipelineInfo, Steps};
 
 /// Specifies which nodes to include in a filtered pipeline run.
@@ -181,28 +181,30 @@ fn collect_filtered<'a, E>(
 ) where
     E: From<PondError> + Send + Sync + 'static,
 {
-    if item.is_leaf() {
-        let id = ptr_to_id(item.as_pipeline_info());
-        if keep_ids.contains(&id) {
-            out.push(Box::new(item));
+    match item.kind() {
+        StepKind::Leaf(_) => {
+            let id = ptr_to_id(item.as_pipeline_info());
+            if keep_ids.contains(&id) {
+                out.push(Box::new(item));
+            }
         }
-    } else {
-        // Pipeline: recurse into children, collect survivors
-        let mut children: StepVec<'a, E> = Vec::new();
-        item.for_each_child_step(&mut |child| {
-            collect_filtered(child, keep_ids, &mut children);
-        });
-        if !children.is_empty() {
-            let mut inputs = Vec::new();
-            item.for_each_input(&mut |d| inputs.push(*d));
-            let mut outputs = Vec::new();
-            item.for_each_output(&mut |d| outputs.push(*d));
-            out.push(Box::new(DynPipeline {
-                name: item.name(),
-                inputs,
-                outputs,
-                steps: children,
-            }));
+        StepKind::Group(group) => {
+            let mut children: StepVec<'a, E> = Vec::new();
+            group.for_each_child_step(&mut |child| {
+                collect_filtered(child, keep_ids, &mut children);
+            });
+            if !children.is_empty() {
+                let mut inputs = Vec::new();
+                item.for_each_input(&mut |d| inputs.push(*d));
+                let mut outputs = Vec::new();
+                item.for_each_output(&mut |d| outputs.push(*d));
+                out.push(Box::new(DynPipeline {
+                    name: item.name(),
+                    inputs,
+                    outputs,
+                    steps: children,
+                }));
+            }
         }
     }
 }
@@ -256,21 +258,21 @@ where
     }
 }
 
+impl<E> GroupStep<E> for DynPipeline<'_, E>
+where
+    E: From<PondError> + Send + Sync + 'static,
+{
+    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
+        self.steps.for_each_item(f);
+    }
+}
+
 impl<E> RunnableStep<E> for DynPipeline<'_, E>
 where
     E: From<PondError> + Send + Sync + 'static,
 {
-    fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<crate::hooks::HookControl, crate::hooks::HookAbort>) -> Result<(), E> {
-        unreachable!("DynPipeline::call() should not be invoked directly")
-    }
-
-    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
-        self.steps.for_each_item(f);
-    }
-
-    fn as_pipeline_info(&self) -> &dyn StepInfo {
-        self
-    }
+    fn kind(&self) -> StepKind<'_, E> { StepKind::Group(self) }
+    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
 
 #[cfg(test)]
@@ -303,12 +305,15 @@ mod tests {
     }
 
     fn collect_leaf_names<E>(item: &dyn RunnableStep<E>, names: &mut Vec<&'static str>) {
-        if item.is_leaf() {
-            names.push(item.name());
-        } else {
-            item.for_each_child_step(&mut |child| {
-                collect_leaf_names(child, names);
-            });
+        match item.kind() {
+            StepKind::Leaf(_) => {
+                names.push(item.name());
+            }
+            StepKind::Group(group) => {
+                group.for_each_child_step(&mut |child| {
+                    collect_leaf_names(child, names);
+                });
+            }
         }
     }
 

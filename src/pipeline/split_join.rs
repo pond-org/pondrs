@@ -7,7 +7,7 @@ use crate::datasets::{Dataset, TemplatedCatalog};
 use crate::error::PondError;
 
 use crate::hooks::{HookAbort, HookControl};
-use super::traits::{DatasetEvent, DatasetRef, StepInfo, RunnableStep};
+use super::traits::{DatasetEvent, DatasetRef, StepInfo, LeafStep, RunnableStep, StepKind};
 
 /// A leaf node that distributes a `HashMap` across a `TemplatedCatalog`.
 ///
@@ -57,7 +57,7 @@ where
     }
 }
 
-impl<Input, S, D, T, E> RunnableStep<E> for Split<'_, Input, S, D, T>
+impl<Input, S, D, T, E> LeafStep<E> for Split<'_, Input, S, D, T>
 where
     Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
     D: Dataset<SaveItem = T> + Send + Sync,
@@ -67,13 +67,11 @@ where
     PondError: From<Input::Error> + From<D::Error>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
-        // Load the input HashMap.
         let input_ref = DatasetRef::from_ref(self.input);
         on_event(&input_ref, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
         let mut map = self.input.load().map_err(|e| E::from(PondError::from(e)))?;
         on_event(&input_ref, DatasetEvent::AfterLoad(&map)).map_err(|e| E::from(PondError::from(e)))?;
 
-        // Validate keys match.
         let mut expected: Vec<String> = self.catalog.keys().to_vec();
         let mut actual: Vec<String> = map.keys().cloned().collect();
         expected.sort();
@@ -82,7 +80,6 @@ where
             return Err(E::from(PondError::KeyMismatch { expected, actual }));
         }
 
-        // Distribute values to catalog entries.
         for (key, entry) in self.catalog.iter() {
             let value = map.remove(key).expect("key validated above");
             let ds = (self.field)(entry);
@@ -96,9 +93,18 @@ where
 
         Ok(())
     }
+}
 
-    fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
-
+impl<Input, S, D, T, E> RunnableStep<E> for Split<'_, Input, S, D, T>
+where
+    Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
+    D: Dataset<SaveItem = T> + Send + Sync,
+    S: Send + Sync,
+    T: Send + Sync + 'static,
+    E: From<PondError>,
+    PondError: From<Input::Error> + From<D::Error>,
+{
+    fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
     fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
 
@@ -150,7 +156,7 @@ where
     }
 }
 
-impl<S, D, Output, T, E> RunnableStep<E> for Join<'_, S, D, Output, T>
+impl<S, D, Output, T, E> LeafStep<E> for Join<'_, S, D, Output, T>
 where
     D: Dataset<LoadItem = T> + Send + Sync,
     Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
@@ -160,7 +166,6 @@ where
     PondError: From<D::Error> + From<Output::Error>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
-        // Load from each catalog entry.
         let mut map = HashMap::with_capacity(self.catalog.len());
         for (key, entry) in self.catalog.iter() {
             let ds = (self.field)(entry);
@@ -171,7 +176,6 @@ where
             map.insert(key.to_string(), value);
         }
 
-        // Save the collected HashMap.
         let output_ref = DatasetRef::from_ref(self.output);
         let control = on_event(&output_ref, DatasetEvent::BeforeSave(&map)).map_err(|e| E::from(PondError::from(e)))?;
         if control != HookControl::Skip {
@@ -181,9 +185,18 @@ where
 
         Ok(())
     }
+}
 
-    fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
-
+impl<S, D, Output, T, E> RunnableStep<E> for Join<'_, S, D, Output, T>
+where
+    D: Dataset<LoadItem = T> + Send + Sync,
+    Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
+    S: Send + Sync,
+    T: Send + Sync + 'static,
+    E: From<PondError>,
+    PondError: From<D::Error> + From<Output::Error>,
+{
+    fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
     fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
 
@@ -385,13 +398,13 @@ names: [alpha, beta]
 
         // Execute split, then process, then join.
         let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
-        RunnableStep::<PondError>::call(&split, noop).unwrap();
+        LeafStep::<PondError>::call(&split, noop).unwrap();
         for (_, item) in catalog.iter() {
             let v = item.raw.load().unwrap();
             item.processed.save(v * 2).unwrap();
         }
         let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
-        RunnableStep::<PondError>::call(&join, noop).unwrap();
+        LeafStep::<PondError>::call(&join, noop).unwrap();
 
         let output = result_ds.load().unwrap();
         assert_eq!(output.get("alpha"), Some(&10));

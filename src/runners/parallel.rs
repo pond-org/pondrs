@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, StepKind, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::{HookControl, Hooks};
@@ -37,8 +37,8 @@ impl Default for ParallelRunner {
 /// Collect callable items by walking the tree in the same order as graph building.
 fn collect_items<'a, E>(items: &mut Vec<&'a dyn RunnableStep<E>>, item: &'a dyn RunnableStep<E>) {
     items.push(item);
-    if !item.is_leaf() {
-        item.for_each_child_step(&mut |child| {
+    if let StepKind::Group(group) = item.kind() {
+        group.for_each_child_step(&mut |child| {
             collect_items(items, child);
         });
     }
@@ -172,7 +172,11 @@ impl Runner for ParallelRunner {
                             let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
                                 super::dispatch_dataset_event(item, ds, event, names, hooks)
                             };
-                            match item.call(&mut on_event) {
+                            let leaf = match item.kind() {
+                                StepKind::Leaf(l) => l,
+                                StepKind::Group(_) => unreachable!("graph only schedules leaves"),
+                            };
+                            match leaf.call(&mut on_event) {
                                 Ok(()) => {
                                     if let Err(e) = super::fire_after_node::<E>(hooks, item, false) {
                                         store_error(first_error, has_error, e);

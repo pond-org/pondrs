@@ -42,7 +42,7 @@ pub use hooks::{Hook, Hooks, HookAbort, HookControl, TypedHook, TypedHookAdapter
 pub use hooks::CacheHook;
 pub use pipeline::{
     DatasetEvent, DatasetRef, Ident, IntoNodeResult, Node, Pipeline, PipelineFn, StepInfo,
-    RunnableStep, PipelineInfo, Steps,
+    LeafStep, GroupStep, StepKind, RunnableStep, PipelineInfo, Steps,
 };
 #[cfg(feature = "std")]
 pub use pipeline::{StepVec, Split, Join, PartitionedNode};

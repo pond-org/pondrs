@@ -5,7 +5,7 @@ use crate::error::PondError;
 use super::into_result::IntoNodeResult;
 use super::stable::{StableFn, StableTuple};
 use crate::hooks::{HookAbort, HookControl};
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, RunnableStep};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, LeafStep, RunnableStep, StepKind};
 
 /// Marker trait asserting that a return type is structurally compatible
 /// with an output tuple `O`.
@@ -60,7 +60,7 @@ where
     }
 }
 
-impl<F, Input, Output, E, R> RunnableStep<E> for Node<F, Input, Output>
+impl<F, Input, Output, E, R> LeafStep<E> for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
@@ -75,8 +75,16 @@ where
         self.output.save_data(output, on_event).map_err(E::from)?;
         Ok(())
     }
+}
 
-    fn for_each_child_step<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {}
-
+impl<F, Input, Output, E, R> RunnableStep<E> for Node<F, Input, Output>
+where
+    Input: NodeInput + Send + Sync,
+    Output: NodeOutput + Send + Sync,
+    F: StableFn<Input::Args, Output = R> + Send + Sync,
+    R: IntoNodeResult<Output::Output, E>,
+    E: From<PondError>,
+{
+    fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
     fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
