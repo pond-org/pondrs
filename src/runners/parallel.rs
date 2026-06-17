@@ -44,6 +44,15 @@ fn collect_items<'a, E>(items: &mut Vec<&'a dyn RunnableStep<E>>, item: &'a dyn 
     }
 }
 
+/// Store an error and signal that the pipeline should stop.
+fn store_error<E>(first_error: &Mutex<Option<E>>, has_error: &AtomicBool, e: E) {
+    let mut guard = first_error.lock().unwrap();
+    if guard.is_none() {
+        *guard = Some(e);
+    }
+    has_error.store(true, Ordering::Release);
+}
+
 impl Runner for ParallelRunner {
     fn name(&self) -> &'static str {
         "parallel"
@@ -107,18 +116,8 @@ impl Runner for ParallelRunner {
                         && pipe_node.inputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_started[pi].store(true, Ordering::Release);
-                        let mut control = HookControl::Continue;
-                        let result = hooks.for_each_hook(&mut |h| {
-                            control = control.merge(h.before_pipeline_run(pipe_node.item)?);
-                            Ok(())
-                        });
-                        if let Err(e) = result {
-                            hooks.for_each_hook(&mut |h| { h.on_pipeline_error(pipe_node.item, e.0); Ok(()) }).ok();
-                            let mut guard = first_error.lock().unwrap();
-                            if guard.is_none() {
-                                *guard = Some(E::from(PondError::from(e)));
-                            }
-                            has_error.store(true, Ordering::Release);
+                        if let Err(e) = super::fire_before_pipeline::<E>(hooks, pipe_node.item) {
+                            store_error(&first_error, &has_error, e);
                         }
                     }
 
@@ -128,12 +127,8 @@ impl Runner for ParallelRunner {
                         && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_completed[pi].store(true, Ordering::Release);
-                        if let Err(e) = hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item)) {
-                            let mut guard = first_error.lock().unwrap();
-                            if guard.is_none() {
-                                *guard = Some(E::from(PondError::from(e)));
-                            }
-                            has_error.store(true, Ordering::Release);
+                        if let Err(e) = super::fire_after_pipeline::<E>(hooks, pipe_node.item) {
+                            store_error(&first_error, &has_error, e);
                         }
                     }
                 }
@@ -160,22 +155,17 @@ impl Runner for ParallelRunner {
 
                         let names = &graph.dataset_names;
                         s.spawn(move |_| {
-                            let mut control = HookControl::Continue;
-                            let result = hooks.for_each_hook(&mut |h| {
-                                control = control.merge(h.before_node_run(item)?);
-                                Ok(())
-                            });
-                            if let Err(e) = result {
-                                hooks.for_each_hook(&mut |h| { h.on_node_error(item, e.0); Ok(()) }).ok();
-                                let mut guard = first_error.lock().unwrap();
-                                if guard.is_none() {
-                                    *guard = Some(E::from(PondError::from(e)));
+                            let control = match super::fire_before_node::<E>(hooks, item) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    store_error(first_error, has_error, e);
+                                    return;
                                 }
-                                has_error.store(true, Ordering::Release);
-                                return;
-                            }
+                            };
                             if control == HookControl::Skip {
-                                hooks.for_each_hook(&mut |h| h.after_node_run(item, true)).ok();
+                                if let Err(e) = super::fire_after_node::<E>(hooks, item, true) {
+                                    store_error(first_error, has_error, e);
+                                }
                                 produced.lock().unwrap().extend(output_ids);
                                 return;
                             }
@@ -184,23 +174,21 @@ impl Runner for ParallelRunner {
                             };
                             match item.call(&mut on_event) {
                                 Ok(()) => {
-                                    hooks.for_each_hook(&mut |h| h.after_node_run(item, false)).ok();
+                                    if let Err(e) = super::fire_after_node::<E>(hooks, item, false) {
+                                        store_error(first_error, has_error, e);
+                                    }
                                     produced.lock().unwrap().extend(output_ids);
                                 }
                                 Err(e) => {
                                     let msg = e.to_string();
-                                    hooks.for_each_hook(&mut |h| { h.on_node_error(item, &msg); Ok(()) }).ok();
+                                    super::fire_node_error(hooks, item, &msg);
                                     let mut parent = graph_nodes[node_idx].parent_pipe;
                                     while let Some(pipe_idx) = parent {
                                         let pipe = &graph_nodes[pipe_idx];
-                                        hooks.for_each_hook(&mut |h| { h.on_pipeline_error(pipe.item, &msg); Ok(()) }).ok();
+                                        super::fire_pipeline_error(hooks, pipe.item, &msg);
                                         parent = pipe.parent_pipe;
                                     }
-                                    let mut guard = first_error.lock().unwrap();
-                                    if guard.is_none() {
-                                        *guard = Some(e);
-                                    }
-                                    has_error.store(true, Ordering::Release);
+                                    store_error(first_error, has_error, e);
                                 }
                             }
                         });
@@ -228,7 +216,12 @@ impl Runner for ParallelRunner {
                     && !pipe_completed[pi].load(Ordering::Acquire)
                     && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
                 {
-                    hooks.for_each_hook(&mut |h| h.after_pipeline_run(pipe_node.item)).ok();
+                    if let Err(e) = super::fire_after_pipeline::<E>(hooks, pipe_node.item) {
+                        let mut guard = first_error.lock().unwrap();
+                        if guard.is_none() {
+                            *guard = Some(e);
+                        }
+                    }
                 }
             }
         }

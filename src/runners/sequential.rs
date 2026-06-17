@@ -43,19 +43,9 @@ impl SequentialRunner {
         E: From<PondError> + core::fmt::Display + core::fmt::Debug,
     {
         if item.is_leaf() {
-            let mut control = HookControl::Continue;
-            let result = hooks.for_each_hook(&mut |h| {
-                control = control.merge(h.before_node_run(item)?);
-                Ok(())
-            });
-            if let Err(e) = result {
-                hooks.for_each_hook(&mut |h| { h.on_node_error(item, e.0); Ok(()) }).ok();
-                return Err(E::from(PondError::from(e)));
-            }
+            let control = super::fire_before_node(hooks, item)?;
             if control == HookControl::Skip {
-                if let Err(e) = hooks.for_each_hook(&mut |h| h.after_node_run(item, true)) {
-                    return Err(E::from(PondError::from(e)));
-                }
+                super::fire_after_node(hooks, item, true)?;
                 return Ok(());
             }
             #[cfg(feature = "std")]
@@ -64,9 +54,7 @@ impl SequentialRunner {
             let mut on_event = Self::make_dataset_callback(item, hooks);
             match item.call(&mut on_event) {
                 Ok(()) => {
-                    if let Err(e) = hooks.for_each_hook(&mut |h| h.after_node_run(item, false)) {
-                        return Err(E::from(PondError::from(e)));
-                    }
+                    super::fire_after_node(hooks, item, false)?;
                     Ok(())
                 }
                 Err(e) => {
@@ -74,20 +62,12 @@ impl SequentialRunner {
                     let msg = e.to_string();
                     #[cfg(not(feature = "std"))]
                     let msg = "node error";
-                    hooks.for_each_hook(&mut |h| { h.on_node_error(item, &msg); Ok(()) }).ok();
+                    super::fire_node_error(hooks, item, &msg);
                     Err(e)
                 }
             }
         } else {
-            let mut control = HookControl::Continue;
-            let result = hooks.for_each_hook(&mut |h| {
-                control = control.merge(h.before_pipeline_run(item)?);
-                Ok(())
-            });
-            if let Err(e) = result {
-                hooks.for_each_hook(&mut |h| { h.on_pipeline_error(item, e.0); Ok(()) }).ok();
-                return Err(E::from(PondError::from(e)));
-            }
+            super::fire_before_pipeline(hooks, item)?;
             let mut result = Ok(());
             item.for_each_child_step(&mut |child| {
                 if result.is_ok() {
@@ -99,16 +79,14 @@ impl SequentialRunner {
             });
             match &result {
                 Ok(()) => {
-                    if let Err(e) = hooks.for_each_hook(&mut |h| h.after_pipeline_run(item)) {
-                        return Err(E::from(PondError::from(e)));
-                    }
+                    super::fire_after_pipeline(hooks, item)?;
                 }
                 Err(_e) => {
                     #[cfg(feature = "std")]
                     let msg = _e.to_string();
                     #[cfg(not(feature = "std"))]
                     let msg = "pipeline error";
-                    hooks.for_each_hook(&mut |h| { h.on_pipeline_error(item, &msg); Ok(()) }).ok();
+                    super::fire_pipeline_error(hooks, item, &msg);
                 }
             }
             result
