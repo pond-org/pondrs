@@ -1,4 +1,4 @@
-//! Split and Join nodes for fan-out/fan-in patterns with TemplatedCatalog.
+//! EachField port adapter for fan-out/fan-in patterns with TemplatedCatalog.
 
 use std::prelude::v1::*;
 use std::collections::HashMap;
@@ -7,204 +7,98 @@ use crate::datasets::{Dataset, TemplatedCatalog};
 use crate::error::PondError;
 
 use crate::hooks::{HookAbort, HookControl};
-use super::traits::{DatasetEvent, DatasetRef, StepInfo, LeafStep, RunnableStep, StepKind};
+use super::traits::{DatasetEvent, DatasetRef, InputPort, OutputPort};
 
-/// A leaf node that distributes a `HashMap` across a `TemplatedCatalog`.
+/// A port that fans out to / fans in from all entries of a [`TemplatedCatalog`].
 ///
-/// Loads a `HashMap<String, T>` from the input dataset, then saves each value
-/// to the corresponding entry's dataset (selected by the `field` accessor).
-/// Errors at runtime if the HashMap keys don't match the catalog keys.
-pub struct Split<'a, Input, S, D, T>
-where
-    Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
-    D: Dataset<SaveItem = T> + Send + Sync,
-{
-    pub name: &'static str,
-    pub input: &'a Input,
+/// Used as an element in a [`Node`](super::Node)'s input or output tuple:
+/// - As **output** (fan-out): distributes a `HashMap<String, T>` to per-entry datasets.
+/// - As **input** (fan-in): loads from each per-entry dataset into a `HashMap<String, T>`.
+pub struct EachField<'a, S, D> {
     pub catalog: &'a TemplatedCatalog<S>,
     pub field: fn(&S) -> &D,
 }
 
-impl<Input, S, D, T> StepInfo for Split<'_, Input, S, D, T>
+impl<S, D> InputPort for EachField<'_, S, D>
 where
-    Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
-    D: Dataset<SaveItem = T> + Send + Sync,
     S: Send + Sync,
-    T: Send + Sync,
+    D: Dataset + Send + Sync,
+    D::LoadItem: Send + Sync + 'static,
+    PondError: From<D::Error>,
 {
-    fn name(&self) -> &'static str {
-        self.name
-    }
+    type Item = HashMap<String, D::LoadItem>;
 
-    fn is_leaf(&self) -> bool {
-        true
-    }
-
-    fn type_string(&self) -> &'static str {
-        core::any::type_name::<Self>()
-    }
-
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
-
-    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::from_ref(self.input));
-    }
-
-    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        for (_, entry) in self.catalog.iter() {
-            f(&DatasetRef::from_ref((self.field)(entry)));
-        }
-    }
-}
-
-impl<Input, S, D, T, E> LeafStep<E> for Split<'_, Input, S, D, T>
-where
-    Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
-    D: Dataset<SaveItem = T> + Send + Sync,
-    S: Send + Sync,
-    T: Send + Sync + 'static,
-    E: From<PondError>,
-    PondError: From<Input::Error> + From<D::Error>,
-{
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
-        let input_ref = DatasetRef::from_ref(self.input);
-        on_event(&input_ref, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
-        let mut map = self.input.load().map_err(|e| E::from(PondError::from(e)))?;
-        on_event(&input_ref, DatasetEvent::AfterLoad(&map)).map_err(|e| E::from(PondError::from(e)))?;
-
-        let mut expected: Vec<String> = self.catalog.keys().to_vec();
-        let mut actual: Vec<String> = map.keys().cloned().collect();
-        expected.sort();
-        actual.sort();
-        if expected != actual {
-            return Err(E::from(PondError::KeyMismatch { expected, actual }));
-        }
-
-        for (key, entry) in self.catalog.iter() {
-            let value = map.remove(key).expect("key validated above");
-            let ds = (self.field)(entry);
-            let ds_ref = DatasetRef::from_ref(ds);
-            let control = on_event(&ds_ref, DatasetEvent::BeforeSave(&value)).map_err(|e| E::from(PondError::from(e)))?;
-            if control != HookControl::Skip {
-                ds.save(value).map_err(|e| E::from(PondError::from(e)))?;
-                on_event(&ds_ref, DatasetEvent::AfterSave).map_err(|e| E::from(PondError::from(e)))?;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl<Input, S, D, T, E> RunnableStep<E> for Split<'_, Input, S, D, T>
-where
-    Input: Dataset<LoadItem = HashMap<String, T>> + Send + Sync,
-    D: Dataset<SaveItem = T> + Send + Sync,
-    S: Send + Sync,
-    T: Send + Sync + 'static,
-    E: From<PondError>,
-    PondError: From<Input::Error> + From<D::Error>,
-{
-    fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
-    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
-}
-
-/// A leaf node that collects values from a `TemplatedCatalog` into a `HashMap`.
-///
-/// Loads a value from each catalog entry's dataset (selected by the `field`
-/// accessor), collects them into a `HashMap<String, T>`, and saves to the
-/// output dataset.
-pub struct Join<'a, S, D, Output, T>
-where
-    D: Dataset<LoadItem = T> + Send + Sync,
-    Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
-{
-    pub name: &'static str,
-    pub catalog: &'a TemplatedCatalog<S>,
-    pub field: fn(&S) -> &D,
-    pub output: &'a Output,
-}
-
-impl<S, D, Output, T> StepInfo for Join<'_, S, D, Output, T>
-where
-    D: Dataset<LoadItem = T> + Send + Sync,
-    Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
-    S: Send + Sync,
-    T: Send + Sync,
-{
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn is_leaf(&self) -> bool {
-        true
-    }
-
-    fn type_string(&self) -> &'static str {
-        core::any::type_name::<Self>()
-    }
-
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
-
-    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        for (_, entry) in self.catalog.iter() {
-            f(&DatasetRef::from_ref((self.field)(entry)));
-        }
-    }
-
-    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-        f(&DatasetRef::from_ref(self.output));
-    }
-}
-
-impl<S, D, Output, T, E> LeafStep<E> for Join<'_, S, D, Output, T>
-where
-    D: Dataset<LoadItem = T> + Send + Sync,
-    Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
-    S: Send + Sync,
-    T: Send + Sync + 'static,
-    E: From<PondError>,
-    PondError: From<D::Error> + From<Output::Error>,
-{
-    fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
+    fn load_port(
+        &self,
+        on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>,
+    ) -> Result<Self::Item, PondError> {
         let mut map = HashMap::with_capacity(self.catalog.len());
         for (key, entry) in self.catalog.iter() {
             let ds = (self.field)(entry);
             let ds_ref = DatasetRef::from_ref(ds);
-            on_event(&ds_ref, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
-            let value = ds.load().map_err(|e| E::from(PondError::from(e)))?;
-            on_event(&ds_ref, DatasetEvent::AfterLoad(&value)).map_err(|e| E::from(PondError::from(e)))?;
+            on_event(&ds_ref, DatasetEvent::BeforeLoad)?;
+            let value = ds.load()?;
+            on_event(&ds_ref, DatasetEvent::AfterLoad(&value))?;
             map.insert(key.to_string(), value);
         }
+        Ok(map)
+    }
 
-        let output_ref = DatasetRef::from_ref(self.output);
-        let control = on_event(&output_ref, DatasetEvent::BeforeSave(&map)).map_err(|e| E::from(PondError::from(e)))?;
-        if control != HookControl::Skip {
-            self.output.save(map).map_err(|e| E::from(PondError::from(e)))?;
-            on_event(&output_ref, DatasetEvent::AfterSave).map_err(|e| E::from(PondError::from(e)))?;
+    fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        for (_, entry) in self.catalog.iter() {
+            f(&DatasetRef::from_ref((self.field)(entry)));
         }
-
-        Ok(())
     }
 }
 
-impl<S, D, Output, T, E> RunnableStep<E> for Join<'_, S, D, Output, T>
+impl<S, D> OutputPort for EachField<'_, S, D>
 where
-    D: Dataset<LoadItem = T> + Send + Sync,
-    Output: Dataset<SaveItem = HashMap<String, T>> + Send + Sync,
     S: Send + Sync,
-    T: Send + Sync + 'static,
-    E: From<PondError>,
-    PondError: From<D::Error> + From<Output::Error>,
+    D: Dataset + Send + Sync,
+    D::SaveItem: Send + Sync + 'static,
+    PondError: From<D::Error>,
 {
-    fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
-    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
+    type Item = HashMap<String, D::SaveItem>;
+
+    fn save_port(
+        &self,
+        mut value: Self::Item,
+        on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>,
+    ) -> Result<(), PondError> {
+        let mut expected: Vec<String> = self.catalog.keys().to_vec();
+        let mut actual: Vec<String> = value.keys().cloned().collect();
+        expected.sort();
+        actual.sort();
+        if expected != actual {
+            return Err(PondError::KeyMismatch { expected, actual });
+        }
+
+        for (key, entry) in self.catalog.iter() {
+            let item = value.remove(key).expect("key validated above");
+            let ds = (self.field)(entry);
+            let ds_ref = DatasetRef::from_ref(ds);
+            let control = on_event(&ds_ref, DatasetEvent::BeforeSave(&item))?;
+            if control != HookControl::Skip {
+                ds.save(item)?;
+                on_event(&ds_ref, DatasetEvent::AfterSave)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        for (_, entry) in self.catalog.iter() {
+            f(&DatasetRef::from_ref((self.field)(entry)));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::datasets::MemoryDataset;
-    use crate::pipeline::{PipelineInfo, StepVec, Node, ptr_to_id};
+    use crate::pipeline::{PipelineInfo, RunnableStep, StepInfo, StepVec, Node, ptr_to_id};
+    use crate::pipeline::traits::LeafStep;
 
     #[derive(Debug, serde::Deserialize, serde::Serialize)]
     struct ItemCatalog {
@@ -222,18 +116,18 @@ names: [alpha, beta]
         serde_yaml::from_str(yaml).unwrap()
     }
 
-    // ── Split tests ─────────────────────────────────────────────────────
+    // ── Fan-out (split) tests ───────────────────────────────────────────
 
     #[test]
     fn split_for_each_input_reports_single_input() {
         let source = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        let split = Split {
+        let split = Node {
             name: "split",
-            input: &source,
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.raw,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (&source,),
+            output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
         };
 
         let mut count = 0;
@@ -246,17 +140,16 @@ names: [alpha, beta]
         let source = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        let split = Split {
+        let split = Node {
             name: "split",
-            input: &source,
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.raw,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (&source,),
+            output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
         };
 
         let mut ids = Vec::new();
         split.for_each_output(&mut |d| ids.push(d.id));
         assert_eq!(ids.len(), 2);
-        // IDs should match the actual dataset addresses in the catalog.
         let expected: Vec<usize> = catalog.iter()
             .map(|(_, item)| ptr_to_id(&item.raw))
             .collect();
@@ -273,11 +166,11 @@ names: [alpha, beta]
 
         let catalog = make_catalog();
 
-        let split = Split {
+        let split = Node {
             name: "split",
-            input: &source,
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.raw,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (&source,),
+            output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
         };
 
         let result: Result<(), PondError> = split.call(&mut |_, _| Ok(HookControl::Continue));
@@ -297,29 +190,29 @@ names: [alpha, beta]
 
         let catalog = make_catalog();
 
-        let split = Split {
+        let split = Node {
             name: "split",
-            input: &source,
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.raw,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (&source,),
+            output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
         };
 
         let result: Result<(), PondError> = split.call(&mut |_, _| Ok(HookControl::Continue));
         assert!(matches!(result, Err(PondError::KeyMismatch { .. })));
     }
 
-    // ── Join tests ──────────────────────────────────────────────────────
+    // ── Fan-in (join) tests ─────────────────────────────────────────────
 
     #[test]
     fn join_for_each_input_reports_catalog_entries() {
         let result_ds = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        let join = Join {
+        let join = Node {
             name: "join",
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.processed,
-            output: &result_ds,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.processed },),
+            output: (&result_ds,),
         };
 
         let mut count = 0;
@@ -332,11 +225,11 @@ names: [alpha, beta]
         let result_ds = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        let join = Join {
+        let join = Node {
             name: "join",
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.processed,
-            output: &result_ds,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.processed },),
+            output: (&result_ds,),
         };
 
         let mut count = 0;
@@ -349,15 +242,14 @@ names: [alpha, beta]
         let result_ds = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        // Pre-populate the catalog datasets.
         catalog.get("alpha").unwrap().processed.save(100).unwrap();
         catalog.get("beta").unwrap().processed.save(200).unwrap();
 
-        let join = Join {
+        let join = Node {
             name: "join",
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.processed,
-            output: &result_ds,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.processed },),
+            output: (&result_ds,),
         };
 
         let result: Result<(), PondError> = join.call(&mut |_, _| Ok(HookControl::Continue));
@@ -368,7 +260,7 @@ names: [alpha, beta]
         assert_eq!(output.get("beta"), Some(&200));
     }
 
-    // ── Integration: Split → process → Join ─────────────────────────────
+    // ── Integration: split → process → join ─────────────────────────────
 
     #[test]
     fn split_process_join_roundtrip() {
@@ -376,27 +268,25 @@ names: [alpha, beta]
         let result_ds = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        // Set up input.
         let mut input_map = HashMap::new();
         input_map.insert("alpha".to_string(), 5);
         input_map.insert("beta".to_string(), 10);
         source.save(input_map).unwrap();
 
-        let split = Split {
+        let split = Node {
             name: "split",
-            input: &source,
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.raw,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (&source,),
+            output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
         };
 
-        let join = Join {
+        let join = Node {
             name: "join",
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.processed,
-            output: &result_ds,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.processed },),
+            output: (&result_ds,),
         };
 
-        // Execute split, then process, then join.
         let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
         LeafStep::<PondError>::call(&split, noop).unwrap();
         for (_, item) in catalog.iter() {
@@ -422,19 +312,19 @@ names: [alpha, beta]
         let beta = catalog.get("beta").unwrap();
 
         let pipeline = (
-            Split {
+            Node {
                 name: "split",
-                input: &source,
-                catalog: &catalog,
-                field: |s: &ItemCatalog| &s.raw,
+                func: |m: HashMap<String, i32>| (m,),
+                input: (&source,),
+                output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
             },
             Node { name: "proc_a", func: |x: i32| (x,), input: (&alpha.raw,), output: (&alpha.processed,) },
             Node { name: "proc_b", func: |x: i32| (x,), input: (&beta.raw,), output: (&beta.processed,) },
-            Join {
+            Node {
                 name: "join",
-                catalog: &catalog,
-                field: |s: &ItemCatalog| &s.processed,
-                output: &result_ds,
+                func: |m: HashMap<String, i32>| (m,),
+                input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.processed },),
+                output: (&result_ds,),
             },
         );
 
@@ -448,11 +338,11 @@ names: [alpha, beta]
         let catalog = make_catalog();
 
         let mut pipeline: StepVec<PondError> = vec![
-            Split {
+            Node {
                 name: "split",
-                input: &source,
-                catalog: &catalog,
-                field: |s: &ItemCatalog| &s.raw,
+                func: |m: HashMap<String, i32>| (m,),
+                input: (&source,),
+                output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
             }.boxed(),
         ];
         for (_, item) in catalog.iter() {
@@ -463,11 +353,11 @@ names: [alpha, beta]
                 output: (&item.processed,),
             }.boxed());
         }
-        pipeline.push(Join {
+        pipeline.push(Node {
             name: "join",
-            catalog: &catalog,
-            field: |s: &ItemCatalog| &s.processed,
-            output: &result_ds,
+            func: |m: HashMap<String, i32>| (m,),
+            input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.processed },),
+            output: (&result_ds,),
         }.boxed());
 
         assert!(pipeline.check().is_ok());
@@ -479,19 +369,19 @@ names: [alpha, beta]
         let result_ds = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        // Join before Split — the join inputs haven't been produced yet.
+        // Join before split — the join inputs haven't been produced yet.
         let pipeline = (
-            Join {
+            Node {
                 name: "join",
-                catalog: &catalog,
-                field: |s: &ItemCatalog| &s.raw,
-                output: &result_ds,
+                func: |m: HashMap<String, i32>| (m,),
+                input: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
+                output: (&result_ds,),
             },
-            Split {
+            Node {
                 name: "split",
-                input: &source,
-                catalog: &catalog,
-                field: |s: &ItemCatalog| &s.raw,
+                func: |m: HashMap<String, i32>| (m,),
+                input: (&source,),
+                output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
             },
         );
 

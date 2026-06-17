@@ -1,6 +1,6 @@
 //! Split/join pipeline example.
 //!
-//! Demonstrates TemplatedCatalog, Split, Join, and StepVec for fan-out/fan-in
+//! Demonstrates TemplatedCatalog, EachField, and StepVec for fan-out/fan-in
 //! patterns with per-item parallel processing.
 //!
 //! Usage:

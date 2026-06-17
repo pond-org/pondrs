@@ -33,7 +33,7 @@ pub use filter::{NodeFilter, filter_steps};
 #[cfg(feature = "std")]
 pub use partitioned_node::PartitionedNode;
 #[cfg(feature = "std")]
-pub use split_join::{Split, Join};
+pub use split_join::EachField;
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
-pub use traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep};
+pub use traits::{DatasetEvent, DatasetRef, InputPort, OutputPort, NodeInput, NodeOutput, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep};
