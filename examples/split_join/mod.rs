@@ -1,6 +1,6 @@
 //! Shared pipeline definition for the split/join example.
 //!
-//! Demonstrates: TemplatedCatalog, Split, Join, StepVec,
+//! Demonstrates: TemplatedCatalog, EachField, StepVec,
 //! fan-out/fan-in patterns with per-item parallel processing.
 
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use pondrs::datasets::{MemoryDataset, Param, PolarsCsvDataset, JsonDataset};
-use pondrs::{Join, Node, RunnableStep, Split, StepVec, TemplatedCatalog};
+use pondrs::{EachField, Node, RunnableStep, StepVec, TemplatedCatalog};
 
 // ANCHOR: types
 // ---------------------------------------------------------------------------
@@ -140,13 +140,13 @@ pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> StepVec<'a> {
         .boxed(),
     ];
 
-    // Step 2: Split distributes per-store DataFrames to individual CSV files.
+    // Step 2: fan-out distributes per-store DataFrames to individual CSV files.
     steps.push(
-        Split {
+        Node {
             name: "split_stores",
-            input: &cat.grouped,
-            catalog: &cat.stores,
-            field: |s: &StoreCatalog| &s.inventory,
+            func: |m: HashMap<String, DataFrame>| (m,),
+            input: (&cat.grouped,),
+            output: (EachField { catalog: &cat.stores, field: |s: &StoreCatalog| &s.inventory },),
         }
         .boxed(),
     );
@@ -164,13 +164,13 @@ pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> StepVec<'a> {
         );
     }
 
-    // Step 4: Join collects per-store totals back into a HashMap.
+    // Step 4: fan-in collects per-store totals back into a HashMap.
     steps.push(
-        Join {
+        Node {
             name: "join_values",
-            catalog: &cat.stores,
-            field: |s: &StoreCatalog| &s.total_value,
-            output: &cat.store_values,
+            func: |m: HashMap<String, f64>| (m,),
+            input: (EachField { catalog: &cat.stores, field: |s: &StoreCatalog| &s.total_value },),
+            output: (&cat.store_values,),
         }
         .boxed(),
     );

@@ -134,6 +134,64 @@ impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
     fn as_pipeline_info(&self) -> &dyn StepInfo { (**self).as_pipeline_info() }
 }
 
+/// A single input slot in a node's input tuple — a generalized [`Dataset`] for loading.
+///
+/// The blanket impl for `&T where T: Dataset` covers plain dataset references.
+/// Custom impls (e.g. [`EachField`](super::EachField)) support fan-in patterns
+/// (loading from many datasets into one value).
+pub trait DatasetInput {
+    type Item: 'static;
+    fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError>;
+    fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+}
+
+/// A single output slot in a node's output tuple — a generalized [`Dataset`] for saving.
+///
+/// The blanket impl for `&T where T: Dataset` covers plain dataset references.
+/// Custom impls (e.g. [`EachField`](super::EachField)) support fan-out patterns
+/// (distributing one value across many datasets).
+pub trait DatasetOutput {
+    type Item: 'static;
+    fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;
+    fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+}
+
+impl<T: Dataset + Send + Sync> DatasetInput for &T
+where
+    PondError: From<T::Error>,
+{
+    type Item = T::LoadItem;
+    fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError> {
+        let ds = DatasetRef::from_ref(*self);
+        on_event(&ds, DatasetEvent::BeforeLoad)?;
+        let value = (*self).load()?;
+        on_event(&ds, DatasetEvent::AfterLoad(&value))?;
+        Ok(value)
+    }
+    fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        f(&DatasetRef::from_ref(*self));
+    }
+}
+
+impl<T: Dataset + Send + Sync> DatasetOutput for &T
+where
+    PondError: From<T::Error>,
+{
+    type Item = T::SaveItem;
+    fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
+        let ds = DatasetRef::from_ref(*self);
+        let control = on_event(&ds, DatasetEvent::BeforeSave(&value))?;
+        if control != HookControl::Skip {
+            (*self).save(value)?;
+            on_event(&ds, DatasetEvent::AfterSave)?;
+        }
+        Ok(())
+    }
+    fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
+        f(&DatasetRef::from_ref(*self));
+    }
+}
+
 /// Trait for loading data from input datasets.
 pub trait NodeInput: StableTuple {
     type Args: StableTuple;
@@ -150,24 +208,18 @@ impl NodeInput for () {
 }
 
 macro_rules! impl_node_input {
-    ($($T:ident $idx:tt),+) => {
-        impl<$($T: Dataset + Send + Sync),+> NodeInput for ($(&$T,)+)
-        where
-            $(PondError: From<$T::Error>,)+
-        {
-            type Args = ($($T::LoadItem,)+);
+    ($($P:ident $idx:tt),+) => {
+        impl<$($P: DatasetInput + Send + Sync),+> NodeInput for ($($P,)+) {
+            type Args = ($($P::Item,)+);
             #[allow(non_snake_case)]
             fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, PondError> {
                 $(
-                    let ds = DatasetRef::from_ref(self.$idx);
-                    on_event(&ds, DatasetEvent::BeforeLoad)?;
-                    let $T = self.$idx.load()?;
-                    on_event(&ds, DatasetEvent::AfterLoad(&$T))?;
+                    let $P = self.$idx.load_input(on_event)?;
                 )+
-                Ok(($($T,)+))
+                Ok(($($P,)+))
             }
             fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-                $(f(&DatasetRef::from_ref(self.$idx));)+
+                $(self.$idx.for_each_ref(f);)+
             }
         }
     };
@@ -200,25 +252,17 @@ impl NodeOutput for () {
 }
 
 macro_rules! impl_node_output {
-    ($($T:ident $idx:tt),+) => {
-        impl<$($T: Dataset + Send + Sync),+> NodeOutput for ($(&$T,)+)
-        where
-            $(PondError: From<$T::Error>,)+
-        {
-            type Output = ($($T::SaveItem,)+);
+    ($($P:ident $idx:tt),+) => {
+        impl<$($P: DatasetOutput + Send + Sync),+> NodeOutput for ($($P,)+) {
+            type Output = ($($P::Item,)+);
             fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
                 $({
-                    let ds = DatasetRef::from_ref(self.$idx);
-                    let control = on_event(&ds, DatasetEvent::BeforeSave(&output.$idx))?;
-                    if control != HookControl::Skip {
-                        self.$idx.save(output.$idx)?;
-                        on_event(&ds, DatasetEvent::AfterSave)?;
-                    }
+                    self.$idx.save_output(output.$idx, on_event)?;
                 })+
                 Ok(())
             }
             fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
-                $(f(&DatasetRef::from_ref(self.$idx));)+
+                $(self.$idx.for_each_ref(f);)+
             }
         }
     };

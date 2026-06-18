@@ -1,8 +1,8 @@
-# Split & Join
+# Fan-out & Fan-in
 
 The [Dynamic Pipelines](./dynamic.md) chapter showed how `StepVec` lets you include or exclude nodes based on **params** — a boolean flag controls whether a report node runs. The pipeline shape changes, but the datasets are still fixed at compile time.
 
-Split & Join solve a different problem: the **catalog** determines the pipeline shape. When you have multiple items of the same kind — stores, regions, sensors — you want to run the same processing for each one, with each item getting its own datasets. The number of items comes from configuration, not code.
+Fan-out & fan-in solve a different problem: the **catalog** determines the pipeline shape. When you have multiple items of the same kind — stores, regions, sensors — you want to run the same processing for each one, with each item getting its own datasets. The number of items comes from configuration, not code.
 
 ## The pattern
 
@@ -11,18 +11,18 @@ A typical fan-out/fan-in pipeline looks like this:
 ```text
  [combined data]
        │
-   ┌───┴───┐        Split
+   ┌───┴───┐        Fan-out (EachField output)
    ▼       ▼
 [item A] [item B]    Per-item processing
    │       │
-   └───┬───┘        Join
+   └───┬───┘        Fan-in (EachField input)
        ▼
   [collected results]
 ```
 
-1. **Split** takes a `HashMap<String, T>` from a single dataset and distributes each value to a per-item dataset
+1. **Fan-out** takes a `HashMap<String, T>` from a single dataset and distributes each value to a per-item dataset
 2. **Per-item nodes** process each item independently (and can run in parallel)
-3. **Join** collects a value from each per-item dataset back into a `HashMap<String, T>`
+3. **Fan-in** collects a value from each per-item dataset back into a `HashMap<String, T>`
 
 ## `TemplatedCatalog`
 
@@ -59,41 +59,45 @@ This produces three `StoreCatalog` instances — `north`, `south`, `east` — ea
 
 `TemplatedCatalog` serializes as a map, so the [catalog indexer](../app/viz.md) produces meaningful names like `stores.north.inventory`.
 
-## `Split`
+## `EachField`
 
-`Split` is a leaf node (like `Ident`) that loads a `HashMap<String, T>` from an input dataset and saves each value to the corresponding entry in a `TemplatedCatalog`. A `field` accessor selects which dataset within each entry to write to:
+`EachField` is a `DatasetInput`/`DatasetOutput` adapter that bridges a `TemplatedCatalog` and a `Node`'s input/output tuple. It appears as a single slot in the tuple but represents many datasets — one per catalog entry — selected by a `field` accessor.
+
+### Fan-out (EachField as output)
+
+When used as a node **output**, `EachField` distributes a `HashMap<String, T>` across the catalog entries:
 
 ```rust,ignore
-Split {
+Node {
     name: "split_stores",
-    input: &cat.grouped,                     // MemoryDataset<HashMap<String, DataFrame>>
-    catalog: &cat.stores,                     // TemplatedCatalog<StoreCatalog>
-    field: |s: &StoreCatalog| &s.inventory,   // which dataset to write to
+    func: |m: HashMap<String, DataFrame>| (m,),
+    input: (&cat.grouped,),
+    output: (EachField { catalog: &cat.stores, field: |s: &StoreCatalog| &s.inventory },),
 }
 ```
 
-At runtime, Split validates that the HashMap keys exactly match the catalog entry names. A mismatch produces a `PondError::KeyMismatch` error.
+At runtime, the `DatasetOutput` impl validates that the HashMap keys exactly match the catalog entry names. A mismatch produces a `PondError::KeyMismatch` error.
 
-For `check()`, Split reports the single input dataset and all per-entry field datasets as outputs — so downstream nodes that read from those datasets are correctly validated.
+For `check()`, the node reports the single input dataset and all per-entry field datasets as outputs — so downstream nodes that read from those datasets are correctly validated.
 
-## `Join`
+### Fan-in (EachField as input)
 
-`Join` is the inverse: it loads a value from each entry's dataset and collects them into a `HashMap<String, T>`:
+When used as a node **input**, `EachField` loads a value from each entry's dataset and collects them into a `HashMap<String, T>`:
 
 ```rust,ignore
-Join {
+Node {
     name: "join_values",
-    catalog: &cat.stores,                       // TemplatedCatalog<StoreCatalog>
-    field: |s: &StoreCatalog| &s.total_value,   // which dataset to read from
-    output: &cat.store_values,                   // MemoryDataset<HashMap<String, f64>>
+    func: |m: HashMap<String, f64>| (m,),
+    input: (EachField { catalog: &cat.stores, field: |s: &StoreCatalog| &s.total_value },),
+    output: (&cat.store_values,),
 }
 ```
 
-For `check()`, Join reports all per-entry field datasets as inputs and the single output dataset as output.
+For `check()`, the node reports all per-entry field datasets as inputs and the single output dataset as output.
 
 ## Building per-item nodes
 
-Between Split and Join, you need processing nodes for each item. Since the number of items is determined by YAML config, you build these dynamically with `StepVec`:
+Between the fan-out and fan-in nodes, you need processing nodes for each item. Since the number of items is determined by YAML config, you build these dynamically with `StepVec`:
 
 ```rust,ignore
 {{#include ../../../examples/split_join/mod.rs:pipeline}}
@@ -103,9 +107,9 @@ Each call to `cat.stores.iter()` yields `(&str, &StoreCatalog)` pairs in name-in
 
 ## Comparison with `PartitionedDataset`
 
-`PartitionedDataset` handles a similar concept — a directory of files keyed by name — but at the dataset level. A single node reads or writes all partitions at once as a `HashMap`. Split & Join operate at the pipeline level: they let you run separate nodes for each item, with each item having its own arbitrarily complex set of datasets.
+`PartitionedDataset` handles a similar concept — a directory of files keyed by name — but at the dataset level. A single node reads or writes all partitions at once as a `HashMap`. Fan-out & fan-in with `EachField` operate at the pipeline level: they let you run separate nodes for each item, with each item having its own arbitrarily complex set of datasets.
 
-Use `PartitionedDataset` when a single node can handle all items. Use Split & Join when each item needs its own processing sub-pipeline.
+Use `PartitionedDataset` when a single node can handle all items. Use `EachField` when each item needs its own processing sub-pipeline.
 
 ## Nested templates
 
