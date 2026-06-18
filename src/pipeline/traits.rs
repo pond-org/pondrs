@@ -134,34 +134,34 @@ impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
     fn as_pipeline_info(&self) -> &dyn StepInfo { (**self).as_pipeline_info() }
 }
 
-/// A single input port in a node's input tuple.
+/// A single input slot in a node's input tuple — a generalized [`Dataset`] for loading.
 ///
-/// Each element of a `NodeInput` tuple implements this trait. The blanket impl
-/// for `&T where T: Dataset` covers plain dataset references; custom impls
-/// (e.g. `EachField`) support fan-in patterns.
-pub trait InputPort {
+/// The blanket impl for `&T where T: Dataset` covers plain dataset references.
+/// Custom impls (e.g. [`EachField`](super::EachField)) support fan-in patterns
+/// (loading from many datasets into one value).
+pub trait DatasetInput {
     type Item: 'static;
-    fn load_port(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError>;
+    fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError>;
     fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-/// A single output port in a node's output tuple.
+/// A single output slot in a node's output tuple — a generalized [`Dataset`] for saving.
 ///
-/// Each element of a `NodeOutput` tuple implements this trait. The blanket impl
-/// for `&T where T: Dataset` covers plain dataset references; custom impls
-/// (e.g. `EachField`) support fan-out patterns.
-pub trait OutputPort {
+/// The blanket impl for `&T where T: Dataset` covers plain dataset references.
+/// Custom impls (e.g. [`EachField`](super::EachField)) support fan-out patterns
+/// (distributing one value across many datasets).
+pub trait DatasetOutput {
     type Item: 'static;
-    fn save_port(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;
+    fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;
     fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-impl<T: Dataset + Send + Sync> InputPort for &T
+impl<T: Dataset + Send + Sync> DatasetInput for &T
 where
     PondError: From<T::Error>,
 {
     type Item = T::LoadItem;
-    fn load_port(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError> {
+    fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError> {
         let ds = DatasetRef::from_ref(*self);
         on_event(&ds, DatasetEvent::BeforeLoad)?;
         let value = (*self).load()?;
@@ -173,12 +173,12 @@ where
     }
 }
 
-impl<T: Dataset + Send + Sync> OutputPort for &T
+impl<T: Dataset + Send + Sync> DatasetOutput for &T
 where
     PondError: From<T::Error>,
 {
     type Item = T::SaveItem;
-    fn save_port(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
+    fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
         let ds = DatasetRef::from_ref(*self);
         let control = on_event(&ds, DatasetEvent::BeforeSave(&value))?;
         if control != HookControl::Skip {
@@ -209,12 +209,12 @@ impl NodeInput for () {
 
 macro_rules! impl_node_input {
     ($($P:ident $idx:tt),+) => {
-        impl<$($P: InputPort + Send + Sync),+> NodeInput for ($($P,)+) {
+        impl<$($P: DatasetInput + Send + Sync),+> NodeInput for ($($P,)+) {
             type Args = ($($P::Item,)+);
             #[allow(non_snake_case)]
             fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, PondError> {
                 $(
-                    let $P = self.$idx.load_port(on_event)?;
+                    let $P = self.$idx.load_input(on_event)?;
                 )+
                 Ok(($($P,)+))
             }
@@ -253,11 +253,11 @@ impl NodeOutput for () {
 
 macro_rules! impl_node_output {
     ($($P:ident $idx:tt),+) => {
-        impl<$($P: OutputPort + Send + Sync),+> NodeOutput for ($($P,)+) {
+        impl<$($P: DatasetOutput + Send + Sync),+> NodeOutput for ($($P,)+) {
             type Output = ($($P::Item,)+);
             fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
                 $({
-                    self.$idx.save_port(output.$idx, on_event)?;
+                    self.$idx.save_output(output.$idx, on_event)?;
                 })+
                 Ok(())
             }

@@ -7,7 +7,7 @@ use crate::datasets::{Dataset, TemplatedCatalog};
 use crate::error::PondError;
 
 use crate::hooks::{HookAbort, HookControl};
-use super::traits::{DatasetEvent, DatasetRef, InputPort, OutputPort};
+use super::traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput};
 
 /// A port that fans out to / fans in from all entries of a [`TemplatedCatalog`].
 ///
@@ -19,7 +19,7 @@ pub struct EachField<'a, S, D> {
     pub field: fn(&S) -> &D,
 }
 
-impl<S, D> InputPort for EachField<'_, S, D>
+impl<S, D> DatasetInput for EachField<'_, S, D>
 where
     S: Send + Sync,
     D: Dataset + Send + Sync,
@@ -28,7 +28,7 @@ where
 {
     type Item = HashMap<String, D::LoadItem>;
 
-    fn load_port(
+    fn load_input(
         &self,
         on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>,
     ) -> Result<Self::Item, PondError> {
@@ -51,7 +51,7 @@ where
     }
 }
 
-impl<S, D> OutputPort for EachField<'_, S, D>
+impl<S, D> DatasetOutput for EachField<'_, S, D>
 where
     S: Send + Sync,
     D: Dataset + Send + Sync,
@@ -60,7 +60,7 @@ where
 {
     type Item = HashMap<String, D::SaveItem>;
 
-    fn save_port(
+    fn save_output(
         &self,
         mut value: Self::Item,
         on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>,

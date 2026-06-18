@@ -14,7 +14,7 @@ mod partitioned_node;
 mod pipeline;
 mod pipeline_fn;
 #[cfg(feature = "std")]
-mod split_join;
+mod each_field;
 pub mod stable;
 mod steps;
 mod traits;
@@ -33,7 +33,7 @@ pub use filter::{NodeFilter, filter_steps};
 #[cfg(feature = "std")]
 pub use partitioned_node::PartitionedNode;
 #[cfg(feature = "std")]
-pub use split_join::EachField;
+pub use each_field::EachField;
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
-pub use traits::{DatasetEvent, DatasetRef, InputPort, OutputPort, NodeInput, NodeOutput, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep};
+pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeOutput, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep};
