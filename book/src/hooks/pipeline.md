@@ -5,10 +5,12 @@ Pipeline hooks fire at the boundaries of `Pipeline` structs (not flat tuples). T
 ## Methods
 
 ```rust,ignore
-fn before_pipeline_run(&self, p: &dyn StepInfo) {}
-fn after_pipeline_run(&self, p: &dyn StepInfo) {}
+fn before_pipeline_run(&self, p: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+fn after_pipeline_run(&self, p: &dyn StepInfo) -> Result<(), HookAbort> { Ok(()) }
 fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {}
 ```
+
+> **Note:** `before_pipeline_run` returns `HookControl` for API consistency, but `Skip` is not currently acted on by runners. Returning `Err(HookAbort(...))` will abort the pipeline.
 
 ## Arguments
 
@@ -22,9 +24,9 @@ The `SequentialRunner` fires pipeline hooks as it enters and exits `Pipeline` st
 ```text
 before_pipeline_run("processing")
   before_node_run("clean")
-  after_node_run("clean")
+  after_node_run("clean", skipped=false)
   before_node_run("transform")
-  after_node_run("transform")
+  after_node_run("transform", skipped=false)
 after_pipeline_run("processing")
 ```
 
@@ -52,14 +54,16 @@ struct PipelineTimer {
 }
 
 impl Hook for PipelineTimer {
-    fn before_pipeline_run(&self, p: &dyn StepInfo) {
+    fn before_pipeline_run(&self, p: &dyn StepInfo) -> Result<HookControl, HookAbort> {
         self.timings.lock().unwrap().insert(p.name(), Instant::now());
+        Ok(HookControl::Continue)
     }
 
-    fn after_pipeline_run(&self, p: &dyn StepInfo) {
+    fn after_pipeline_run(&self, p: &dyn StepInfo) -> Result<(), HookAbort> {
         if let Some(start) = self.timings.lock().unwrap().remove(p.name()) {
             println!("[{}] completed in {:.1}ms", p.name(), start.elapsed().as_secs_f64() * 1000.0);
         }
+        Ok(())
     }
 }
 ```

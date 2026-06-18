@@ -1,6 +1,6 @@
 # Built-in Hooks
 
-pondrs provides two built-in hook implementations.
+pondrs provides three built-in hook implementations.
 
 ## `LoggingHook`
 
@@ -36,7 +36,43 @@ At `debug` level, dataset load/save events are also logged:
 [DEBUG]   saved summary (0.1ms)
 ```
 
+When a node is skipped (e.g. by `CacheHook`), `LoggingHook` logs it:
+
+```text
+[INFO] [node] clean - skipped (cached)
+```
+
 `LoggingHook` uses a `TimingTracker` internally to measure durations between before/after pairs.
+
+## `CacheHook`
+
+*Requires the `std` feature.*
+
+Automatically skips nodes whose inputs have not changed since the last run, using content hashing to detect changes.
+
+```rust,ignore
+use pondrs::CacheHook;
+
+App::new(catalog, params)
+    .with_hooks((CacheHook::new(".pondcache"),))
+    .execute(pipeline)?;
+```
+
+### How it works
+
+`CacheHook` implements `before_node_run` and `after_node_run`:
+
+1. **`before_node_run`** computes a cache key from the node name, function type, and content hashes of all input datasets. If the key matches the stored key from the last run, it returns `HookControl::Skip`.
+2. **`after_node_run`** writes the cache key to disk (if the node ran) and records output dataset keys for downstream nodes.
+
+### Requirements
+
+- All output datasets must be **persistent** (`is_persistent() == true`) for caching to apply. Nodes with `MemoryDataset` outputs always re-run because their outputs don't survive across runs.
+- All input datasets must provide a **content hash** (`content_hash()` returns `Some`). File-backed datasets compute this from file metadata; `Param` datasets use their serialized value.
+
+### Cache directory
+
+Cache keys are stored as text files in the cache directory (default `.pondcache`). Each node gets one file named after a sanitized version of the node name. Delete the directory to force a full re-run.
 
 ## `VizHook`
 
@@ -71,6 +107,7 @@ Hooks compose as tuples:
 ```rust,ignore
 .with_hooks((
     LoggingHook::new(),
+    CacheHook::new(".pondcache"),
     VizHook::new("http://localhost:8080".into()),
     my_custom_hook,
 ))
