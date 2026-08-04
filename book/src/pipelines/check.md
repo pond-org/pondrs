@@ -51,12 +51,21 @@ A dataset must not be produced by more than one node:
 
 ### Params are read-only
 
-No node may write to a `Param` dataset:
+No node may write to a `Param` dataset. A `&Param` used directly as an output is
+rejected by the compiler — `Param::SaveItem` is the uninhabited `Never`, so no
+function can produce a value to save:
 
 ```rust,ignore
 (
     Node { name: "n1", func: || ((),), input: (), output: (&param,) },
 )
+// → error[E0271]: expected tuple `((),)`, found tuple `(Never,)`
+```
+
+`check()` still catches params reached indirectly, e.g. through an `EachField`
+fan-out over a catalog whose entries contain a `Param`:
+
+```rust,ignore
 // → CheckError::ParamWritten { node_name: "n1", .. }
 ```
 

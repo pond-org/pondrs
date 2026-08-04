@@ -96,7 +96,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datasets::MemoryDataset;
+    use crate::datasets::{MemoryDataset, Never, Param};
+    use crate::error::CheckError;
     use crate::pipeline::{PipelineInfo, RunnableStep, StepInfo, StepVec, Node, ptr_to_id};
     use crate::pipeline::traits::LeafStep;
 
@@ -386,5 +387,34 @@ names: [alpha, beta]
         );
 
         assert!(pipeline.check().is_err());
+    }
+
+    #[derive(Debug, serde::Deserialize, serde::Serialize)]
+    struct ParamEntry {
+        setting: Param<i32>,
+    }
+
+    #[test]
+    fn check_catches_param_written_through_each_field() {
+        let yaml = r#"
+template:
+  setting: 0
+names: [alpha, beta]
+"#;
+        let catalog: TemplatedCatalog<ParamEntry> = serde_yaml::from_str(yaml).unwrap();
+
+        // A `&Param` in an output tuple is a compile error (uninhabited SaveItem);
+        // reaching one through EachField still needs the runtime check.
+        let pipeline = (
+            Node {
+                name: "write_params",
+                func: || (HashMap::<String, Never>::new(),),
+                input: (),
+                output: (EachField { catalog: &catalog, field: |s: &ParamEntry| &s.setting },),
+            },
+        );
+
+        let err = pipeline.check().unwrap_err();
+        assert!(matches!(err, CheckError::ParamWritten { node_name: "write_params", .. }));
     }
 }
