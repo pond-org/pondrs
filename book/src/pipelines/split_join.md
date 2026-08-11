@@ -70,9 +70,9 @@ When used as a node **output**, `EachField` distributes a `HashMap<String, T>` a
 ```rust,ignore
 Node {
     name: "split_stores",
-    func: |m: HashMap<String, DataFrame>| (m,),
     input: (&cat.grouped,),
     output: (EachField { catalog: &cat.stores, field: |s: &StoreCatalog| &s.inventory },),
+    func: |m: HashMap<String, DataFrame>| (m,),
 }
 ```
 
@@ -87,9 +87,9 @@ When used as a node **input**, `EachField` loads a value from each entry's datas
 ```rust,ignore
 Node {
     name: "join_values",
-    func: |m: HashMap<String, f64>| (m,),
     input: (EachField { catalog: &cat.stores, field: |s: &StoreCatalog| &s.total_value },),
     output: (&cat.store_values,),
+    func: |m: HashMap<String, f64>| (m,),
 }
 ```
 

@@ -93,6 +93,12 @@ pub enum StepKind<'a, E> {
 ///
 /// Implementors are either leaves ([`LeafStep`]) or groups ([`GroupStep`]).
 /// Use [`kind()`](RunnableStep::kind) to match and access the appropriate interface.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a pipeline step",
+    label = "not a step",
+    note = "steps are `Node`, `Pipeline`, `Ident`, `PartitionedNode`, or a boxed step in a `StepVec`",
+    note = "if `{Self}` is a step, check that the pipeline error type `{E}` implements `From<PondError>`"
+)]
 pub trait RunnableStep<E>: StepInfo {
     /// Returns whether this step is a leaf or a group, with access to the
     /// appropriate trait object for calling `call()` or iterating children.
@@ -139,6 +145,12 @@ impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
 /// The blanket impl for `&T where T: Dataset` covers plain dataset references.
 /// Custom impls (e.g. [`EachField`](super::EachField)) support fan-in patterns
 /// (loading from many datasets into one value).
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be used as a node input",
+    label = "not a node input",
+    note = "input tuples hold dataset *references*: write `(&catalog.field,)`, not `(catalog.field,)`",
+    note = "adapters such as `EachField` are also valid input slots"
+)]
 pub trait DatasetInput {
     type Item: 'static;
     fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError>;
@@ -150,12 +162,23 @@ pub trait DatasetInput {
 /// The blanket impl for `&T where T: Dataset` covers plain dataset references.
 /// Custom impls (e.g. [`EachField`](super::EachField)) support fan-out patterns
 /// (distributing one value across many datasets).
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be used as a node output",
+    label = "not a node output",
+    note = "output tuples hold dataset *references*: write `(&catalog.field,)`, not `(catalog.field,)`",
+    note = "adapters such as `EachField` are also valid output slots"
+)]
 pub trait DatasetOutput {
     type Item: 'static;
     fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;
     fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
+// Deliberately *not* `#[diagnostic::do_not_recommend]`: suppressing this impl
+// makes a dataset whose `Error` does not convert into `PondError` report the
+// `DatasetInput` message instead, which tells the user to pass a reference when
+// they already did. The unsatisfied `From` bound, verbose as it is, names the
+// actual problem.
 impl<T: Dataset + Send + Sync> DatasetInput for &T
 where
     PondError: From<T::Error>,
@@ -173,6 +196,7 @@ where
     }
 }
 
+// See the note on the `DatasetInput` impl above.
 impl<T: Dataset + Send + Sync> DatasetOutput for &T
 where
     PondError: From<T::Error>,
@@ -193,6 +217,11 @@ where
 }
 
 /// Trait for loading data from input datasets.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a valid `input` for a node",
+    label = "not an input tuple",
+    note = "`input` is a tuple of dataset references, e.g. `(&cat.raw, &params.factor)`, or `()` for no inputs"
+)]
 pub trait NodeInput: StableTuple {
     type Args: StableTuple;
     fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, PondError>;
@@ -237,6 +266,11 @@ impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
 impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 
 /// Trait for saving data to output datasets.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a valid `output` for a node",
+    label = "not an output tuple",
+    note = "`output` is a tuple of dataset references, e.g. `(&cat.scaled,)`, or `()` for no outputs"
+)]
 pub trait NodeOutput: StableTuple {
     type Output: StableTuple;
     fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;

@@ -1,0 +1,17 @@
+error[E0277]: the trait bound `PondError: From<MyErr>` is not satisfied
+  --> tests/ui/fail/18_dataset_error_no_conversion.rs:24:14
+   |
+24 |     let _n = Node {
+   |              ^^^^ the trait `From<MyErr>` is not implemented for `PondError`
+   |
+   = help: the following other types implement trait `From<T>`:
+             `PondError` implements `From<Infallible>`
+             `PondError` implements `From<image::error::ImageError>`
+             `PondError` implements `From<polars_error::PolarsError>`
+             `PondError` implements `From<pondrs::HookAbort>`
+             `PondError` implements `From<serde_json::error::Error>`
+             `PondError` implements `From<serde_yaml::error::Error>`
+             `PondError` implements `From<std::io::Error>`
+             `PondError` implements `From<yaml_rust2::emitter::EmitError>`
+             `PondError` implements `From<yaml_rust2::scanner::ScanError>`
+   = note: required for `&MyDataset` to implement `DatasetInput`

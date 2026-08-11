@@ -13,12 +13,43 @@ use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, L
 /// Implemented for `O` itself (bare tuple return) and `Result<O, E>`
 /// (fallible return). This allows [`Node`] to catch output type mismatches
 /// at construction time, before the pipeline error type `E` is known.
+#[diagnostic::on_unimplemented(
+    message = "node function returns `{Self}`, but `output` expects `{O}`",
+    label = "returns `{Self}`",
+    note = "a node function returns the `SaveItem` of each output dataset, in order",
+    note = "return `{O}`, or `Result<{O}, E>` where the pipeline error type implements `From<E>`"
+)]
 pub trait CompatibleOutput<O: StableTuple> {}
 
 impl<O: StableTuple> CompatibleOutput<O> for O {}
 impl<O: StableTuple, E> CompatibleOutput<O> for Result<O, E> {}
 
 /// A single computation unit: loads inputs, calls a function, saves outputs.
+///
+/// # Field order
+///
+/// Declare the fields as `name`, `input`, `output`, `func`:
+///
+/// ```rust,ignore
+/// Node {
+///     name: "scale",
+///     input: (&cat.raw, &params.factor),
+///     output: (&cat.scaled,),
+///     func: |raw: Vec<f64>, factor: f64| (raw.iter().map(|v| v * factor).collect(),),
+/// }
+/// ```
+///
+/// Struct fields are type-checked in the order they are written, so listing
+/// `input` and `output` first means the loaded argument types and the expected
+/// return type are already known when the compiler checks `func`. Mistakes then
+/// surface as closure-signature errors pointing at the closure ("expected closure
+/// signature `fn(f64) -> _`") instead of associated-type mismatches pointing at
+/// `Node {`. The order has no effect on behaviour — it only changes the
+/// diagnostics you get when something does not line up.
+///
+/// A node function takes the `LoadItem` of each input, in order, and returns a
+/// tuple of the `SaveItem` of each output, in order — or a `Result` of that tuple
+/// when it can fail. A single output is a one-element tuple: `(value,)`.
 pub struct Node<F, Input: NodeInput, Output: NodeOutput>
 where
     F: StableFn<Input::Args>,
@@ -77,6 +108,10 @@ where
     }
 }
 
+// Deliberately *not* `#[diagnostic::do_not_recommend]`: suppressing this impl
+// replaces the precise `IntoNodeResult` / `From<PondError>` diagnostics with a
+// generic "`Node<...>` is not a pipeline step" that spells out the whole closure
+// type. The chain through this impl is what makes those messages readable.
 impl<F, Input, Output, E, R> RunnableStep<E> for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,

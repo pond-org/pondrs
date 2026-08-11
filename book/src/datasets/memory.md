@@ -41,18 +41,18 @@ Use `MemoryDataset` for intermediate values that are computed by one node and co
 (
     Node {
         name: "compute",
+        input: (&cat.raw_data,),
+        output: (&cat.mean_value,),  // MemoryDataset<f64>,
         func: |input: DataFrame| {
             let mean = input.column("value").unwrap().mean().unwrap();
             (mean,)
         },
-        input: (&cat.raw_data,),
-        output: (&cat.mean_value,),  // MemoryDataset<f64>
     },
     Node {
         name: "use_result",
-        func: |mean: f64| (format!("Mean: {mean}"),),
         input: (&cat.mean_value,),
         output: (&cat.report,),
+        func: |mean: f64| (format!("Mean: {mean}"),),
     },
 )
 ```

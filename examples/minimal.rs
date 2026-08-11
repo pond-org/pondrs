@@ -38,22 +38,22 @@ fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<PondError> +
         // ANCHOR: summarize_node
         Node {
             name: "summarize",
+            input: (&cat.readings,),
+            output: (&cat.summary,),
             func: |df: DataFrame| {
                 let mean = df.column("value").unwrap().f64().unwrap().mean().unwrap();
                 (mean,)
             },
-            input: (&cat.readings,),
-            output: (&cat.summary,),
         },
         // ANCHOR_END: summarize_node
         // ANCHOR: report_node
         Node {
             name: "report",
+            input: (&cat.summary, &params.threshold),
+            output: (&cat.report,),
             func: |mean: f64, threshold: f64| {
                 (json!({ "mean": mean, "passed": mean >= threshold }),)
             },
-            input: (&cat.summary, &params.threshold),
-            output: (&cat.report,),
         },
         // ANCHOR_END: report_node
     )

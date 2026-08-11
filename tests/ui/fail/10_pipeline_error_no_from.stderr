@@ -1,0 +1,28 @@
+error[E0277]: the trait bound `MyErr: From<PondError>` is not satisfied
+  --> tests/ui/fail/10_pipeline_error_no_from.rs:24:53
+   |
+24 |     let _: Result<(), MyErr> = SequentialRunner.run(&pipe, &(), &(), &());
+   |                                                 --- ^^^^^ the trait `From<PondError>` is not implemented for `MyErr`
+   |                                                 |
+   |                                                 required by a bound introduced by this call
+   |
+   = help: the following other types implement trait `Steps<E>`:
+             (N0, N1)
+             (N0, N1, N2)
+             (N0, N1, N2, N3)
+             (N0, N1, N2, N3, N4)
+             (N0, N1, N2, N3, N4, N5)
+             (N0, N1, N2, N3, N4, N5, N6)
+             (N0, N1, N2, N3, N4, N5, N6, N7)
+             (N0, N1, N2, N3, N4, N5, N6, N7, N8)
+           and $N others
+   = note: required for `Node<{closure@$DIR/tests/ui/fail/10_pipeline_error_no_from.rs:22:15: 22:23}, (&Param<i32>,), (&CellDataset<i32>,)>` to implement `RunnableStep<MyErr>`
+   = note: required for `(Node<{closure@$DIR/tests/ui/fail/10_pipeline_error_no_from.rs:22:15: 22:23}, (&Param<i32>,), (&CellDataset<i32>,)>,)` to implement `Steps<MyErr>`
+note: required by a bound in `run`
+  --> src/runners/mod.rs
+   |
+   |     fn run<E>(
+   |        --- required by a bound in this associated function
+   |         &self,
+   |         pipe: &impl Steps<E>,
+   |                     ^^^^^^^^ required by this bound in `Runner::run`

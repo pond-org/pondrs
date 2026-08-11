@@ -23,6 +23,9 @@ plotly = ["std", "dep:plotly", "dep:serde_json"]
 viz = ["std", "dep:axum", "dep:tokio", "dep:rust-embed", "dep:serde_json", "dep:ureq"]
 image = ["std", "dep:image", "dep:base64"]
 all = ["std", "json", "polars", "yaml", "plotly", "viz", "image"]
+# Compile-fail UI tests (tests/ui). Off by default: the .stderr snapshots are
+# rustc-version specific and rust-toolchain.toml tracks floating stable.
+ui-tests = []
 
 [dependencies]
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
@@ -46,6 +49,7 @@ rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+trybuild = "1"
 
 [profile.dev]
 split-debuginfo = "unpacked"

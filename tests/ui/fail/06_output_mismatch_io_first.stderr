@@ -1,0 +1,18 @@
+error[E0277]: node function returns `(i32,)`, but `output` expects `(String,)`
+  --> tests/ui/fail/06_output_mismatch_io_first.rs:13:15
+   |
+13 |         func: |a: i32| (a,),
+   |               ^^^^^^^^^^^^^ returns `(i32,)`
+   |
+   = help: the trait `CompatibleOutput<(String,)>` is not implemented for `(i32,)`
+   = note: a node function returns the `SaveItem` of each output dataset, in order
+   = note: return `(String,)`, or `Result<(String,), E>` where the pipeline error type implements `From<E>`
+   = help: the trait `CompatibleOutput<O>` is implemented for `Result<O, E>`
+note: required by a bound in `Node`
+  --> src/pipeline/node.rs
+   |
+   | pub struct Node<F, Input: NodeInput, Output: NodeOutput>
+   |            ---- required by a bound in this struct
+...
+   |     F::Output: CompatibleOutput<Output::Output>,
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Node`

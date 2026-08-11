@@ -1,0 +1,12 @@
+error[E0631]: type mismatch in closure arguments
+  --> tests/ui/fail/02_arg_type_io_first.rs:9:14
+   |
+9  |     let _n = Node {
+   |              ^^^^ expected due to this
+...
+13 |         func: |s: String| (s.len() as i32,),
+   |               ----------- found signature defined here
+   |
+   = note: expected closure signature `fn(i32) -> _`
+              found closure signature `fn(String) -> _`
+   = note: required for `{closure@$DIR/tests/ui/fail/02_arg_type_io_first.rs:13:15: 13:26}` to implement `StableFn<(i32,)>`

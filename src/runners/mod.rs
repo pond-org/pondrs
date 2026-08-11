@@ -134,6 +134,11 @@ pub trait Runner {
 
 /// Trait for a collection of runners (implemented for tuples).
 /// Allows selecting a runner by name at runtime.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a collection of runners",
+    label = "not a runners tuple",
+    note = "pass a tuple of types implementing `Runner`, e.g. `(SequentialRunner, ParallelRunner)`"
+)]
 pub trait Runners {
     /// The name of the first (default) runner in the collection.
     fn first_name(&self) -> &'static str;

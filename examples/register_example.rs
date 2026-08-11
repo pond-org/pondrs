@@ -76,42 +76,42 @@ fn register_pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<Pon
     (
         Node {
             name: "read_sensor",
+            input: (&cat.sensor,),
+            output: (&cat.status,),
             func: |raw: u16| -> (u32,) {
                 println!("  Sensor reading: 0x{raw:04x} ({raw})");
                 (raw as u32,)
             },
-            input: (&cat.sensor,),
-            output: (&cat.status,),
         },
         Node {
             name: "set_ok_led",
+            input: (&cat.sensor, &params.warn_threshold),
+            output: (&cat.led_ok,),
             func: |reading: u16, warn: u16| {
                 let ok = reading < warn;
                 println!("  OK LED: {ok} (reading {reading} < warn {warn})");
                 (ok,)
             },
-            input: (&cat.sensor, &params.warn_threshold),
-            output: (&cat.led_ok,),
         },
         Node {
             name: "set_warn_led",
+            input: (&cat.sensor, &params.warn_threshold, &params.crit_threshold),
+            output: (&cat.led_warn,),
             func: |reading: u16, warn: u16, crit: u16| {
                 let warning = reading >= warn && reading < crit;
                 println!("  WARN LED: {warning}");
                 (warning,)
             },
-            input: (&cat.sensor, &params.warn_threshold, &params.crit_threshold),
-            output: (&cat.led_warn,),
         },
         Node {
             name: "set_crit_led",
+            input: (&cat.sensor, &params.crit_threshold),
+            output: (&cat.led_crit,),
             func: |reading: u16, crit: u16| {
                 let critical = reading >= crit;
                 println!("  CRIT LED: {critical}");
                 (critical,)
             },
-            input: (&cat.sensor, &params.crit_threshold),
-            output: (&cat.led_crit,),
         },
     )
 }

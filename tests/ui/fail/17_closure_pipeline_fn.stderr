@@ -1,0 +1,29 @@
+error: lifetime may not live long enough
+  --> tests/ui/fail/17_closure_pipeline_fn.rs:22:9
+   |
+21 |       let _: Result<(), PondError> = app.execute(|cat: &Catalog, params: &Params| {
+   |                                                        -                        - return type of closure is (Node<{closure@$DIR/tests/ui/fail/17_closure_pipeline_fn.rs:26:19: 26:27}, (&Param<i32>,), (&'2 MemoryDataset<i32>,)>,)
+   |                                                        |
+   |                                                        let's call the lifetime of this reference `'1`
+22 | /         (Node {
+23 | |             name: "n",
+24 | |             input: (&params.x,),
+25 | |             output: (&cat.a,),
+26 | |             func: |v: i32| (v,),
+27 | |         },)
+   | |___________^ returning this value requires that `'1` must outlive `'2`
+
+error: lifetime may not live long enough
+  --> tests/ui/fail/17_closure_pipeline_fn.rs:22:9
+   |
+21 |       let _: Result<(), PondError> = app.execute(|cat: &Catalog, params: &Params| {
+   |                                                                          -      - return type of closure is (Node<{closure@$DIR/tests/ui/fail/17_closure_pipeline_fn.rs:26:19: 26:27}, (&'4 Param<i32>,), (&MemoryDataset<i32>,)>,)
+   |                                                                          |
+   |                                                                          let's call the lifetime of this reference `'3`
+22 | /         (Node {
+23 | |             name: "n",
+24 | |             input: (&params.x,),
+25 | |             output: (&cat.a,),
+26 | |             func: |v: i32| (v,),
+27 | |         },)
+   | |___________^ returning this value requires that `'3` must outlive `'4`

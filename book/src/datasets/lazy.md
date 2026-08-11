@@ -152,9 +152,9 @@ let pipe = (
     // Manual thunk wiring via Node
     Node {
         name: "uppercase_map",
-        func: uppercase_map,
         input: (&catalog.input,),
         output: (&catalog.via_node,),
+        func: uppercase_map,
     },
     // Per-partition function via PartitionedNode
     PartitionedNode {

@@ -50,11 +50,11 @@ Nodes with no outputs are useful for logging, sending notifications, or other si
 ```rust,ignore
 Node {
     name: "log_summary",
+    input: (&cat.summary,),
+    output: (),
     func: |summary: f64| {
         println!("Summary: {summary}");
     },
-    input: (&cat.summary,),
-    output: (),
 }
 ```
 

@@ -1,0 +1,11 @@
+error[E0277]: node function returns `Result<(i32,), MyErr>`, which cannot produce output `(i32,)` in a pipeline with error type `PondError`
+  --> tests/ui/fail/09_node_error_no_conversion.rs:17:47
+   |
+17 |     let _step: &dyn RunnableStep<PondError> = &n;
+   |                                               ^^ invalid node return type
+   |
+   = help: the trait `IntoNodeResult<(i32,), PondError>` is not implemented for `Result<(i32,), MyErr>`
+   = note: return `(i32,)`, or `Result<(i32,), E2>` where `PondError` implements `From<E2>`
+   = help: the trait `RunnableStep<E>` is implemented for `Node<F, Input, Output>`
+   = note: required for `Node<{closure@$DIR/tests/ui/fail/09_node_error_no_conversion.rs:15:15: 15:48}, (&Param<i32>,), (&CellDataset<i32>,)>` to implement `RunnableStep<PondError>`
+   = note: required for the cast from `&Node<{closure@$DIR/tests/ui/fail/09_node_error_no_conversion.rs:15:15: 15:48}, (&Param<i32>,), (&CellDataset<i32>,)>` to `&dyn RunnableStep<PondError>`

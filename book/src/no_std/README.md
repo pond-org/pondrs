@@ -49,15 +49,15 @@ fn pipeline<'a>(
     (
         Node {
             name: "read_sensor",
-            func: |raw: u16| (raw,),
             input: (&cat.sensor,),
             output: (&cat.reading,),
+            func: |raw: u16| (raw,),
         },
         Node {
             name: "check_threshold",
-            func: |value: u16, threshold: u16| (value > threshold,),
             input: (&cat.reading, &params.threshold),
             output: (&cat.led,),
+            func: |value: u16, threshold: u16| (value > threshold,),
         },
     )
 }
