@@ -2,15 +2,16 @@
 
 use super::check::{CheckError, check_item, collect_all_outputs};
 use super::id_set::IdSet;
-use super::traits::{StepInfo, RunnableStep};
+use super::traits::{StepMeta, Step};
 
-/// Non-generic trait for a sequence of pipeline items (metadata only).
+/// Non-generic trait for a sequence of steps (metadata only).
 ///
-/// Implemented for tuples of `StepInfo` items. Provides pipeline
-/// validation via [`check`](PipelineInfo::check).
-pub trait PipelineInfo {
-    /// Iterate over each item's metadata.
-    fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo));
+/// The metadata companion to [`Steps`], as [`StepMeta`] is to
+/// [`Step`](super::Step). Implemented for tuples of [`StepMeta`] and for
+/// `DynSteps`. Provides pipeline validation via [`check`](StepsMeta::check).
+pub trait StepsMeta {
+    /// Iterate over each step's metadata.
+    fn for_each_meta<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepMeta));
 
     /// Validate sequential ordering and pipeline contracts.
     ///
@@ -32,7 +33,7 @@ pub trait PipelineInfo {
     fn check_with_capacity<const N: usize>(&self) -> Result<(), CheckError> {
         // Pass 1: collect all datasets produced by any node.
         let mut all_produced = IdSet::<N>::new();
-        self.for_each_info(&mut |item| {
+        self.for_each_meta(&mut |item| {
             collect_all_outputs::<N>(item, &mut all_produced);
         });
 
@@ -40,7 +41,7 @@ pub trait PipelineInfo {
         let mut produced = IdSet::<N>::new();
         let mut consumed = IdSet::<N>::new();
         let mut result = Ok(());
-        self.for_each_info(&mut |item| {
+        self.for_each_meta(&mut |item| {
             if result.is_ok() {
                 result = check_item::<N>(item, &all_produced, &mut produced, &mut consumed);
             }
@@ -49,30 +50,30 @@ pub trait PipelineInfo {
     }
 }
 
-/// Generic trait for a sequence of executable pipeline items.
+/// Generic trait for a sequence of executable steps.
 ///
-/// Extends [`PipelineInfo`] with the ability to iterate over runnable steps.
+/// Extends [`StepsMeta`] with the ability to iterate over the steps themselves.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a pipeline",
     label = "not a pipeline",
-    note = "a pipeline is a tuple of up to 10 steps, a `Pipeline`, or a `StepVec`",
+    note = "a pipeline is a tuple of up to 10 steps, a `Pipeline`, or a `DynSteps`",
     note = "the pipeline error type `{E}` must implement `From<PondError>`"
 )]
-pub trait Steps<E>: PipelineInfo {
+pub trait Steps<E>: StepsMeta {
     /// Iterate over each executable step.
-    fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
+    fn for_each_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn Step<E>));
 }
 
 macro_rules! impl_steps {
     ($($N:ident $idx:tt),+) => {
-        impl<$($N: StepInfo),+> PipelineInfo for ($($N,)+) {
-            fn for_each_info<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
+        impl<$($N: StepMeta),+> StepsMeta for ($($N,)+) {
+            fn for_each_meta<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepMeta)) {
                 $(f(&self.$idx);)+
             }
         }
 
-        impl<E, $($N: RunnableStep<E>),+> Steps<E> for ($($N,)+) {
-            fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
+        impl<E, $($N: Step<E>),+> Steps<E> for ($($N,)+) {
+            fn for_each_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn Step<E>)) {
                 $(f(&self.$idx);)+
             }
         }

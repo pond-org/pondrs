@@ -10,7 +10,7 @@ use crate::error::PondError;
 use super::into_result::IntoNodeResult;
 use super::node::CompatibleOutput;
 use super::stable::StableFn;
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, LeafStep, RunnableStep, StepKind};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepMeta, Leaf, Step, StepKind};
 
 pub struct PartitionedNode<'a, F, D1, D2, T1, T2>
 where
@@ -43,7 +43,7 @@ where
     }
 }
 
-impl<F, D1, D2, T1, T2> StepInfo for PartitionedNode<'_, F, D1, D2, T1, T2>
+impl<F, D1, D2, T1, T2> StepMeta for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
@@ -69,7 +69,7 @@ where
         core::any::type_name::<F>()
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepMeta)) {}
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         f(&DatasetRef::from_ref(self.input));
@@ -80,7 +80,7 @@ where
     }
 }
 
-impl<F, D1, D2, T1, T2, E> LeafStep<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
+impl<F, D1, D2, T1, T2, E> Leaf<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
@@ -120,7 +120,7 @@ where
     }
 }
 
-impl<F, D1, D2, T1, T2, E> RunnableStep<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
+impl<F, D1, D2, T1, T2, E> Step<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
@@ -137,5 +137,4 @@ where
     E: From<PondError>,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
-    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }

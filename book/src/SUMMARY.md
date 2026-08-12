@@ -54,7 +54,7 @@
 - [Examples](./examples/README.md)
   - [Weather Pipeline](./examples/weather.md)
   - [Sales Pipeline](./examples/sales.md)
-  - [Identity Pipeline](./examples/ident.md)
+  - [Alias Pipeline](./examples/alias.md)
   - [Register Pipeline](./examples/register.md)
   - [Dynamic Pipeline](./examples/dyn_steps.md)
   - [Fan-out/Fan-in Pipeline](./examples/split_join.md)

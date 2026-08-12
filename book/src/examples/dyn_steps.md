@@ -1,6 +1,6 @@
 # Dynamic Pipeline
 
-Demonstrates runtime pipeline composition using `StepVec`: the `report`
+Demonstrates runtime pipeline composition using `DynSteps`: the `report`
 node is only included when the `include_report` param is `true`.
 
 ## Usage

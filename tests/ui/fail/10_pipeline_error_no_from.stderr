@@ -16,7 +16,7 @@ error[E0277]: the trait bound `MyErr: From<PondError>` is not satisfied
              (N0, N1, N2, N3, N4, N5, N6, N7)
              (N0, N1, N2, N3, N4, N5, N6, N7, N8)
            and $N others
-   = note: required for `Node<{closure@$DIR/tests/ui/fail/10_pipeline_error_no_from.rs:22:15: 22:23}, (&Param<i32>,), (&CellDataset<i32>,)>` to implement `RunnableStep<MyErr>`
+   = note: required for `Node<{closure@$DIR/tests/ui/fail/10_pipeline_error_no_from.rs:22:15: 22:23}, (&Param<i32>,), (&CellDataset<i32>,)>` to implement `pondrs::Step<MyErr>`
    = note: required for `(Node<{closure@$DIR/tests/ui/fail/10_pipeline_error_no_from.rs:22:15: 22:23}, (&Param<i32>,), (&CellDataset<i32>,)>,)` to implement `Steps<MyErr>`
 note: required by a bound in `run`
   --> src/runners/mod.rs

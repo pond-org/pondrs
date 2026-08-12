@@ -7,7 +7,7 @@ use tempfile::TempDir;
 
 use pondrs::datasets::{MemoryDataset, Param, TextDataset};
 use pondrs::error::PondError;
-use pondrs::{CacheHook, Dataset, Node, Runner, SequentialRunner, PipelineInfo};
+use pondrs::{CacheHook, Dataset, Node, Runner, SequentialRunner, StepsMeta};
 
 // ---------------------------------------------------------------------------
 // Each test group gets its own counter pair to avoid cross-test interference

@@ -1,6 +1,6 @@
 # Fan-out & Fan-in
 
-The [Dynamic Pipelines](./dynamic.md) chapter showed how `StepVec` lets you include or exclude nodes based on **params** — a boolean flag controls whether a report node runs. The pipeline shape changes, but the datasets are still fixed at compile time.
+The [Dynamic Pipelines](./dynamic.md) chapter showed how `DynSteps` lets you include or exclude nodes based on **params** — a boolean flag controls whether a report node runs. The pipeline shape changes, but the datasets are still fixed at compile time.
 
 Fan-out & fan-in solve a different problem: the **catalog** determines the pipeline shape. When you have multiple items of the same kind — stores, regions, sensors — you want to run the same processing for each one, with each item getting its own datasets. The number of items comes from configuration, not code.
 
@@ -97,7 +97,7 @@ For `check()`, the node reports all per-entry field datasets as inputs and the s
 
 ## Building per-item nodes
 
-Between the fan-out and fan-in nodes, you need processing nodes for each item. Since the number of items is determined by YAML config, you build these dynamically with `StepVec`:
+Between the fan-out and fan-in nodes, you need processing nodes for each item. Since the number of items is determined by YAML config, you build these dynamically with `DynSteps`:
 
 ```rust,ignore
 {{#include ../../../examples/split_join/mod.rs:pipeline}}

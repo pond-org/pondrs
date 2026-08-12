@@ -8,9 +8,9 @@ use serde::Serialize;
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 
-use super::dyn_steps::StepVec;
-use super::traits::{ptr_to_id, DatasetRef, StepInfo, GroupStep, RunnableStep, StepKind};
-use super::steps::{PipelineInfo, Steps};
+use super::dyn_steps::DynSteps;
+use super::traits::{ptr_to_id, DatasetRef, StepMeta, Group, Step, StepKind};
+use super::steps::{StepsMeta, Steps};
 
 /// Specifies which nodes to include in a filtered pipeline run.
 pub enum NodeFilter {
@@ -25,7 +25,7 @@ pub enum NodeFilter {
     },
 }
 
-/// Filter a pipeline's steps, returning a `StepVec` containing only the
+/// Filter a pipeline's steps, returning a `DynSteps` containing only the
 /// nodes that match the filter. Pipeline structure is preserved: sub-pipelines
 /// whose children partially match are emitted as `DynPipeline` wrappers.
 pub fn filter_steps<'a, E>(
@@ -33,7 +33,7 @@ pub fn filter_steps<'a, E>(
     catalog: &impl Serialize,
     params: &impl Serialize,
     filter: &NodeFilter,
-) -> Result<StepVec<'a, E>, PondError>
+) -> Result<DynSteps<'a, E>, PondError>
 where
     E: From<PondError> + Send + Sync + 'static,
 {
@@ -51,8 +51,8 @@ where
         .collect();
 
     // Walk the Steps tree and collect matching items
-    let mut result: StepVec<'a, E> = Vec::new();
-    pipe.for_each_item(&mut |item| {
+    let mut result: DynSteps<'a, E> = Vec::new();
+    pipe.for_each_step(&mut |item| {
         collect_filtered(item, &keep_ids, &mut result);
     });
 
@@ -175,21 +175,21 @@ fn reachable(
 
 /// Recursively collect filtered steps from a single item.
 fn collect_filtered<'a, E>(
-    item: &'a dyn RunnableStep<E>,
+    item: &'a dyn Step<E>,
     keep_ids: &HashSet<usize>,
-    out: &mut StepVec<'a, E>,
+    out: &mut DynSteps<'a, E>,
 ) where
     E: From<PondError> + Send + Sync + 'static,
 {
     match item.kind() {
         StepKind::Leaf(_) => {
-            let id = ptr_to_id(item.as_pipeline_info());
+            let id = ptr_to_id(item as &dyn StepMeta);
             if keep_ids.contains(&id) {
                 out.push(Box::new(item));
             }
         }
         StepKind::Group(group) => {
-            let mut children: StepVec<'a, E> = Vec::new();
+            let mut children: DynSteps<'a, E> = Vec::new();
             group.for_each_child_step(&mut |child| {
                 collect_filtered(child, keep_ids, &mut children);
             });
@@ -212,20 +212,20 @@ fn collect_filtered<'a, E>(
 /// A dynamically-constructed pipeline container used by node filtering.
 ///
 /// Mirrors `Pipeline` but stores inputs/outputs as `Vec<DatasetRef>` and
-/// children as a `StepVec`, allowing construction from filtered tree walks.
+/// children as a `DynSteps`, allowing construction from filtered tree walks.
 struct DynPipeline<'a, E> {
     name: &'static str,
     inputs: Vec<DatasetRef<'a>>,
     outputs: Vec<DatasetRef<'a>>,
-    steps: StepVec<'a, E>,
+    steps: DynSteps<'a, E>,
 }
 
 // SAFETY: DynPipeline contains only Send+Sync fields (DatasetRef is Copy,
-// StepVec requires Send+Sync on its elements).
+// DynSteps requires Send+Sync on its elements).
 unsafe impl<E> Send for DynPipeline<'_, E> {}
 unsafe impl<E> Sync for DynPipeline<'_, E> {}
 
-impl<E> StepInfo for DynPipeline<'_, E>
+impl<E> StepMeta for DynPipeline<'_, E>
 where
     E: Send + Sync + 'static,
 {
@@ -241,8 +241,8 @@ where
         "pipeline"
     }
 
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
-        self.steps.for_each_info(f);
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepMeta)) {
+        self.steps.for_each_meta(f);
     }
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
@@ -258,21 +258,20 @@ where
     }
 }
 
-impl<E> GroupStep<E> for DynPipeline<'_, E>
+impl<E> Group<E> for DynPipeline<'_, E>
 where
     E: From<PondError> + Send + Sync + 'static,
 {
-    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>)) {
-        self.steps.for_each_item(f);
+    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn Step<E>)) {
+        self.steps.for_each_step(f);
     }
 }
 
-impl<E> RunnableStep<E> for DynPipeline<'_, E>
+impl<E> Step<E> for DynPipeline<'_, E>
 where
     E: From<PondError> + Send + Sync + 'static,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Group(self) }
-    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }
 
 #[cfg(test)]
@@ -298,13 +297,13 @@ mod tests {
     /// Helper: collect leaf node names from a Steps.
     fn leaf_names<E>(steps: &impl Steps<E>) -> Vec<&'static str> {
         let mut names = Vec::new();
-        steps.for_each_item(&mut |item| {
+        steps.for_each_step(&mut |item| {
             collect_leaf_names(item, &mut names);
         });
         names
     }
 
-    fn collect_leaf_names<E>(item: &dyn RunnableStep<E>, names: &mut Vec<&'static str>) {
+    fn collect_leaf_names<E>(item: &dyn Step<E>, names: &mut Vec<&'static str>) {
         match item.kind() {
             StepKind::Leaf(_) => {
                 names.push(item.name());
@@ -368,7 +367,7 @@ mod tests {
 
         // Verify pipeline structure is preserved (one top-level item that is not a leaf)
         let mut top_items = Vec::new();
-        filtered.for_each_item(&mut |item| top_items.push((item.name(), item.is_leaf())));
+        filtered.for_each_step(&mut |item| top_items.push((item.name(), item.is_leaf())));
         assert_eq!(top_items, [("inner", false)]);
     }
 
@@ -491,7 +490,7 @@ mod tests {
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
 
         let mut top_items = Vec::new();
-        filtered.for_each_item(&mut |item| top_items.push((item.name(), item.is_leaf())));
+        filtered.for_each_step(&mut |item| top_items.push((item.name(), item.is_leaf())));
         assert_eq!(top_items, [("n1", true)]);
     }
 }

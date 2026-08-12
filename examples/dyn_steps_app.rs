@@ -1,4 +1,4 @@
-//! Dynamic pipeline example using [`StepVec`].
+//! Dynamic pipeline example using [`DynSteps`].
 //!
 //! Demonstrates runtime step composition: the `report` node is only included
 //! when the `include_report` param is `true`.

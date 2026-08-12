@@ -7,7 +7,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, StepKind, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, Step, StepKind, Steps};
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::{HookControl, Hooks};
@@ -35,7 +35,7 @@ impl Default for ParallelRunner {
 }
 
 /// Collect callable items by walking the tree in the same order as graph building.
-fn collect_items<'a, E>(items: &mut Vec<&'a dyn RunnableStep<E>>, item: &'a dyn RunnableStep<E>) {
+fn collect_items<'a, E>(items: &mut Vec<&'a dyn Step<E>>, item: &'a dyn Step<E>) {
     items.push(item);
     if let StepKind::Group(group) = item.kind() {
         group.for_each_child_step(&mut |child| {
@@ -67,7 +67,7 @@ impl Runner for ParallelRunner {
             .build_global()
             .ok();
 
-        // Build graph using StepInfo (non-generic) for dependency analysis
+        // Build graph using StepMeta (non-generic) for dependency analysis
         let graph = build_pipeline_graph(pipe, catalog, params);
 
         if graph.node_indices.is_empty() {
@@ -75,8 +75,8 @@ impl Runner for ParallelRunner {
         }
 
         // Collect callable items in the same tree-walk order as graph building
-        let mut callable_items: Vec<&dyn RunnableStep<E>> = Vec::new();
-        pipe.for_each_item(&mut |item| {
+        let mut callable_items: Vec<&dyn Step<E>> = Vec::new();
+        pipe.for_each_step(&mut |item| {
             collect_items(&mut callable_items, item);
         });
 

@@ -1,9 +1,9 @@
-//! Example demonstrating the Ident node: write CSV as plain text, then read it
-//! back as a Polars DataFrame via Ident, and produce a Plotly bar chart.
+//! Example demonstrating the Alias node: write CSV as plain text, then read it
+//! back as a Polars DataFrame via Alias, and produce a Plotly bar chart.
 //!
 //! Usage:
-//!   cargo run --example ident_app -- --catalog-path examples/ident_data/catalog.yml \
-//!       --params-path examples/ident_data/params.yml run
+//!   cargo run --example alias_app -- --catalog-path examples/alias_data/catalog.yml \
+//!       --params-path examples/alias_data/params.yml run
 
 use plotly::{Bar, Layout, Plot};
 use polars::prelude::*;
@@ -13,7 +13,7 @@ use pondrs::datasets::{PlotlyDataset, PolarsCsvDataset, TextDataset};
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
 use pondrs::viz::VizHook;
-use pondrs::{Ident, Node, Steps};
+use pondrs::{Alias, Node, Steps};
 
 // ANCHOR: types
 // ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ use pondrs::{Ident, Node, Steps};
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize)]
-struct IdentCatalog {
+struct AliasCatalog {
     csv_text: TextDataset,
     csv_data: PolarsCsvDataset,
     chart: PlotlyDataset,
@@ -81,8 +81,8 @@ fn build_chart(df: DataFrame) -> (Plot,) {
 // Pipeline function
 // ---------------------------------------------------------------------------
 
-fn ident_pipeline<'a>(
-    cat: &'a IdentCatalog,
+fn alias_pipeline<'a>(
+    cat: &'a AliasCatalog,
     _params: &'a (),
 ) -> impl Steps<PondError> + 'a {
     (
@@ -92,7 +92,7 @@ fn ident_pipeline<'a>(
             output: (&cat.csv_text,),
             func: generate_csv,
         },
-        Ident {
+        Alias {
             name: "text_to_csv",
             input: &cat.csv_text,
             output: &cat.csv_data,
@@ -115,7 +115,7 @@ fn ident_pipeline<'a>(
 fn main() -> Result<(), pondrs::error::PondError> {
     let dir = {
         let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        manifest.join("examples").join("ident_data")
+        manifest.join("examples").join("alias_data")
     };
 
     std::fs::create_dir_all(&dir)?;
@@ -143,6 +143,6 @@ chart:
             VizHook::new("http://localhost:8080".to_string()),
         ));
 
-    app.dispatch(ident_pipeline)?;
+    app.dispatch(alias_pipeline)?;
     Ok(())
 }

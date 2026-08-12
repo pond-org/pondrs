@@ -5,9 +5,9 @@ Node hooks fire when a runner starts and finishes executing a node, or when a no
 ## Methods
 
 ```rust,ignore
-fn before_node_run(&self, n: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) -> Result<(), HookAbort> { Ok(()) }
-fn on_node_error(&self, n: &dyn StepInfo, error: &str) {}
+fn before_node_run(&self, n: &dyn StepMeta) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+fn after_node_run(&self, n: &dyn StepMeta, skipped: bool) -> Result<(), HookAbort> { Ok(()) }
+fn on_node_error(&self, n: &dyn StepMeta, error: &str) {}
 ```
 
 ## Arguments
@@ -64,7 +64,7 @@ struct NodeCounter {
 }
 
 impl Hook for NodeCounter {
-    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) -> Result<(), HookAbort> {
+    fn after_node_run(&self, n: &dyn StepMeta, skipped: bool) -> Result<(), HookAbort> {
         if !skipped {
             let i = self.count.fetch_add(1, Ordering::Relaxed) + 1;
             println!("Completed node {} ({}/total)", n.name(), i);
@@ -72,7 +72,7 @@ impl Hook for NodeCounter {
         Ok(())
     }
 
-    fn on_node_error(&self, n: &dyn StepInfo, error: &str) {
+    fn on_node_error(&self, n: &dyn StepMeta, error: &str) {
         eprintln!("Node {} failed: {}", n.name(), error);
     }
 }

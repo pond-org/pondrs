@@ -44,7 +44,7 @@ struct MaxNodesGuard {
 }
 
 impl Hook for MaxNodesGuard {
-    fn before_node_run(&self, _n: &dyn StepInfo) -> Result<HookControl, HookAbort> {
+    fn before_node_run(&self, _n: &dyn StepMeta) -> Result<HookControl, HookAbort> {
         let c = self.count.fetch_add(1, Ordering::Relaxed);
         if c >= self.limit {
             Err(HookAbort("node limit exceeded"))
@@ -65,7 +65,7 @@ struct SkipByName {
 }
 
 impl Hook for SkipByName {
-    fn before_node_run(&self, n: &dyn StepInfo) -> Result<HookControl, HookAbort> {
+    fn before_node_run(&self, n: &dyn StepMeta) -> Result<HookControl, HookAbort> {
         if n.name() == self.skip {
             Ok(HookControl::Skip)
         } else {

@@ -10,14 +10,14 @@ pub use sequential::SequentialRunner;
 
 use serde::Serialize;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, StepInfo, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, StepMeta, Steps};
 use crate::error::PondError;
 use crate::hooks::{HookAbort, HookControl, Hooks};
 
 /// Resolve dataset name from the catalog index and dispatch to hooks.
 #[cfg(feature = "std")]
 pub(crate) fn dispatch_dataset_event(
-    item: &dyn StepInfo,
+    item: &dyn StepMeta,
     ds: &DatasetRef<'_>,
     event: DatasetEvent<'_>,
     names: &std::collections::HashMap<usize, std::string::String>,
@@ -29,7 +29,7 @@ pub(crate) fn dispatch_dataset_event(
 
 /// Dispatch a dataset event to all hooks without name resolution.
 pub(crate) fn dispatch_dataset_event_raw(
-    item: &dyn StepInfo,
+    item: &dyn StepMeta,
     ds: &DatasetRef<'_>,
     event: DatasetEvent<'_>,
     hooks: &impl Hooks,
@@ -64,7 +64,7 @@ pub(crate) fn dispatch_dataset_event_raw(
 
 #[must_use]
 pub(crate) fn fire_before_node<E: From<PondError>>(
-    hooks: &impl Hooks, item: &dyn StepInfo,
+    hooks: &impl Hooks, item: &dyn StepMeta,
 ) -> Result<HookControl, E> {
     let mut control = HookControl::Continue;
     let result = hooks.for_each_hook(&mut |h| {
@@ -79,19 +79,19 @@ pub(crate) fn fire_before_node<E: From<PondError>>(
 }
 
 pub(crate) fn fire_after_node<E: From<PondError>>(
-    hooks: &impl Hooks, item: &dyn StepInfo, skipped: bool,
+    hooks: &impl Hooks, item: &dyn StepMeta, skipped: bool,
 ) -> Result<(), E> {
     hooks.for_each_hook(&mut |h| h.after_node_run(item, skipped))
         .map_err(|e| E::from(PondError::from(e)))
 }
 
-pub(crate) fn fire_node_error(hooks: &impl Hooks, item: &dyn StepInfo, msg: &str) {
+pub(crate) fn fire_node_error(hooks: &impl Hooks, item: &dyn StepMeta, msg: &str) {
     hooks.for_each_hook(&mut |h| { h.on_node_error(item, msg); Ok(()) }).ok();
 }
 
 #[must_use]
 pub(crate) fn fire_before_pipeline<E: From<PondError>>(
-    hooks: &impl Hooks, item: &dyn StepInfo,
+    hooks: &impl Hooks, item: &dyn StepMeta,
 ) -> Result<HookControl, E> {
     let mut control = HookControl::Continue;
     let result = hooks.for_each_hook(&mut |h| {
@@ -106,13 +106,13 @@ pub(crate) fn fire_before_pipeline<E: From<PondError>>(
 }
 
 pub(crate) fn fire_after_pipeline<E: From<PondError>>(
-    hooks: &impl Hooks, item: &dyn StepInfo,
+    hooks: &impl Hooks, item: &dyn StepMeta,
 ) -> Result<(), E> {
     hooks.for_each_hook(&mut |h| h.after_pipeline_run(item))
         .map_err(|e| E::from(PondError::from(e)))
 }
 
-pub(crate) fn fire_pipeline_error(hooks: &impl Hooks, item: &dyn StepInfo, msg: &str) {
+pub(crate) fn fire_pipeline_error(hooks: &impl Hooks, item: &dyn StepMeta, msg: &str) {
     hooks.for_each_hook(&mut |h| { h.on_pipeline_error(item, msg); Ok(()) }).ok();
 }
 

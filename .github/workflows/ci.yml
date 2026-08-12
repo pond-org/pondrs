@@ -50,6 +50,6 @@ jobs:
           cargo run --example minimal -- run
           cargo run --example weather_app -- run || true
           cargo run --example sales_app -- run
-          cargo run --example ident_app -- --catalog-path examples/ident_data/catalog.yml --params-path examples/ident_data/params.yml run
+          cargo run --example alias_app -- --catalog-path examples/alias_data/catalog.yml --params-path examples/alias_data/params.yml run
           cargo run --example register_example -- run
           cargo run --example dyn_steps_app -- run

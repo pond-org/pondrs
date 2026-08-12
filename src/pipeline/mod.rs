@@ -6,7 +6,7 @@ mod dyn_steps;
 #[cfg(feature = "std")]
 mod filter;
 pub(crate) mod id_set;
-mod ident;
+mod alias;
 mod into_result;
 mod node;
 #[cfg(feature = "std")]
@@ -20,14 +20,14 @@ mod steps;
 mod traits;
 
 pub use crate::error::CheckError;
-pub use ident::Ident;
+pub use alias::Alias;
 pub use into_result::IntoNodeResult;
 pub use node::{CompatibleOutput, Node};
 pub use pipeline::Pipeline;
 pub use pipeline_fn::PipelineFn;
-pub use steps::{PipelineInfo, Steps};
+pub use steps::{StepsMeta, Steps};
 #[cfg(feature = "std")]
-pub use dyn_steps::StepVec;
+pub use dyn_steps::DynSteps;
 #[cfg(feature = "std")]
 pub use filter::{NodeFilter, filter_steps};
 #[cfg(feature = "std")]
@@ -36,4 +36,4 @@ pub use partitioned_node::PartitionedNode;
 pub use each_field::EachField;
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
-pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeOutput, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep};
+pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeOutput, StepMeta, Leaf, Group, StepKind, Step};

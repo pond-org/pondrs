@@ -1,6 +1,6 @@
 //! Shared pipeline definition for the split/join example.
 //!
-//! Demonstrates: TemplatedCatalog, EachField, StepVec,
+//! Demonstrates: TemplatedCatalog, EachField, DynSteps,
 //! fan-out/fan-in patterns with per-item parallel processing.
 
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use pondrs::datasets::{MemoryDataset, Param, PolarsCsvDataset, JsonDataset};
-use pondrs::{EachField, Node, RunnableStep, StepVec, TemplatedCatalog};
+use pondrs::{EachField, Node, Step, DynSteps, TemplatedCatalog};
 
 // ANCHOR: types
 // ---------------------------------------------------------------------------
@@ -128,9 +128,9 @@ fn build_report(store_values: HashMap<String, f64>) -> (Value,) {
 // Pipeline function
 // ---------------------------------------------------------------------------
 
-pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> StepVec<'a> {
+pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> DynSteps<'a> {
     // Step 1: group the combined CSV into a HashMap by store.
-    let mut steps: StepVec<'a> = vec![
+    let mut steps: DynSteps<'a> = vec![
         Node {
             name: "group_by_store",
             func: group_by_store,

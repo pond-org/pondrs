@@ -276,7 +276,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn pipeline_walk_collects_meta_refs() {
-        use crate::PipelineInfo;
+        use crate::StepsMeta;
         use std::collections::HashMap;
 
         let param = Param(1i32);
@@ -290,7 +290,7 @@ mod tests {
 
         // Walk the pipeline and collect all DatasetRef ids → is_param
         let mut meta_map: HashMap<usize, bool> = HashMap::new();
-        pipe.for_each_info(&mut |item: &dyn crate::StepInfo| {
+        pipe.for_each_meta(&mut |item: &dyn crate::StepMeta| {
             item.for_each_input(&mut |d| { meta_map.insert(d.id, d.meta.is_param()); });
             item.for_each_output(&mut |d| { meta_map.insert(d.id, d.meta.is_param()); });
         });

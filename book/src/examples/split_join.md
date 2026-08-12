@@ -1,7 +1,7 @@
 # Fan-out/Fan-in Pipeline
 
 Demonstrates fan-out/fan-in patterns using `TemplatedCatalog`, `EachField`,
-and `StepVec`. A combined inventory CSV is split by store into per-store files,
+and `DynSteps`. A combined inventory CSV is split by store into per-store files,
 processed independently, then joined back into a comparison report.
 
 ## Usage
@@ -44,7 +44,7 @@ stores:
 {{#include ../../../examples/split_join/mod.rs:pipeline}}
 ```
 
-The pipeline uses `StepVec` because the per-store processing nodes are built
+The pipeline uses `DynSteps` because the per-store processing nodes are built
 dynamically from the `TemplatedCatalog` entries. The flow is:
 
 1. **group_by_store** — reads the combined CSV and groups rows into a `HashMap<String, DataFrame>`

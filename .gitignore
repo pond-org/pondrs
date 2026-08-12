@@ -1,7 +1,7 @@
 /target
 /.cargo/
 /examples/data/
-/examples/ident_data/
+/examples/alias_data/
 /examples/minimal_data/
 /examples/dyn_steps_data/
 /examples/weather_data/
