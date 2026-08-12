@@ -31,7 +31,7 @@ pub mod viz;
 pub use app::App;
 #[cfg(feature = "std")]
 pub use catalog_indexer::{CatalogIndex, index_catalog, index_catalog_with_params};
-pub use datasets::{Dataset, DatasetMeta};
+pub use datasets::{Dataset, DatasetMeta, Never};
 #[cfg(feature = "std")]
 pub use datasets::TemplatedCatalog;
 pub use error::{CheckError, PondError};

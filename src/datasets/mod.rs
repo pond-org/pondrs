@@ -8,6 +8,20 @@ pub(crate) fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
+/// An uninhabited type: no value of it can ever be constructed.
+///
+/// Used as a `Dataset::SaveItem` for read-only datasets such as [`Param`].
+/// Because no node function can produce a `Never`, writing to such a dataset
+/// is rejected by the type checker rather than by a runtime check, and the
+/// dataset's `save()` can discharge its argument with `match item {}`.
+///
+/// This is the stable-Rust stand-in for the `!` type. It is distinct from
+/// `core::convert::Infallible` only in name — a separate type keeps
+/// "cannot fail" (`Dataset::Error`) and "cannot be written" (`SaveItem`)
+/// readable apart in signatures and error messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Never {}
+
 mod cell;
 mod gpio;
 #[cfg(feature = "std")]

@@ -10,11 +10,11 @@ pub struct Param<T: Clone>(pub T);
 
 impl<T: Clone + Serialize> Dataset for Param<T> {
     type LoadItem = T;
-    type SaveItem = ();
+    type SaveItem = Never;   // uninhabited
     type Error = Infallible;
 
     fn load(&self) -> Result<T, Infallible> { Ok(self.0.clone()) }
-    fn save(&self, _: ()) -> Result<(), Infallible> { unreachable!() }
+    fn save(&self, output: Never) -> Result<(), Infallible> { match output {} }
     fn is_param(&self) -> bool { true }
 }
 ```
@@ -22,7 +22,7 @@ impl<T: Clone + Serialize> Dataset for Param<T> {
 Key properties:
 
 - **Loading always succeeds** — `Error = Infallible`
-- **Writing is forbidden** — `save()` is unreachable; the pipeline validator (`check()`) rejects any node that writes to a `Param`
+- **Writing is forbidden at compile time** — `SaveItem` is `Never`, an uninhabited type. A node whose output tuple contains a `&Param<T>` does not compile, because its function would have to produce a value that cannot exist. `save()` discharges its argument with `match output {}` — no runtime code, no panic
 - **`is_param()` returns `true`** — used by the validator and visualization to distinguish params from data
 
 ## Usage
