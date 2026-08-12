@@ -1,0 +1,8 @@
+error[E0277]: expected a `Fn(i32)` closure, found `u8`
+ --> tests/ui/fail/13_func_not_callable.rs:8:14
+  |
+8 |     let _n = Node {
+  |              ^^^^ expected an `Fn(i32)` closure, found `u8`
+  |
+  = help: the trait `Fn(i32)` is not implemented for `u8`
+  = note: required for `u8` to implement `StableFn<(i32,)>`

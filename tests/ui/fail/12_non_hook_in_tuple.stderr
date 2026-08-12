@@ -1,0 +1,25 @@
+error[E0277]: `u32` is not a hook
+  --> tests/ui/fail/12_non_hook_in_tuple.rs:15:74
+   |
+15 |     let _: Result<(), PondError> = SequentialRunner.run(&pipe, &(), &(), &(1u32,));
+   |                                                     ---                  ^^^^^^^^ not a hook
+   |                                                     |
+   |                                                     required by a bound introduced by this call
+   |
+   = help: the trait `Hook` is not implemented for `u32`
+   = note: implement `Hook` for `u32`, or wrap a `TypedHook` with `.typed()`
+   = note: built-in hooks include `LoggingHook`, `CacheHook`, and `VizHook`
+   = help: the following other types implement trait `Hook`:
+             CacheHook
+             LoggingHook
+             TypedHookAdapter<T, H>
+             VizHook
+   = note: required for `(u32,)` to implement `Hooks`
+note: required by a bound in `run`
+  --> src/runners/mod.rs
+   |
+   |     fn run<E>(
+   |        --- required by a bound in this associated function
+...
+   |         hooks: &impl Hooks,
+   |                      ^^^^^ required by this bound in `Runner::run`

@@ -9,9 +9,9 @@ The simplest nodes return a bare tuple. They cannot fail:
 ```rust,ignore
 Node {
     name: "double",
-    func: |x: i32| (x * 2,),
     input: (&params.x,),
     output: (&cat.doubled,),
+    func: |x: i32| (x * 2,),
 }
 ```
 
@@ -22,13 +22,13 @@ Nodes that can fail return `Result<(outputs...), E>` where `E` is the pipeline e
 ```rust,ignore
 Node {
     name: "parse",
+    input: (&cat.raw_text,),
+    output: (&cat.parsed,),
     func: |text: String| -> Result<(i32,), PondError> {
         let n = text.trim().parse::<i32>()
             .map_err(|e| PondError::Custom(e.to_string()))?;
         Ok((n,))
     },
-    input: (&cat.raw_text,),
-    output: (&cat.parsed,),
 }
 ```
 
@@ -80,13 +80,13 @@ enum MyError {
 
 Node {
     name: "validate",
+    input: (&cat.raw,),
+    output: (&cat.validated,),
     func: |value: f64| -> Result<(f64,), MyError> {
         if value > 100.0 {
             return Err(MyError::TooLarge(value));
         }
         Ok((value,))
     },
-    input: (&cat.raw,),
-    output: (&cat.validated,),
 }
 ```

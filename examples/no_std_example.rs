@@ -54,24 +54,24 @@ fn main() -> Result<(), PondError> {
     let pipe = (
         Node {
             name: "multiply",
-            func: |v| (v * 2,),
             input: (&params.scale,),
             output: (&catalog.a,),
+            func: |v| (v * 2,),
         },
         Pipeline {
             name: "transform",
             steps: (
                 Node {
                     name: "add_offset",
-                    func: |a, off| (a + off,),
                     input: (&catalog.a, &params.offset),
                     output: (&catalog.b,),
+                    func: |a, off| (a + off,),
                 },
                 Node {
                     name: "square",
-                    func: checked_square,
                     input: (&catalog.b,),
                     output: (&catalog.c,),
+                    func: checked_square,
                 },
             ),
             input: (&catalog.a, &params.offset),

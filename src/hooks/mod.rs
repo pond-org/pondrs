@@ -50,6 +50,12 @@ impl HookControl {
 }
 
 /// Trait for individual hooks that respond to pipeline events.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a hook",
+    label = "not a hook",
+    note = "implement `Hook` for `{Self}`, or wrap a `TypedHook` with `.typed()`",
+    note = "built-in hooks include `LoggingHook`, `CacheHook`, and `VizHook`"
+)]
 pub trait Hook: Sync {
     fn before_pipeline_run(&self, _p: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
     fn after_pipeline_run(&self, _p: &dyn StepInfo) -> Result<(), HookAbort> { Ok(()) }
@@ -66,6 +72,11 @@ pub trait Hook: Sync {
 }
 
 /// Trait for a collection of hooks (implemented for tuples).
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a collection of hooks",
+    label = "not a hooks tuple",
+    note = "pass a tuple of types implementing `Hook`, e.g. `(LoggingHook,)`, or `()` for no hooks"
+)]
 pub trait Hooks: Sync {
     fn for_each_hook(&self, f: &mut dyn FnMut(&dyn Hook) -> Result<(), HookAbort>) -> Result<(), HookAbort>;
 }

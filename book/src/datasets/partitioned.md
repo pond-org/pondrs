@@ -44,11 +44,11 @@ When the inner dataset's `prefer_parallel()` returns `true` and the pipeline is 
 ```rust,ignore
 Node {
     name: "split_by_month",
+    input: (&cat.all_data,),
+    output: (&cat.monthly,),  // PartitionedDataset<PolarsCsvDataset>,
     func: |df: DataFrame| -> (HashMap<String, DataFrame>,) {
         // split DataFrame into partitions...
     },
-    input: (&cat.all_data,),
-    output: (&cat.monthly,),  // PartitionedDataset<PolarsCsvDataset>
 }
 ```
 

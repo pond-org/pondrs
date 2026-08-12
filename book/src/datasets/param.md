@@ -36,11 +36,11 @@ struct Params {
 
 Node {
     name: "filter",
+    input: (&cat.value, &params.threshold),
+    output: (&cat.passed,),
     func: |value: f64, threshold: f64| {
         (value >= threshold,)
     },
-    input: (&cat.value, &params.threshold),
-    output: (&cat.passed,),
 }
 ```
 

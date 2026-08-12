@@ -52,6 +52,12 @@ pub trait PipelineInfo {
 /// Generic trait for a sequence of executable pipeline items.
 ///
 /// Extends [`PipelineInfo`] with the ability to iterate over runnable steps.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a pipeline",
+    label = "not a pipeline",
+    note = "a pipeline is a tuple of up to 10 steps, a `Pipeline`, or a `StepVec`",
+    note = "the pipeline error type `{E}` must implement `From<PondError>`"
+)]
 pub trait Steps<E>: PipelineInfo {
     /// Iterate over each executable step.
     fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));

@@ -1,0 +1,10 @@
+error[E0593]: closure is expected to take 2 arguments, but it takes 1 argument
+  --> tests/ui/fail/03_too_few_params.rs:9:14
+   |
+9  |     let _n = Node {
+   |              ^^^^ expected closure that takes 2 arguments
+...
+13 |         func: |a: i32| (a,),
+   |               -------- takes 1 argument
+   |
+   = note: required for `{closure@$DIR/tests/ui/fail/03_too_few_params.rs:13:15: 13:23}` to implement `StableFn<(i32, i32)>`

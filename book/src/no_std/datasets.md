@@ -75,15 +75,15 @@ fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<PondError> +
     (
         Node {
             name: "read",
-            func: |raw: u16| (raw,),
             input: (&cat.sensor,),
             output: (&cat.reading,),
+            func: |raw: u16| (raw,),
         },
         Node {
             name: "check",
-            func: |value: u16, thresh: u16| (value > thresh,),
             input: (&cat.reading, &params.threshold),
             output: (&cat.alert,),
+            func: |value: u16, thresh: u16| (value > thresh,),
         },
     )
 }

@@ -78,12 +78,12 @@ Node functions can return `Result` to signal errors:
 ```rust,ignore
 Node {
     name: "parse",
+    input: (&cat.raw_text,),
+    output: (&cat.parsed_value,),
     func: |text: String| -> Result<(i32,), PondError> {
         let n = text.trim().parse::<i32>().map_err(|e| PondError::Custom(e.to_string()))?;
         Ok((n,))
     },
-    input: (&cat.raw_text,),
-    output: (&cat.parsed_value,),
 }
 ```
 

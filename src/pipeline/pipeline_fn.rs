@@ -14,6 +14,12 @@ use crate::pipeline::Steps;
 ///
 /// The lifetime lives on the trait (not as a GAT), so the blanket impl for `Fn`
 /// works without `impl_trait_in_assoc_type`.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a pipeline function",
+    label = "not a pipeline function",
+    note = "a pipeline function is a named `fn` with an explicit lifetime: `fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<E> + 'a`",
+    note = "closures do not work here: they desugar into two independent lifetimes"
+)]
 pub trait PipelineFn<'a, C: 'a, P: 'a, E> {
     type Output: Steps<E> + 'a;
     fn call(&self, catalog: &'a C, params: &'a P) -> Self::Output;

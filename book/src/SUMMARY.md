@@ -17,6 +17,7 @@
   - [Dynamic Pipelines](./pipelines/dynamic.md)
   - [Fan-out & Fan-in](./pipelines/split_join.md)
   - [Check](./pipelines/check.md)
+  - [Compile Errors](./pipelines/errors.md)
 - [Error handling](./error_handling/README.md)
   - [Error Type](./error_handling/error_type.md)
   - [Node Errors](./error_handling/nodes.md)

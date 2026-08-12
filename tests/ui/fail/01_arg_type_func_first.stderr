@@ -1,0 +1,8 @@
+error[E0271]: type mismatch resolving `<(&Param<i32>,) as NodeInput>::Args == (String,)`
+ --> tests/ui/fail/01_arg_type_func_first.rs:9:14
+  |
+9 |     let _n = Node {
+  |              ^^^^ expected `(String,)`, found `(i32,)`
+  |
+  = note: expected tuple `(String,)`
+             found tuple `(i32,)`

@@ -88,9 +88,9 @@ fn ident_pipeline<'a>(
     (
         Node {
             name: "generate_csv",
-            func: generate_csv,
             input: (),
             output: (&cat.csv_text,),
+            func: generate_csv,
         },
         Ident {
             name: "text_to_csv",
@@ -99,9 +99,9 @@ fn ident_pipeline<'a>(
         },
         Node {
             name: "build_chart",
-            func: build_chart,
             input: (&cat.csv_data,),
             output: (&cat.chart,),
+            func: build_chart,
         },
     )
 }

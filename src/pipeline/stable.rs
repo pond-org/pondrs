@@ -18,6 +18,11 @@ mod sealed {
 /// can implement it, which is critical for [`IntoNodeResult`] disambiguation.
 ///
 /// [`IntoNodeResult`]: super::IntoNodeResult
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a tuple",
+    label = "not a tuple",
+    note = "node functions return a tuple of output values; for a single output write `({Self},)`"
+)]
 pub trait StableTuple: sealed::Sealed {}
 
 impl sealed::Sealed for () {}
@@ -45,6 +50,11 @@ impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9);
 ///
 /// Replaces the nightly `Fn<Args>` bound and `Fn::call(&f, args)` syntax.
 /// Implemented for all `Fn(T0, T1, ...) -> R` up to 10 arguments.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be called with the node's loaded inputs `{Args}`",
+    label = "not callable with `{Args}`",
+    note = "`func` must be a closure or fn taking the `LoadItem` of each input dataset, in order"
+)]
 pub trait StableFn<Args> {
     type Output;
     fn call(&self, args: Args) -> Self::Output;
