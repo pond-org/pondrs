@@ -5,16 +5,16 @@ Dataset hooks fire during the load and save operations inside `Node::call()`. Ea
 ## Methods
 
 ```rust,ignore
-fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef)
+fn before_dataset_loaded(&self, n: &dyn StepMeta, ds: &DatasetRef)
     -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
 
-fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn Any)
+fn after_dataset_loaded(&self, n: &dyn StepMeta, ds: &DatasetRef, value: &dyn Any)
     -> Result<(), HookAbort> { Ok(()) }
 
-fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn Any)
+fn before_dataset_saved(&self, n: &dyn StepMeta, ds: &DatasetRef, value: &dyn Any)
     -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
 
-fn after_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef)
+fn after_dataset_saved(&self, n: &dyn StepMeta, ds: &DatasetRef)
     -> Result<(), HookAbort> { Ok(()) }
 ```
 
@@ -60,14 +60,14 @@ struct IoTimingHook {
 }
 
 impl Hook for IoTimingHook {
-    fn before_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef)
+    fn before_dataset_loaded(&self, _n: &dyn StepMeta, ds: &DatasetRef)
         -> Result<HookControl, HookAbort>
     {
         self.starts.lock().unwrap().insert(ds.id, Instant::now());
         Ok(HookControl::Continue)
     }
 
-    fn after_dataset_loaded(&self, _n: &dyn StepInfo, ds: &DatasetRef, _value: &dyn Any)
+    fn after_dataset_loaded(&self, _n: &dyn StepMeta, ds: &DatasetRef, _value: &dyn Any)
         -> Result<(), HookAbort>
     {
         if let Some(start) = self.starts.lock().unwrap().remove(&ds.id) {
@@ -84,7 +84,7 @@ impl Hook for IoTimingHook {
 The `value` parameter on `after_dataset_loaded` and `before_dataset_saved` is type-erased as `&dyn Any`. You can downcast it manually:
 
 ```rust,ignore
-fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn Any)
+fn after_dataset_loaded(&self, n: &dyn StepMeta, ds: &DatasetRef, value: &dyn Any)
     -> Result<(), HookAbort>
 {
     if let Some(v) = value.downcast_ref::<f64>() {

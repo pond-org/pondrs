@@ -98,8 +98,8 @@ mod tests {
     use super::*;
     use crate::datasets::{MemoryDataset, Never, Param};
     use crate::error::CheckError;
-    use crate::pipeline::{PipelineInfo, RunnableStep, StepInfo, StepVec, Node, ptr_to_id};
-    use crate::pipeline::traits::LeafStep;
+    use crate::pipeline::{StepsMeta, Step, StepMeta, DynSteps, Node, ptr_to_id};
+    use crate::pipeline::traits::Leaf;
 
     #[derive(Debug, serde::Deserialize, serde::Serialize)]
     struct ItemCatalog {
@@ -289,13 +289,13 @@ names: [alpha, beta]
         };
 
         let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
-        LeafStep::<PondError>::call(&split, noop).unwrap();
+        Leaf::<PondError>::call(&split, noop).unwrap();
         for (_, item) in catalog.iter() {
             let v = item.raw.load().unwrap();
             item.processed.save(v * 2).unwrap();
         }
         let noop = &mut |_: &DatasetRef<'_>, _: DatasetEvent| Ok(HookControl::Continue);
-        LeafStep::<PondError>::call(&join, noop).unwrap();
+        Leaf::<PondError>::call(&join, noop).unwrap();
 
         let output = result_ds.load().unwrap();
         assert_eq!(output.get("alpha"), Some(&10));
@@ -333,12 +333,12 @@ names: [alpha, beta]
     }
 
     #[test]
-    fn check_with_step_vec() {
+    fn check_with_dyn_steps() {
         let source = MemoryDataset::<HashMap<String, i32>>::new();
         let result_ds = MemoryDataset::<HashMap<String, i32>>::new();
         let catalog = make_catalog();
 
-        let mut pipeline: StepVec<PondError> = vec![
+        let mut pipeline: DynSteps<PondError> = vec![
             Node {
                 name: "split",
                 func: |m: HashMap<String, i32>| (m,),

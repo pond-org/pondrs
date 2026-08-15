@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use log::info;
 
-use crate::pipeline::StepInfo;
+use crate::pipeline::StepMeta;
 
 use super::{Hook, HookControl};
 
@@ -28,7 +28,7 @@ impl CacheHook {
         }
     }
 
-    fn compute_cache_key(&self, n: &dyn StepInfo) -> Option<u64> {
+    fn compute_cache_key(&self, n: &dyn StepMeta) -> Option<u64> {
         use core::hash::{Hash, Hasher};
         let mut hasher = std::hash::DefaultHasher::new();
         n.name().hash(&mut hasher);
@@ -59,7 +59,7 @@ impl CacheHook {
         Some(hasher.finish())
     }
 
-    fn outputs_are_persistent(n: &dyn StepInfo) -> bool {
+    fn outputs_are_persistent(n: &dyn StepMeta) -> bool {
         let mut all_persistent = true;
         let mut has_outputs = false;
         n.for_each_output(&mut |ds| {
@@ -71,7 +71,7 @@ impl CacheHook {
         has_outputs && all_persistent
     }
 
-    fn record_node_key(&self, n: &dyn StepInfo, key: u64) {
+    fn record_node_key(&self, n: &dyn StepMeta, key: u64) {
         let mut node_keys = self.node_keys.lock().unwrap();
         n.for_each_output(&mut |ds| {
             node_keys.insert(ds.id, key);
@@ -101,7 +101,7 @@ impl CacheHook {
 }
 
 impl Hook for CacheHook {
-    fn before_node_run(&self, n: &dyn StepInfo) -> Result<HookControl, super::HookAbort> {
+    fn before_node_run(&self, n: &dyn StepMeta) -> Result<HookControl, super::HookAbort> {
         if !Self::outputs_are_persistent(n) {
             return Ok(HookControl::Continue);
         }
@@ -115,7 +115,7 @@ impl Hook for CacheHook {
         }
     }
 
-    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) -> Result<(), super::HookAbort> {
+    fn after_node_run(&self, n: &dyn StepMeta, skipped: bool) -> Result<(), super::HookAbort> {
         if let Some(key) = self.compute_cache_key(n) {
             if skipped {
                 info!("[cache] {} - skipped (inputs unchanged)", n.name());

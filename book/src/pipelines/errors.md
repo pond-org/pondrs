@@ -168,8 +168,8 @@ a node once `PondError: From<Self::Error>` holds. See
 
 ```text
 error[E0277]: `u8` is not a pipeline step
-   = note: steps are `Node`, `Pipeline`, `Ident`, `PartitionedNode`, or a boxed
-           step in a `StepVec`
+   = note: steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, or a boxed
+           step in a `DynSteps`
 ```
 
 ### Something in the tuple is not a hook

@@ -1,5 +1,5 @@
 //! Node returns Result with an error type the pipeline error cannot absorb.
-use pondrs::{Node, PondError, RunnableStep};
+use pondrs::{Node, PondError, Step};
 use pondrs::datasets::{CellDataset, Param};
 
 #[derive(Debug)]
@@ -14,5 +14,5 @@ fn main() {
         output: (&out,),
         func: |a: i32| -> Result<(i32,), MyErr> { Ok((a,)) },
     };
-    let _step: &dyn RunnableStep<PondError> = &n;
+    let _step: &dyn Step<PondError> = &n;
 }

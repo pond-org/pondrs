@@ -5,7 +5,7 @@ use crate::error::PondError;
 use super::into_result::IntoNodeResult;
 use super::stable::{StableFn, StableTuple};
 use crate::hooks::{HookAbort, HookControl};
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepInfo, LeafStep, RunnableStep, StepKind};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepMeta, Leaf, Step, StepKind};
 
 /// Marker trait asserting that a return type is structurally compatible
 /// with an output tuple `O`.
@@ -61,7 +61,7 @@ where
     pub output: Output,
 }
 
-impl<F, Input, Output> StepInfo for Node<F, Input, Output>
+impl<F, Input, Output> StepMeta for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
@@ -80,7 +80,7 @@ where
         core::any::type_name::<F>()
     }
 
-    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepInfo)) {}
+    fn for_each_child<'a>(&'a self, _f: &mut dyn FnMut(&'a dyn StepMeta)) {}
 
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
         self.input.for_each_input(f);
@@ -91,7 +91,7 @@ where
     }
 }
 
-impl<F, Input, Output, E, R> LeafStep<E> for Node<F, Input, Output>
+impl<F, Input, Output, E, R> Leaf<E> for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
@@ -112,7 +112,7 @@ where
 // replaces the precise `IntoNodeResult` / `From<PondError>` diagnostics with a
 // generic "`Node<...>` is not a pipeline step" that spells out the whole closure
 // type. The chain through this impl is what makes those messages readable.
-impl<F, Input, Output, E, R> RunnableStep<E> for Node<F, Input, Output>
+impl<F, Input, Output, E, R> Step<E> for Node<F, Input, Output>
 where
     Input: NodeInput + Send + Sync,
     Output: NodeOutput + Send + Sync,
@@ -121,5 +121,4 @@ where
     E: From<PondError>,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
-    fn as_pipeline_info(&self) -> &dyn StepInfo { self }
 }

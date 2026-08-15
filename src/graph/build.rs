@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use serde::Serialize;
 
 use crate::catalog_indexer::index_catalog_with_params;
-use crate::pipeline::{StepInfo, PipelineInfo, ptr_to_id};
+use crate::pipeline::{StepMeta, StepsMeta, ptr_to_id};
 
 use super::types::{Edge, GraphNode, PipelineGraph};
 
@@ -15,7 +15,7 @@ use super::types::{Edge, GraphNode, PipelineGraph};
 /// Walks the pipeline tree, indexes dataset names via the catalog serializer,
 /// and computes producer-consumer edges between leaf nodes.
 pub fn build_pipeline_graph<'a>(
-    pipe: &'a impl PipelineInfo,
+    pipe: &'a impl StepsMeta,
     catalog: &impl Serialize,
     params: &impl Serialize,
 ) -> PipelineGraph<'a> {
@@ -25,7 +25,7 @@ pub fn build_pipeline_graph<'a>(
 
     // 2. Walk tree, collect all nodes with parent/child relationships
     let mut nodes: Vec<GraphNode<'a>> = Vec::new();
-    pipe.for_each_info(&mut |item| {
+    pipe.for_each_meta(&mut |item| {
         collect_node(item, None, &mut nodes);
     });
 
@@ -63,7 +63,7 @@ pub fn build_pipeline_graph<'a>(
 }
 
 fn collect_node<'a>(
-    item: &'a dyn StepInfo,
+    item: &'a dyn StepMeta,
     parent: Option<usize>,
     nodes: &mut Vec<GraphNode<'a>>,
 ) {

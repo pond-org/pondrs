@@ -16,7 +16,7 @@ pub use cache::CacheHook;
 mod typed;
 pub use typed::{TypedHook, TypedHookAdapter, IntoTypedHook};
 
-use crate::pipeline::{DatasetRef, StepInfo};
+use crate::pipeline::{DatasetRef, StepMeta};
 
 #[derive(Debug, Clone)]
 pub struct HookAbort(pub &'static str);
@@ -57,18 +57,18 @@ impl HookControl {
     note = "built-in hooks include `LoggingHook`, `CacheHook`, and `VizHook`"
 )]
 pub trait Hook: Sync {
-    fn before_pipeline_run(&self, _p: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_pipeline_run(&self, _p: &dyn StepInfo) -> Result<(), HookAbort> { Ok(()) }
-    fn on_pipeline_error(&self, _p: &dyn StepInfo, _error: &str) {}
+    fn before_pipeline_run(&self, _p: &dyn StepMeta) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_pipeline_run(&self, _p: &dyn StepMeta) -> Result<(), HookAbort> { Ok(()) }
+    fn on_pipeline_error(&self, _p: &dyn StepMeta, _error: &str) {}
 
-    fn before_node_run(&self, _n: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_node_run(&self, _n: &dyn StepInfo, _skipped: bool) -> Result<(), HookAbort> { Ok(()) }
-    fn on_node_error(&self, _n: &dyn StepInfo, _error: &str) {}
+    fn before_node_run(&self, _n: &dyn StepMeta) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_node_run(&self, _n: &dyn StepMeta, _skipped: bool) -> Result<(), HookAbort> { Ok(()) }
+    fn on_node_error(&self, _n: &dyn StepMeta, _error: &str) {}
 
-    fn before_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_dataset_loaded(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) -> Result<(), HookAbort> { Ok(()) }
-    fn before_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &dyn core::any::Any) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_dataset_saved(&self, _n: &dyn StepInfo, _ds: &DatasetRef) -> Result<(), HookAbort> { Ok(()) }
+    fn before_dataset_loaded(&self, _n: &dyn StepMeta, _ds: &DatasetRef) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_dataset_loaded(&self, _n: &dyn StepMeta, _ds: &DatasetRef, _value: &dyn core::any::Any) -> Result<(), HookAbort> { Ok(()) }
+    fn before_dataset_saved(&self, _n: &dyn StepMeta, _ds: &DatasetRef, _value: &dyn core::any::Any) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_dataset_saved(&self, _n: &dyn StepMeta, _ds: &DatasetRef) -> Result<(), HookAbort> { Ok(()) }
 }
 
 /// Trait for a collection of hooks (implemented for tuples).

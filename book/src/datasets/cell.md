@@ -29,7 +29,7 @@ let pipe = (
 
 ## Thread safety
 
-`CellDataset` implements `Sync` via an `unsafe impl` because the `RunnableStep` trait requires `Send + Sync`. This is safe **only for single-threaded runners** like `SequentialRunner`.
+`CellDataset` implements `Sync` via an `unsafe impl` because the `Step` trait requires `Send + Sync`. This is safe **only for single-threaded runners** like `SequentialRunner`.
 
 **Do not use `CellDataset` with `ParallelRunner`.** Use `MemoryDataset` instead for parallel pipelines.
 

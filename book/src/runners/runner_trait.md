@@ -24,8 +24,8 @@ pub trait Runner {
 
 A runner walks the pipeline steps and executes each node. The key types to work with are:
 
-- **`Steps<E>`** — iterate steps via `for_each_item()`
-- **`RunnableStep<E>`** — each step, which is either a leaf node or a pipeline container
+- **`Steps<E>`** — iterate steps via `for_each_step()`
+- **`Step<E>`** — each step, which is either a leaf node or a pipeline container
   - `is_leaf()` — `true` for nodes, `false` for pipelines
   - `call(on_event)` — execute a leaf node, passing a callback for dataset events
   - `for_each_child_step()` — iterate children of a pipeline container

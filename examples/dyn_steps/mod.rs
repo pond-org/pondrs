@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use pondrs::datasets::{JsonDataset, MemoryDataset, Param, PolarsCsvDataset};
-use pondrs::{Node, RunnableStep, StepVec};
+use pondrs::{Node, Step, DynSteps};
 
 // ANCHOR: types
 #[derive(Serialize, Deserialize)]
@@ -26,7 +26,7 @@ pub struct Params {
 // ANCHOR_END: types
 
 // ANCHOR: pipeline
-pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> StepVec<'a> {
+pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> DynSteps<'a> {
     let mut steps = vec![
         Node {
             name: "summarize",

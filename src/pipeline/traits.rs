@@ -1,4 +1,4 @@
-//! Core traits for pipeline items and data flow.
+//! Core traits for pipeline steps and data flow.
 
 use crate::datasets::{Dataset, DatasetMeta};
 use crate::hooks::{HookAbort, HookControl};
@@ -54,19 +54,21 @@ pub enum DatasetEvent<'v> {
     AfterSave,
 }
 
-/// Non-generic, object-safe metadata for pipeline items.
+/// Non-generic, object-safe metadata for a single pipeline step.
 ///
-/// Used by hooks, graph building, and validation. Leaf items are nodes;
-/// non-leaf items are pipelines (containers with children).
-pub trait StepInfo: Send + Sync {
-    /// Human-readable name for this item.
+/// The metadata companion to [`Step`], mirroring the [`Dataset`]/[`DatasetMeta`]
+/// split: `StepMeta` carries everything hooks, graph building, and validation
+/// need without knowing the pipeline error type. Leaf steps are nodes; non-leaf
+/// steps are pipelines (containers with children).
+pub trait StepMeta: Send + Sync {
+    /// Human-readable name for this step.
     fn name(&self) -> &'static str;
     /// `true` for nodes, `false` for pipelines.
     fn is_leaf(&self) -> bool;
     /// The Rust type name of the underlying function or `"pipeline"`.
     fn type_string(&self) -> &'static str;
-    /// Iterate over child items (empty for leaf nodes).
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo));
+    /// Iterate over child steps (empty for leaf nodes).
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepMeta));
     /// Iterate over input dataset references.
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
     /// Iterate over output dataset references.
@@ -74,42 +76,39 @@ pub trait StepInfo: Send + Sync {
 }
 
 /// Executable leaf step (node). Has a `call()` method for actual computation.
-pub trait LeafStep<E>: StepInfo {
+pub trait Leaf<E>: StepMeta {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E>;
 }
 
-/// Container step (pipeline). Has children that are themselves `RunnableStep`s.
-pub trait GroupStep<E>: StepInfo {
-    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
+/// Container step (pipeline). Has children that are themselves `Step`s.
+pub trait Group<E>: StepMeta {
+    fn for_each_child_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn Step<E>));
 }
 
 /// Discriminated union of leaf and group steps.
 pub enum StepKind<'a, E> {
-    Leaf(&'a dyn LeafStep<E>),
-    Group(&'a dyn GroupStep<E>),
+    Leaf(&'a dyn Leaf<E>),
+    Group(&'a dyn Group<E>),
 }
 
 /// Generic execution trait, parameterized by the pipeline error type `E`.
 ///
-/// Implementors are either leaves ([`LeafStep`]) or groups ([`GroupStep`]).
-/// Use [`kind()`](RunnableStep::kind) to match and access the appropriate interface.
+/// Implementors are either leaves ([`Leaf`]) or groups ([`Group`]).
+/// Use [`kind()`](Step::kind) to match and access the appropriate interface.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a pipeline step",
     label = "not a step",
-    note = "steps are `Node`, `Pipeline`, `Ident`, `PartitionedNode`, or a boxed step in a `StepVec`",
+    note = "steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, or a boxed step in a `DynSteps`",
     note = "if `{Self}` is a step, check that the pipeline error type `{E}` implements `From<PondError>`"
 )]
-pub trait RunnableStep<E>: StepInfo {
+pub trait Step<E>: StepMeta {
     /// Returns whether this step is a leaf or a group, with access to the
     /// appropriate trait object for calling `call()` or iterating children.
     fn kind(&self) -> StepKind<'_, E>;
 
-    /// Upcast to `&dyn StepInfo`.
-    fn as_pipeline_info(&self) -> &dyn StepInfo;
-
-    /// Box this step for use in a [`StepVec`](crate::StepVec).
+    /// Box this step for use in a [`DynSteps`](crate::DynSteps).
     #[cfg(feature = "std")]
-    fn boxed<'a>(self) -> std::boxed::Box<dyn RunnableStep<E> + Send + Sync + 'a>
+    fn boxed<'a>(self) -> std::boxed::Box<dyn Step<E> + Send + Sync + 'a>
     where
         Self: Sized + Send + Sync + 'a,
     {
@@ -118,13 +117,13 @@ pub trait RunnableStep<E>: StepInfo {
 }
 
 // --- Blanket impls for references ---
-// These allow `&'a dyn RunnableStep<E>` to be boxed into a `StepVec<'a, E>` directly.
+// These allow `&'a dyn Step<E>` to be boxed into a `DynSteps<'a, E>` directly.
 
-impl<T: StepInfo + ?Sized> StepInfo for &T {
+impl<T: StepMeta + ?Sized> StepMeta for &T {
     fn name(&self) -> &'static str { (**self).name() }
     fn is_leaf(&self) -> bool { (**self).is_leaf() }
     fn type_string(&self) -> &'static str { (**self).type_string() }
-    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepInfo)) {
+    fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepMeta)) {
         (**self).for_each_child(f);
     }
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
@@ -135,9 +134,8 @@ impl<T: StepInfo + ?Sized> StepInfo for &T {
     }
 }
 
-impl<E, T: RunnableStep<E> + ?Sized> RunnableStep<E> for &T {
+impl<E, T: Step<E> + ?Sized> Step<E> for &T {
     fn kind(&self) -> StepKind<'_, E> { (**self).kind() }
-    fn as_pipeline_info(&self) -> &dyn StepInfo { (**self).as_pipeline_info() }
 }
 
 /// A single input slot in a node's input tuple — a generalized [`Dataset`] for loading.

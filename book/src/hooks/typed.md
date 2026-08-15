@@ -6,10 +6,10 @@ The `Hook` trait passes dataset values as `&dyn Any`, requiring manual downcasti
 
 ```rust,ignore
 pub trait TypedHook<T: 'static>: Sync {
-    fn after_load(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &T) -> Result<(), HookAbort> {
+    fn after_load(&self, _n: &dyn StepMeta, _ds: &DatasetRef, _value: &T) -> Result<(), HookAbort> {
         Ok(())
     }
-    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, _value: &T) -> Result<HookControl, HookAbort> {
+    fn before_save(&self, _n: &dyn StepMeta, _ds: &DatasetRef, _value: &T) -> Result<HookControl, HookAbort> {
         Ok(HookControl::Continue)
     }
 }
@@ -38,7 +38,7 @@ use std::sync::{Arc, Mutex};
 struct I32Recorder(Arc<Mutex<Vec<i32>>>);
 
 impl TypedHook<i32> for I32Recorder {
-    fn after_load(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> Result<(), HookAbort> {
+    fn after_load(&self, _n: &dyn StepMeta, _ds: &DatasetRef, value: &i32) -> Result<(), HookAbort> {
         self.0.lock().unwrap().push(*value);
         Ok(())
     }
@@ -64,7 +64,7 @@ App::new(catalog, params)
 struct RejectNegative;
 
 impl TypedHook<i32> for RejectNegative {
-    fn before_save(&self, _n: &dyn StepInfo, _ds: &DatasetRef, value: &i32) -> Result<HookControl, HookAbort> {
+    fn before_save(&self, _n: &dyn StepMeta, _ds: &DatasetRef, value: &i32) -> Result<HookControl, HookAbort> {
         if *value < 0 {
             Err(HookAbort("negative value rejected"))
         } else {

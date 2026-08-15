@@ -270,20 +270,20 @@ This is basically the way in which nodes get executed in the pipelines.
 Nodes are not very useful by themselves. Now we'll see how we can string them
 together with datasets in between in order to create data flow.
 The `Steps` trait is implemented for tuples (or general sequences) of
-`RunnableStep`s. For the purpose of this overview, you can just think of them as nodes.
+`Step`s. For the purpose of this overview, you can just think of them as nodes.
 The abstraction exists because pondrs also has a `Pipeline` type
 (a group of `Steps` with declared inputs/outputs) that can appear wherever a `Node` can.
 ```rust
 pub trait Steps<E> {
     /// Iterate over each executable step.
-    fn for_each_item<'a>(&'a self, f: &mut dyn FnMut(&'a dyn RunnableStep<E>));
+    fn for_each_step<'a>(&'a self, f: &mut dyn FnMut(&'a dyn Step<E>));
 }
 ```
-Notice that both `Steps` and `RunnableStep` are generic over the error type that
+Notice that both `Steps` and `Step` are generic over the error type that
 is used in the pipeline. Errors returned by the nodes or datasets need to be
 convertible to this type in order for the program to type check.
 
-The `for_each_item` method can be invoked by a runner to iterate over the steps —
+The `for_each_step` method can be invoked by a runner to iterate over the steps —
 the sequential runner executes them in the declared order,
 while the parallel runner uses the iteration to
 build a dependency graph and run independent nodes concurrently.

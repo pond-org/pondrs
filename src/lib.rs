@@ -41,11 +41,11 @@ pub use hooks::{Hook, Hooks, HookAbort, HookControl, TypedHook, TypedHookAdapter
 #[cfg(feature = "std")]
 pub use hooks::CacheHook;
 pub use pipeline::{
-    DatasetEvent, DatasetInput, DatasetOutput, DatasetRef, Ident, IntoNodeResult, Node, Pipeline,
-    PipelineFn, StepInfo, LeafStep, GroupStep, StepKind, RunnableStep, PipelineInfo, Steps,
+    Alias, DatasetEvent, DatasetInput, DatasetOutput, DatasetRef, Group, IntoNodeResult, Leaf, Node,
+    Pipeline, PipelineFn, Step, StepKind, StepMeta, Steps, StepsMeta,
 };
 #[cfg(feature = "std")]
-pub use pipeline::{StepVec, EachField, PartitionedNode};
+pub use pipeline::{DynSteps, EachField, PartitionedNode};
 #[cfg(feature = "std")]
 pub use runners::ParallelRunner;
 pub use runners::{Runner, Runners, SequentialRunner};

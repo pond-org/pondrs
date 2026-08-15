@@ -5,7 +5,7 @@ use std::prelude::v1::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, RunnableStep, StepKind, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, Step, StepKind, Steps};
 use crate::error::PondError;
 use crate::hooks::{HookAbort, HookControl, Hooks};
 
@@ -19,7 +19,7 @@ pub struct SequentialRunner;
 
 impl SequentialRunner {
     fn make_dataset_callback<'a, E>(
-        item: &'a dyn RunnableStep<E>,
+        item: &'a dyn Step<E>,
         #[cfg(feature = "std")]
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
@@ -34,7 +34,7 @@ impl SequentialRunner {
 
     fn run_item<E>(
         &self,
-        item: &dyn RunnableStep<E>,
+        item: &dyn Step<E>,
         #[cfg(feature = "std")]
         names: &HashMap<usize, String>,
         hooks: &impl Hooks,
@@ -112,7 +112,7 @@ impl Runner for SequentialRunner {
         let _ = (catalog, params);
 
         let mut result = Ok(());
-        pipe.for_each_item(&mut |item| {
+        pipe.for_each_step(&mut |item| {
             if result.is_ok() {
                 #[cfg(feature = "std")]
                 { result = self.run_item(item, &names, hooks); }

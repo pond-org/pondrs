@@ -7,20 +7,20 @@ Hooks let you observe and control pipeline execution events. They are used for l
 ```rust,ignore
 pub trait Hook: Sync {
     // Pipeline lifecycle
-    fn before_pipeline_run(&self, p: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_pipeline_run(&self, p: &dyn StepInfo) -> Result<(), HookAbort> { Ok(()) }
-    fn on_pipeline_error(&self, p: &dyn StepInfo, error: &str) {}
+    fn before_pipeline_run(&self, p: &dyn StepMeta) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_pipeline_run(&self, p: &dyn StepMeta) -> Result<(), HookAbort> { Ok(()) }
+    fn on_pipeline_error(&self, p: &dyn StepMeta, error: &str) {}
 
     // Node lifecycle
-    fn before_node_run(&self, n: &dyn StepInfo) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_node_run(&self, n: &dyn StepInfo, skipped: bool) -> Result<(), HookAbort> { Ok(()) }
-    fn on_node_error(&self, n: &dyn StepInfo, error: &str) {}
+    fn before_node_run(&self, n: &dyn StepMeta) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_node_run(&self, n: &dyn StepMeta, skipped: bool) -> Result<(), HookAbort> { Ok(()) }
+    fn on_node_error(&self, n: &dyn StepMeta, error: &str) {}
 
     // Dataset lifecycle (fired per-dataset during Node::call)
-    fn before_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_dataset_loaded(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn Any) -> Result<(), HookAbort> { Ok(()) }
-    fn before_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef, value: &dyn Any) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
-    fn after_dataset_saved(&self, n: &dyn StepInfo, ds: &DatasetRef) -> Result<(), HookAbort> { Ok(()) }
+    fn before_dataset_loaded(&self, n: &dyn StepMeta, ds: &DatasetRef) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_dataset_loaded(&self, n: &dyn StepMeta, ds: &DatasetRef, value: &dyn Any) -> Result<(), HookAbort> { Ok(()) }
+    fn before_dataset_saved(&self, n: &dyn StepMeta, ds: &DatasetRef, value: &dyn Any) -> Result<HookControl, HookAbort> { Ok(HookControl::Continue) }
+    fn after_dataset_saved(&self, n: &dyn StepMeta, ds: &DatasetRef) -> Result<(), HookAbort> { Ok(()) }
 }
 ```
 
@@ -55,7 +55,7 @@ App::new(catalog, params)
 
 ## Hook arguments
 
-All hook methods receive `&dyn StepInfo`, which provides:
+All hook methods receive `&dyn StepMeta`, which provides:
 
 - `name()` — the node or pipeline name (`&'static str`)
 - `is_leaf()` — `true` for nodes, `false` for pipelines

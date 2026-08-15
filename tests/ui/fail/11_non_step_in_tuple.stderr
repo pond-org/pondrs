@@ -6,12 +6,12 @@ error[E0277]: `u8` is not a pipeline step
    |                                                     |
    |                                                     required by a bound introduced by this call
    |
-   = help: the trait `RunnableStep<_>` is not implemented for `u8`
-   = note: steps are `Node`, `Pipeline`, `Ident`, `PartitionedNode`, or a boxed step in a `StepVec`
+   = help: the trait `pondrs::Step<_>` is not implemented for `u8`
+   = note: steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, or a boxed step in a `DynSteps`
    = note: if `u8` is a step, check that the pipeline error type `_` implements `From<PondError>`
-   = help: the following other types implement trait `RunnableStep<E>`:
+   = help: the following other types implement trait `pondrs::Step<E>`:
              &T
-             Ident<'_, Input, Output>
+             Alias<'_, Input, Output>
              Node<F, Input, Output>
              PartitionedNode<'_, F, D1, D2, T1, T2>
              Pipeline<S, Input, Output>
