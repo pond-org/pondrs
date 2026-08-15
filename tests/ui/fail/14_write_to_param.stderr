@@ -11,7 +11,7 @@ error[E0277]: node function returns `((),)`, but `output` expects `(Never,)`
 note: required by a bound in `Node`
   --> src/pipeline/node.rs
    |
-   | pub struct Node<F, Input: NodeInput, Output: NodeOutput>
+   | pub struct Node<F, Input: NodeInputMeta, Output: NodeOutputMeta>
    |            ---- required by a bound in this struct
 ...
    |     F::Output: CompatibleOutput<Output::Output>,

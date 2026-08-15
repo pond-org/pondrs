@@ -75,38 +75,31 @@ fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<MyError> + '
 
 ## The `From<PondError>` requirement
 
-The pipeline error type `E` must satisfy `E: From<PondError>`. This is how the framework converts dataset I/O errors and infrastructure failures into your pipeline's error type. Without this conversion, dataset `load()` and `save()` calls couldn't propagate errors through your nodes.
+The pipeline error type `E` must satisfy `E: From<PondError>`. This is the framework floor: it covers infrastructure failures that belong to no particular dataset — hook aborts, `RunnerNotFound`, `CheckFailed`, and adapter errors such as `EachField`'s `KeyMismatch` — as well as every built-in dataset, whose `Error` is already `PondError`.
+
+It is *not* how custom dataset errors reach you. Those convert into `E` directly; see below.
 
 ## Adding variants for custom datasets
 
-If you implement a custom dataset whose `Error` type is not already covered by `PondError`, you have two choices:
+A dataset's `Error` converts straight into your pipeline error type. Give your enum an `#[error(transparent)] #[from]` variant per dataset error type, alongside the `PondError` variant:
 
-1. **Use `PondError::Custom`** (simplest): convert your error to a string.
+```rust,ignore
+impl Dataset for GpsDataset {
+    type Error = GpsError;
+    // ...
+}
 
-   ```rust,ignore
-   impl Dataset for MyDataset {
-       type Error = PondError;
-       fn load(&self) -> Result<Self::LoadItem, PondError> {
-           do_something().map_err(|e| PondError::Custom(e.to_string()))
-       }
-   }
-   ```
+#[derive(Debug, thiserror::Error)]
+enum MyError {
+    #[error(transparent)]
+    Pond(#[from] PondError),
+    #[error(transparent)]
+    Gps(#[from] GpsError),
+}
+```
 
-2. **Add a variant to your pipeline error type**: keep the original error type in your custom dataset and convert it in your pipeline error enum.
+That is all. **No `PondError: From<GpsError>` impl is required**, and you should not write one — `GpsError` reaches `MyError::Gps` with its type and `source()` chain intact, so you can match on it and recover.
 
-   ```rust,ignore
-   impl Dataset for MyDataset {
-       type Error = MyDatasetError;
-       // ...
-   }
+The bound comes from the node input/output tuple impls, which require `E: From<D::Error>` for each dataset `D` in the tuple. A node may mix datasets with different error types freely. See [Dataset Errors](./datasets.md) for the full pattern.
 
-   #[derive(Debug, thiserror::Error)]
-   enum MyError {
-       #[error(transparent)]
-       Pond(#[from] PondError),
-       #[error(transparent)]
-       MyDataset(#[from] MyDatasetError),
-   }
-   ```
-
-   This requires `PondError: From<MyDatasetError>` — the node input/output bounds convert a dataset's error into `PondError` before it reaches your pipeline error type. See [Dataset Errors](./datasets.md) for the full pattern.
+If your dataset has no failure modes worth distinguishing, giving it `type Error = PondError` is simpler and needs no variant at all.

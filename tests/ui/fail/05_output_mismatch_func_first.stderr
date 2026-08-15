@@ -1,4 +1,4 @@
-error[E0271]: type mismatch resolving `<(&MemoryDataset<String>,) as NodeOutput>::Output == (i32,)`
+error[E0271]: type mismatch resolving `<(&MemoryDataset<String>,) as NodeOutputMeta>::Output == (i32,)`
  --> tests/ui/fail/05_output_mismatch_func_first.rs:9:14
   |
 9 |     let _n = Node {

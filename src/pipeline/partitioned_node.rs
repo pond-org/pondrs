@@ -84,27 +84,29 @@ impl<F, D1, D2, T1, T2, E> Leaf<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
-    D1::LoadItem: IntoThunk<T1> + Send + 'static,
+    D1::LoadItem: IntoThunk<T1, E> + Send + 'static,
     D1::SaveItem: Send,
-    D2::SaveItem: FromThunk<T2> + Send,
+    D2::SaveItem: FromThunk<T2, E> + Send,
+    // `PartitionedDataset` aggregates its inner dataset's errors into
+    // `PondError` itself, so this is its bound, not the node's.
     PondError: From<D1::Error> + From<D2::Error>,
     D1::Error: Send,
     D2::Error: Send,
     T1: Send + Sync + 'static,
     T2: Send + Sync + 'static,
     F: StableFn<(T1,)> + Clone + Send + Sync + 'static,
-    F::Output: IntoNodeResult<(T2,), PondError>,
-    E: From<PondError>,
+    F::Output: IntoNodeResult<(T2,), E>,
+    E: From<PondError> + Send + 'static,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<crate::hooks::HookControl, crate::hooks::HookAbort>) -> Result<(), E> {
-        let (input_map,) = (self.input,).load_data(on_event).map_err(E::from)?;
+        let (input_map,) = NodeInput::<E>::load_data(&(self.input,), on_event)?;
 
         let output_map = input_map
             .into_iter()
             .map(|(key, elem)| {
                 let func = self.func.clone();
-                let in_thunk: Thunk<T1> = elem.into_thunk();
-                let out_thunk: Thunk<T2> = Box::new(move || {
+                let in_thunk: Thunk<T1, E> = elem.into_thunk();
+                let out_thunk: Thunk<T2, E> = Box::new(move || {
                     let value = in_thunk()?;
                     let (result,) = StableFn::call(&func, (value,)).into_node_result()?;
                     Ok(result)
@@ -112,10 +114,9 @@ where
                 let save_item = D2::SaveItem::from_thunk(out_thunk)?;
                 Ok((key, save_item))
             })
-            .collect::<Result<HashMap<_, _>, PondError>>()
-            .map_err(E::from)?;
+            .collect::<Result<HashMap<_, _>, E>>()?;
 
-        (self.output,).save_data((output_map,), on_event).map_err(E::from)?;
+        NodeOutput::<E>::save_data(&(self.output,), (output_map,), on_event)?;
         Ok(())
     }
 }
@@ -124,17 +125,19 @@ impl<F, D1, D2, T1, T2, E> Step<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
-    D1::LoadItem: IntoThunk<T1> + Send + 'static,
+    D1::LoadItem: IntoThunk<T1, E> + Send + 'static,
     D1::SaveItem: Send,
-    D2::SaveItem: FromThunk<T2> + Send,
+    D2::SaveItem: FromThunk<T2, E> + Send,
+    // `PartitionedDataset` aggregates its inner dataset's errors into
+    // `PondError` itself, so this is its bound, not the node's.
     PondError: From<D1::Error> + From<D2::Error>,
     D1::Error: Send,
     D2::Error: Send,
     T1: Send + Sync + 'static,
     T2: Send + Sync + 'static,
     F: StableFn<(T1,)> + Clone + Send + Sync + 'static,
-    F::Output: IntoNodeResult<(T2,), PondError>,
-    E: From<PondError>,
+    F::Output: IntoNodeResult<(T2,), E>,
+    E: From<PondError> + Send + 'static,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
 }

@@ -36,4 +36,4 @@ pub use partitioned_node::PartitionedNode;
 pub use each_field::EachField;
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
-pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeOutput, StepMeta, Leaf, Group, StepKind, Step};
+pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeInputMeta, NodeOutput, NodeOutputMeta, StepMeta, Leaf, Group, StepKind, Step};

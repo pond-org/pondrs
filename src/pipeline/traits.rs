@@ -143,6 +143,13 @@ impl<E, T: Step<E> + ?Sized> Step<E> for &T {
 /// The blanket impl for `&T where T: Dataset` covers plain dataset references.
 /// Custom impls (e.g. [`EachField`](super::EachField)) support fan-in patterns
 /// (loading from many datasets into one value).
+///
+/// `load_input` is generic over the pipeline error type rather than returning
+/// [`PondError`]: a slot's [`Error`](Self::Error) converts straight into `E`, so
+/// a custom dataset error reaches the user's error enum with its type and
+/// `source()` chain intact. `E: From<PondError>` remains as the floor for
+/// framework errors (hook aborts, and adapter errors such as
+/// [`PondError::KeyMismatch`]) — a bound every pipeline already owes the runner.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be used as a node input",
     label = "not a node input",
@@ -151,7 +158,12 @@ impl<E, T: Step<E> + ?Sized> Step<E> for &T {
 )]
 pub trait DatasetInput {
     type Item: 'static;
-    fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError>;
+    /// The error this slot can raise — for a plain dataset reference, the
+    /// dataset's own `Dataset::Error`.
+    type Error;
+    fn load_input<E>(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, E>
+    where
+        E: From<Self::Error> + From<PondError>;
     fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
@@ -160,6 +172,8 @@ pub trait DatasetInput {
 /// The blanket impl for `&T where T: Dataset` covers plain dataset references.
 /// Custom impls (e.g. [`EachField`](super::EachField)) support fan-out patterns
 /// (distributing one value across many datasets).
+///
+/// See [`DatasetInput`] for why `save_output` is generic over `E`.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be used as a node output",
     label = "not a node output",
@@ -168,25 +182,29 @@ pub trait DatasetInput {
 )]
 pub trait DatasetOutput {
     type Item: 'static;
-    fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;
+    /// The error this slot can raise — for a plain dataset reference, the
+    /// dataset's own `Dataset::Error`.
+    type Error;
+    fn save_output<E>(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E>
+    where
+        E: From<Self::Error> + From<PondError>;
     fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
 // Deliberately *not* `#[diagnostic::do_not_recommend]`: suppressing this impl
-// makes a dataset whose `Error` does not convert into `PondError` report the
-// `DatasetInput` message instead, which tells the user to pass a reference when
-// they already did. The unsatisfied `From` bound, verbose as it is, names the
-// actual problem.
-impl<T: Dataset + Send + Sync> DatasetInput for &T
-where
-    PondError: From<T::Error>,
-{
+// makes a dataset used in a node input report the `DatasetInput` message
+// instead, which tells the user to pass a reference when they already did.
+impl<T: Dataset + Send + Sync> DatasetInput for &T {
     type Item = T::LoadItem;
-    fn load_input(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, PondError> {
+    type Error = T::Error;
+    fn load_input<E>(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Item, E>
+    where
+        E: From<Self::Error> + From<PondError>,
+    {
         let ds = DatasetRef::from_ref(*self);
-        on_event(&ds, DatasetEvent::BeforeLoad)?;
-        let value = (*self).load()?;
-        on_event(&ds, DatasetEvent::AfterLoad(&value))?;
+        on_event(&ds, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
+        let value = (*self).load().map_err(E::from)?;
+        on_event(&ds, DatasetEvent::AfterLoad(&value)).map_err(|e| E::from(PondError::from(e)))?;
         Ok(value)
     }
     fn for_each_ref<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
@@ -195,17 +213,19 @@ where
 }
 
 // See the note on the `DatasetInput` impl above.
-impl<T: Dataset + Send + Sync> DatasetOutput for &T
-where
-    PondError: From<T::Error>,
-{
+impl<T: Dataset + Send + Sync> DatasetOutput for &T {
     type Item = T::SaveItem;
-    fn save_output(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
+    type Error = T::Error;
+    fn save_output<E>(&self, value: Self::Item, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E>
+    where
+        E: From<Self::Error> + From<PondError>,
+    {
         let ds = DatasetRef::from_ref(*self);
-        let control = on_event(&ds, DatasetEvent::BeforeSave(&value))?;
+        let control = on_event(&ds, DatasetEvent::BeforeSave(&value))
+            .map_err(|e| E::from(PondError::from(e)))?;
         if control != HookControl::Skip {
-            (*self).save(value)?;
-            on_event(&ds, DatasetEvent::AfterSave)?;
+            (*self).save(value).map_err(E::from)?;
+            on_event(&ds, DatasetEvent::AfterSave).map_err(|e| E::from(PondError::from(e)))?;
         }
         Ok(())
     }
@@ -214,39 +234,66 @@ where
     }
 }
 
-/// Trait for loading data from input datasets.
+/// Non-generic metadata for a node's `input` tuple: what it loads, and which
+/// datasets it names.
+///
+/// The metadata companion to [`NodeInput`], mirroring the [`StepMeta`]/[`Step`]
+/// split. [`Node`](super::Node) bounds its `Input` on this trait so that
+/// [`Args`](Self::Args) — and therefore the closure's expected signature —
+/// resolves at the `Node { .. }` literal, before the pipeline error type is
+/// known.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a valid `input` for a node",
     label = "not an input tuple",
     note = "`input` is a tuple of dataset references, e.g. `(&cat.raw, &params.factor)`, or `()` for no inputs"
 )]
-pub trait NodeInput: StableTuple {
+pub trait NodeInputMeta: StableTuple {
     type Args: StableTuple;
-    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, PondError>;
     fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-impl NodeInput for () {
+/// Loads a node's `input` tuple into its `Args`, converting each slot's error
+/// into the pipeline error type `E`.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be loaded into the pipeline error type `{E}`",
+    label = "input errors do not convert into `{E}`",
+    note = "`{E}` must implement `From<..>` for the `Error` of every input dataset, plus `From<PondError>`",
+    note = "the usual fix is a `#[derive(thiserror::Error)]` enum with an `#[error(transparent)] #[from]` variant per dataset error type"
+)]
+pub trait NodeInput<E>: NodeInputMeta {
+    fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, E>;
+}
+
+impl NodeInputMeta for () {
     type Args = ();
-    fn load_data(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, PondError> {
+    fn for_each_input<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
+}
+
+impl<E> NodeInput<E> for () {
+    fn load_data(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, E> {
         Ok(())
     }
-    fn for_each_input<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
 }
 
 macro_rules! impl_node_input {
     ($($P:ident $idx:tt),+) => {
-        impl<$($P: DatasetInput + Send + Sync),+> NodeInput for ($($P,)+) {
+        impl<$($P: DatasetInput + Send + Sync),+> NodeInputMeta for ($($P,)+) {
             type Args = ($($P::Item,)+);
-            #[allow(non_snake_case)]
-            fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, PondError> {
-                $(
-                    let $P = self.$idx.load_input(on_event)?;
-                )+
-                Ok(($($P,)+))
-            }
             fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
                 $(self.$idx.for_each_ref(f);)+
+            }
+        }
+
+        impl<E, $($P: DatasetInput + Send + Sync),+> NodeInput<E> for ($($P,)+)
+        where
+            E: $(From<$P::Error> +)+ From<PondError>,
+        {
+            #[allow(non_snake_case)]
+            fn load_data(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<Self::Args, E> {
+                $(
+                    let $P = self.$idx.load_input::<E>(on_event)?;
+                )+
+                Ok(($($P,)+))
             }
         }
     };
@@ -263,38 +310,62 @@ impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7);
 impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8);
 impl_node_input!(T0 0, T1 1, T2 2, T3 3, T4 4, T5 5, T6 6, T7 7, T8 8, T9 9);
 
-/// Trait for saving data to output datasets.
+/// Non-generic metadata for a node's `output` tuple: what it saves, and which
+/// datasets it names.
+///
+/// The metadata companion to [`NodeOutput`]; see [`NodeInputMeta`] for why the
+/// split exists.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a valid `output` for a node",
     label = "not an output tuple",
     note = "`output` is a tuple of dataset references, e.g. `(&cat.scaled,)`, or `()` for no outputs"
 )]
-pub trait NodeOutput: StableTuple {
+pub trait NodeOutputMeta: StableTuple {
     type Output: StableTuple;
-    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError>;
     fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-impl NodeOutput for () {
+/// Saves a node's return value into its `output` tuple, converting each slot's
+/// error into the pipeline error type `E`.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be saved into the pipeline error type `{E}`",
+    label = "output errors do not convert into `{E}`",
+    note = "`{E}` must implement `From<..>` for the `Error` of every output dataset, plus `From<PondError>`",
+    note = "the usual fix is a `#[derive(thiserror::Error)]` enum with an `#[error(transparent)] #[from]` variant per dataset error type"
+)]
+pub trait NodeOutput<E>: NodeOutputMeta {
+    fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E>;
+}
+
+impl NodeOutputMeta for () {
     type Output = ();
-    fn save_data(&self, _output: Self::Output, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
+    fn for_each_output<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
+}
+
+impl<E> NodeOutput<E> for () {
+    fn save_data(&self, _output: Self::Output, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
         Ok(())
     }
-    fn for_each_output<'s>(&'s self, _f: &mut dyn FnMut(&DatasetRef<'s>)) {}
 }
 
 macro_rules! impl_node_output {
     ($($P:ident $idx:tt),+) => {
-        impl<$($P: DatasetOutput + Send + Sync),+> NodeOutput for ($($P,)+) {
+        impl<$($P: DatasetOutput + Send + Sync),+> NodeOutputMeta for ($($P,)+) {
             type Output = ($($P::Item,)+);
-            fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), PondError> {
-                $({
-                    self.$idx.save_output(output.$idx, on_event)?;
-                })+
-                Ok(())
-            }
             fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>)) {
                 $(self.$idx.for_each_ref(f);)+
+            }
+        }
+
+        impl<E, $($P: DatasetOutput + Send + Sync),+> NodeOutput<E> for ($($P,)+)
+        where
+            E: $(From<$P::Error> +)+ From<PondError>,
+        {
+            fn save_data(&self, output: Self::Output, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
+                $({
+                    self.$idx.save_output::<E>(output.$idx, on_event)?;
+                })+
+                Ok(())
             }
         }
     };

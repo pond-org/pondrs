@@ -1,8 +1,8 @@
 error[E0277]: the trait bound `PondError: From<MyErr>` is not satisfied
-  --> tests/ui/fail/18_dataset_error_no_conversion.rs:24:14
+  --> tests/ui/fail/18_dataset_error_no_conversion.rs:37:39
    |
-24 |     let _n = Node {
-   |              ^^^^ the trait `From<MyErr>` is not implemented for `PondError`
+37 |     let _step: &dyn Step<PondError> = &n;
+   |                                       ^^ the trait `From<MyErr>` is not implemented for `PondError`
    |
    = help: the following other types implement trait `From<T>`:
              `PondError` implements `From<Box<dyn StdError + Send + Sync>>`
@@ -14,4 +14,6 @@ error[E0277]: the trait bound `PondError: From<MyErr>` is not satisfied
              `PondError` implements `From<serde_yaml::error::Error>`
              `PondError` implements `From<std::io::Error>`
            and $N others
-   = note: required for `&MyDataset` to implement `DatasetInput`
+   = note: required for `(&MyDataset,)` to implement `NodeInput<PondError>`
+   = note: required for `Node<{closure@$DIR/tests/ui/fail/18_dataset_error_no_conversion.rs:33:15: 33:23}, (&MyDataset,), ()>` to implement `pondrs::Step<PondError>`
+   = note: required for the cast from `&Node<{closure@$DIR/tests/ui/fail/18_dataset_error_no_conversion.rs:33:15: 33:23}, (&MyDataset,), ()>` to `&dyn pondrs::Step<PondError>`

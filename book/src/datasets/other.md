@@ -6,7 +6,7 @@ All built-in dataset types, their feature flags, and typical use cases.
 
 | Type | Load/Save types | Description |
 |------|----------------|-------------|
-| `Param<T>` | `T` / `()` | Read-only parameter. Error: `Infallible`. |
+| `Param<T>` | `T` / `Never` | Read-only parameter. Error: `PondError` (never returned). |
 | `CellDataset<T>` | `T` / `T` | `no_std` intermediate storage. `T: Copy` only. |
 
 ## `std` datasets

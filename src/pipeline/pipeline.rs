@@ -1,20 +1,20 @@
 //! Pipeline struct - a container for multiple steps.
 
 use super::steps::{StepsMeta, Steps};
-use super::traits::{DatasetRef, NodeInput, NodeOutput, StepMeta, Group, Step, StepKind};
+use super::traits::{DatasetRef, NodeInputMeta, NodeOutputMeta, StepMeta, Group, Step, StepKind};
 
 /// A named group of steps with declared input/output dataset contracts.
 ///
 /// Pipelines are containers — they delegate execution to their child steps
 /// and are never called directly by runners.
-pub struct Pipeline<S: StepsMeta, Input: NodeInput, Output: NodeOutput> {
+pub struct Pipeline<S: StepsMeta, Input: NodeInputMeta, Output: NodeOutputMeta> {
     pub name: &'static str,
     pub steps: S,
     pub input: Input,
     pub output: Output,
 }
 
-impl<S: StepsMeta + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
+impl<S: StepsMeta + Send + Sync, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync>
     StepMeta for Pipeline<S, Input, Output>
 {
     fn name(&self) -> &'static str {
@@ -42,7 +42,7 @@ impl<S: StepsMeta + Send + Sync, Input: NodeInput + Send + Sync, Output: NodeOut
     }
 }
 
-impl<E, S, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
+impl<E, S, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync>
     Group<E> for Pipeline<S, Input, Output>
 where
     S: Steps<E> + Send + Sync,
@@ -52,7 +52,7 @@ where
     }
 }
 
-impl<E, S, Input: NodeInput + Send + Sync, Output: NodeOutput + Send + Sync>
+impl<E, S, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync>
     Step<E> for Pipeline<S, Input, Output>
 where
     S: Steps<E> + Send + Sync,

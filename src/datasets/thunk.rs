@@ -1,8 +1,14 @@
 use std::prelude::v1::*;
 
-use crate::error::PondError;
-
-pub type Thunk<T> = Box<dyn FnOnce() -> Result<T, PondError> + Send>;
+/// A deferred computation carrying the pipeline error type `E`.
+///
+/// Generic over `E` rather than pinned to
+/// [`PondError`](crate::error::PondError) so that a [`PartitionedNode`]'s
+/// function may return a custom error type, exactly as a plain
+/// [`Node`](crate::pipeline::Node)'s may.
+///
+/// [`PartitionedNode`]: crate::pipeline::PartitionedNode
+pub type Thunk<T, E> = Box<dyn FnOnce() -> Result<T, E> + Send>;
 
 /// Adapts a loaded partition element into a [`Thunk`].
 ///
@@ -17,21 +23,21 @@ pub type Thunk<T> = Box<dyn FnOnce() -> Result<T, PondError> + Send>;
     label = "yields `{Self}`",
     note = "a partitioned node's function maps one element of the input partition to one element of the output partition"
 )]
-pub trait IntoThunk<T> {
-    fn into_thunk(self) -> Thunk<T>;
+pub trait IntoThunk<T, E> {
+    fn into_thunk(self) -> Thunk<T, E>;
 }
 
-impl<T: Send + 'static> IntoThunk<T> for T {
-    fn into_thunk(self) -> Thunk<T> {
+impl<T: Send + 'static, E> IntoThunk<T, E> for T {
+    fn into_thunk(self) -> Thunk<T, E> {
         Box::new(move || Ok(self))
     }
 }
 
-impl<T: Send + 'static, E: Into<PondError> + Send + 'static> IntoThunk<T>
-    for Box<dyn FnOnce() -> Result<T, E> + Send>
+impl<T: Send + 'static, E: From<E2>, E2: Send + 'static> IntoThunk<T, E>
+    for Box<dyn FnOnce() -> Result<T, E2> + Send>
 {
-    fn into_thunk(self) -> Thunk<T> {
-        Box::new(move || self().map_err(Into::into))
+    fn into_thunk(self) -> Thunk<T, E> {
+        Box::new(move || self().map_err(E::from))
     }
 }
 
@@ -44,20 +50,20 @@ impl<T: Send + 'static, E: Into<PondError> + Send + 'static> IntoThunk<T>
     label = "stores `{Self}`",
     note = "a partitioned node's function maps one element of the input partition to one element of the output partition"
 )]
-pub trait FromThunk<T>: Sized {
-    fn from_thunk(thunk: Thunk<T>) -> Result<Self, PondError>;
+pub trait FromThunk<T, E>: Sized {
+    fn from_thunk(thunk: Thunk<T, E>) -> Result<Self, E>;
 }
 
-impl<T: Send + 'static> FromThunk<T> for T {
-    fn from_thunk(thunk: Thunk<T>) -> Result<Self, PondError> {
+impl<T: Send + 'static, E> FromThunk<T, E> for T {
+    fn from_thunk(thunk: Thunk<T, E>) -> Result<Self, E> {
         thunk()
     }
 }
 
-impl<T: Send + 'static, E: From<PondError> + Send + 'static> FromThunk<T>
-    for Box<dyn FnOnce() -> Result<T, E> + Send>
+impl<T: Send + 'static, E: Send + 'static, E2: From<E> + Send + 'static> FromThunk<T, E>
+    for Box<dyn FnOnce() -> Result<T, E2> + Send>
 {
-    fn from_thunk(thunk: Thunk<T>) -> Result<Self, PondError> {
-        Ok(Box::new(move || thunk().map_err(Into::into)))
+    fn from_thunk(thunk: Thunk<T, E>) -> Result<Self, E> {
+        Ok(Box::new(move || thunk().map_err(E2::from)))
     }
 }

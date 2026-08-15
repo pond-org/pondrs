@@ -5,7 +5,7 @@ use crate::error::PondError;
 use super::into_result::IntoNodeResult;
 use super::stable::{StableFn, StableTuple};
 use crate::hooks::{HookAbort, HookControl};
-use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepMeta, Leaf, Step, StepKind};
+use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeInputMeta, NodeOutput, NodeOutputMeta, StepMeta, Leaf, Step, StepKind};
 
 /// Marker trait asserting that a return type is structurally compatible
 /// with an output tuple `O`.
@@ -50,7 +50,7 @@ impl<O: StableTuple, E> CompatibleOutput<O> for Result<O, E> {}
 /// A node function takes the `LoadItem` of each input, in order, and returns a
 /// tuple of the `SaveItem` of each output, in order — or a `Result` of that tuple
 /// when it can fail. A single output is a one-element tuple: `(value,)`.
-pub struct Node<F, Input: NodeInput, Output: NodeOutput>
+pub struct Node<F, Input: NodeInputMeta, Output: NodeOutputMeta>
 where
     F: StableFn<Input::Args>,
     F::Output: CompatibleOutput<Output::Output>,
@@ -63,8 +63,8 @@ where
 
 impl<F, Input, Output> StepMeta for Node<F, Input, Output>
 where
-    Input: NodeInput + Send + Sync,
-    Output: NodeOutput + Send + Sync,
+    Input: NodeInputMeta + Send + Sync,
+    Output: NodeOutputMeta + Send + Sync,
     F: StableFn<Input::Args> + Send + Sync,
     F::Output: CompatibleOutput<Output::Output>,
 {
@@ -93,17 +93,17 @@ where
 
 impl<F, Input, Output, E, R> Leaf<E> for Node<F, Input, Output>
 where
-    Input: NodeInput + Send + Sync,
-    Output: NodeOutput + Send + Sync,
+    Input: NodeInput<E> + Send + Sync,
+    Output: NodeOutput<E> + Send + Sync,
     F: StableFn<Input::Args, Output = R> + Send + Sync,
     R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
-        let args = self.input.load_data(on_event).map_err(E::from)?;
+        let args = self.input.load_data(on_event)?;
         let result = StableFn::call(&self.func, args);
         let output = result.into_node_result()?;
-        self.output.save_data(output, on_event).map_err(E::from)?;
+        self.output.save_data(output, on_event)?;
         Ok(())
     }
 }
@@ -114,8 +114,8 @@ where
 // type. The chain through this impl is what makes those messages readable.
 impl<F, Input, Output, E, R> Step<E> for Node<F, Input, Output>
 where
-    Input: NodeInput + Send + Sync,
-    Output: NodeOutput + Send + Sync,
+    Input: NodeInput<E> + Send + Sync,
+    Output: NodeOutput<E> + Send + Sync,
     F: StableFn<Input::Args, Output = R> + Send + Sync,
     R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,

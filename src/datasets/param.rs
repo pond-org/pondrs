@@ -2,9 +2,10 @@
 
 #[cfg(feature = "std")]
 use std::prelude::v1::*;
-use core::convert::Infallible;
 
 use serde::{Deserialize, Serialize};
+
+use crate::error::PondError;
 
 use super::{Dataset, Never};
 
@@ -19,15 +20,22 @@ pub struct Param<T: Clone>(pub T);
 impl<T: Clone + Serialize + 'static> Dataset for Param<T> {
     type LoadItem = T;
     type SaveItem = Never;
-    type Error = Infallible;
+    /// `PondError`, not `Infallible`, even though loading a param cannot fail.
+    ///
+    /// A node's input tuple requires `E: From<D::Error>` of every slot, and a
+    /// `Param` appears in nearly every pipeline — `Infallible` here would make
+    /// every user error type owe an `From<Infallible>` impl. Blanketing around
+    /// that is impossible: any `impl<E> ... for E` overlaps the `E: From<X>`
+    /// blanket and coherence rejects it.
+    type Error = PondError;
 
-    fn load(&self) -> Result<Self::LoadItem, Infallible> {
+    fn load(&self) -> Result<Self::LoadItem, PondError> {
         Ok(self.0.clone())
     }
 
     /// Param is read-only. `SaveItem` is uninhabited, so this argument cannot
     /// exist and the match discharges it without any runtime code.
-    fn save(&self, output: Self::SaveItem) -> Result<(), Infallible> {
+    fn save(&self, output: Self::SaveItem) -> Result<(), PondError> {
         match output {}
     }
 

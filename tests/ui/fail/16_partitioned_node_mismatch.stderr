@@ -4,9 +4,9 @@ error[E0277]: the input partition yields `String`, but the node function takes `
 17 |     let _step: &dyn Step<PondError> = &n;
    |                                       ^^ yields `String`
    |
-   = help: the trait `IntoThunk<i32>` is not implemented for `String`
+   = help: the trait `IntoThunk<i32, PondError>` is not implemented for `String`
    = note: a partitioned node's function maps one element of the input partition to one element of the output partition
-   = help: the trait `IntoThunk<T>` is implemented for `Box<(dyn FnOnce() -> Result<T, E> + Send + 'static)>`
+   = help: the trait `IntoThunk<T, E>` is implemented for `Box<(dyn FnOnce() -> Result<T, E2> + Send + 'static)>`
    = note: required for `PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to implement `pondrs::Step<PondError>`
    = note: required for the cast from `&PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to `&dyn pondrs::Step<PondError>`
 
@@ -16,8 +16,8 @@ error[E0277]: the node function returns `i32`, but the output partition stores `
 17 |     let _step: &dyn Step<PondError> = &n;
    |                                       ^^ stores `String`
    |
-   = help: the trait `FromThunk<i32>` is not implemented for `String`
+   = help: the trait `FromThunk<i32, PondError>` is not implemented for `String`
    = note: a partitioned node's function maps one element of the input partition to one element of the output partition
-   = help: the trait `FromThunk<T>` is implemented for `Box<(dyn FnOnce() -> Result<T, E> + Send + 'static)>`
+   = help: the trait `FromThunk<T, E>` is implemented for `Box<(dyn FnOnce() -> Result<T, E2> + Send + 'static)>`
    = note: required for `PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to implement `pondrs::Step<PondError>`
    = note: required for the cast from `&PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to `&dyn pondrs::Step<PondError>`

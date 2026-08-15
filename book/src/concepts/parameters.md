@@ -17,7 +17,7 @@ Configured via YAML:
 threshold: 0.5
 ```
 
-The "report" node reads the threshold as one of its inputs. When `Param` appears in a node's `input` tuple, `.load()` clones the inner value. Because `Param::Error` is `Infallible`, this can never fail.
+The "report" node reads the threshold as one of its inputs. When `Param` appears in a node's `input` tuple, `.load()` clones the inner value. It can never fail.
 
 ```rust,ignore
 {{#include ../../../examples/minimal.rs:report_node}}

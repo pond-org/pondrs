@@ -4,21 +4,35 @@ This page covers the `Node` struct in more depth. For the basics, see [A minimal
 
 ## `NodeInput` and `NodeOutput` traits
 
-These traits handle the mechanics of loading from and saving to dataset tuples:
+These traits handle the mechanics of loading from and saving to dataset tuples. Each is split along the same axis as `StepMeta`/`Step<E>`: a non-generic metadata half, and an `E`-generic execution half.
 
 ```rust,ignore
-pub trait NodeInput {
-    type Args;
-    fn load_data(&self, on_event: ...) -> Result<Self::Args, PondError>;
+// Metadata: what the tuple loads/saves, and which datasets it names.
+pub trait NodeInputMeta: StableTuple {
+    type Args: StableTuple;
+    fn for_each_input<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
 }
 
-pub trait NodeOutput {
-    type Output;
-    fn save_data(&self, output: Self::Output, on_event: ...) -> Result<(), PondError>;
+pub trait NodeOutputMeta: StableTuple {
+    type Output: StableTuple;
+    fn for_each_output<'s>(&'s self, f: &mut dyn FnMut(&DatasetRef<'s>));
+}
+
+// Execution: converts each slot's error into the pipeline error type `E`.
+pub trait NodeInput<E>: NodeInputMeta {
+    fn load_data(&self, on_event: ...) -> Result<Self::Args, E>;
+}
+
+pub trait NodeOutput<E>: NodeOutputMeta {
+    fn save_data(&self, output: Self::Output, on_event: ...) -> Result<(), E>;
 }
 ```
 
 They are implemented for tuples of dataset references (up to 10 elements) via macros. During execution, `load_data` fires `BeforeLoad`/`AfterLoad` events for each dataset, and `save_data` fires `BeforeSave`/`AfterSave` events — these drive the [hook system](../hooks/README.md).
+
+The split exists because the error bound is variadic: `(T0, T1)` needs `E: From<T0::Error> + From<T1::Error>`, which only an impl header can express, and that forces `E` onto the trait. `Args` cannot come along — `Node` resolves `Input::Args` to type-check the closure *before* `E` is known, which is what gives you closure-signature diagnostics at the `Node { .. }` literal. So `Node` bounds its `Input`/`Output` on the `Meta` traits, and the `Leaf<E>`/`Step<E>` impls add the `E`-generic ones.
+
+The practical consequence: argument- and return-type mistakes are reported at the `Node { .. }` literal, while error-conversion mistakes are reported where `E` is named. See [Compile errors](./errors.md).
 
 ## `CompatibleOutput`
 
