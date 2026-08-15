@@ -6,7 +6,12 @@ use thiserror::Error;
 ///
 /// Feature-gated variants are only available when the corresponding feature
 /// is enabled. The `DatasetNotLoaded` variant is always available (no_std).
+///
+/// Marked `#[non_exhaustive]`: which variants exist already depends on the
+/// feature set a build resolves to, so downstream code must not rely on
+/// matching them exhaustively.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum PondError {
     #[cfg(feature = "std")]
     #[error("IO error: {0}")]
@@ -56,6 +61,19 @@ pub enum PondError {
     #[error("{0}")]
     Custom(std::string::String),
 
+    /// A foreign error, preserved whole: `Display`, `source()` chain, and
+    /// `downcast_ref` all keep working. Prefer this over [`Custom`](Self::Custom),
+    /// which flattens an error to its message.
+    #[cfg(feature = "std")]
+    #[error(transparent)]
+    Other(#[from] std::boxed::Box<dyn core::error::Error + Send + Sync>),
+
+    /// A static message. The `no_std`-usable counterpart of
+    /// [`Custom`](Self::Custom) and [`Other`](Self::Other), which both need an
+    /// allocator.
+    #[error("{0}")]
+    Message(&'static str),
+
     #[cfg(feature = "std")]
     #[error("Key mismatch: expected keys {expected:?}, got {actual:?}")]
     KeyMismatch {
@@ -66,6 +84,14 @@ pub enum PondError {
     #[cfg(feature = "std")]
     #[error("Node not found: '{0}'")]
     NodeNotFound(std::string::String),
+}
+
+impl PondError {
+    /// Wrap a foreign error in [`Other`](Self::Other), keeping it whole.
+    #[cfg(feature = "std")]
+    pub fn other<E: core::error::Error + Send + Sync + 'static>(e: E) -> Self {
+        PondError::Other(std::boxed::Box::new(e))
+    }
 }
 
 /// Validation error from [`StepsMeta::check`](crate::pipeline::StepsMeta::check).

@@ -16,14 +16,24 @@ pub enum PondError {
     #[cfg(feature = "image")]  Image(image::ImageError),
 
     DatasetNotLoaded,          // always available (no_std)
+    HookAbort(&'static str),
     RunnerNotFound,
     CheckFailed,
+    Message(&'static str),
     #[cfg(feature = "std")]    LockPoisoned(String),
     #[cfg(feature = "std")]    Custom(String),
+    #[cfg(feature = "std")]    Other(Box<dyn core::error::Error + Send + Sync>),
+    // ...
 }
 ```
 
-Variants are feature-gated — only `DatasetNotLoaded`, `RunnerNotFound`, and `CheckFailed` are available in `no_std` builds.
+Variants are feature-gated — only `DatasetNotLoaded`, `HookAbort`, `RunnerNotFound`, `CheckFailed`, and `Message` are available in `no_std` builds. The enum is `#[non_exhaustive]`, so match on it with a `_` arm.
+
+`Custom(String)` flattens an error to its message. Prefer `PondError::other(e)`, which stores the error in the `Other` variant and keeps `Display`, the `source()` chain, and `downcast_ref` intact:
+
+```rust,ignore
+parse_my_format(&bytes).map_err(PondError::other)?;
+```
 
 ## Using `PondError` directly
 
@@ -99,4 +109,4 @@ If you implement a custom dataset whose `Error` type is not already covered by `
    }
    ```
 
-   This requires `PondError: From<MyDatasetError>` **or** using your custom pipeline error type `E` where `E: From<PondError> + From<MyDatasetError>`. See [Dataset Errors](./datasets.md) for the full pattern.
+   This requires `PondError: From<MyDatasetError>` — the node input/output bounds convert a dataset's error into `PondError` before it reaches your pipeline error type. See [Dataset Errors](./datasets.md) for the full pattern.
