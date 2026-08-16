@@ -97,13 +97,13 @@ PartitionedNode::new("uppercase", uppercase, &catalog.input, &catalog.output)
 
 ### How it works
 
-`PartitionedNode` uses the `IntoThunk` and `FromThunk` traits to bridge eager and lazy datasets transparently:
+`PartitionedNode` uses the `IntoLazy` and `FromLazy` traits to bridge eager and lazy datasets transparently:
 
 1. **Load** — loads the partitioned input as a `HashMap<String, D1::LoadItem>`
-2. **Map** — for each entry, wraps the loaded item as an input `Thunk<T1, E>` via `IntoThunk`, applies the function inside a new output `Thunk<T2, E>`, then converts back via `FromThunk`
+2. **Map** — for each entry, wraps the loaded item as an input `Lazy<T1, E>` via `IntoLazy`, applies the function inside a new output `Lazy<T2, E>`, then converts back via `FromLazy`
 3. **Save** — saves the output `HashMap`
 
-The thunk types carry the pipeline error type `E`, so a partitioned node's function may return a custom error just as a plain `Node`'s may:
+In these positions `Lazy` carries the pipeline error type `E` rather than a dataset error, so a partitioned node's function may return a custom error just as a plain `Node`'s may:
 
 ```rust,ignore
 fn shout(text: String) -> Result<(String,), MyError> { /* ... */ }
@@ -115,7 +115,7 @@ When both input and output are lazy, the per-partition function is captured insi
 
 ### Eager, lazy, or mixed
 
-`PartitionedNode` works with any combination of eager and lazy input/output datasets. The thunk traits handle the conversion:
+`PartitionedNode` works with any combination of eager and lazy input/output datasets. The `IntoLazy`/`FromLazy` traits handle the conversion:
 
 | Input | Output | Behavior |
 |---|---|---|

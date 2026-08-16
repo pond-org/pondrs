@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use core::marker::PhantomData;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::datasets::{FileDataset, FromThunk, IntoThunk, PartitionedDataset, Thunk};
+use crate::datasets::{FileDataset, FromLazy, IntoLazy, Lazy, PartitionedDataset};
 use crate::error::PondError;
 
 use super::into_result::IntoNodeResult;
@@ -84,9 +84,9 @@ impl<F, D1, D2, T1, T2, E> Leaf<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
-    D1::LoadItem: IntoThunk<T1, E> + Send + 'static,
+    D1::LoadItem: IntoLazy<T1, E> + Send + 'static,
     D1::SaveItem: Send,
-    D2::SaveItem: FromThunk<T2, E> + Send,
+    D2::SaveItem: FromLazy<T2, E> + Send,
     // `PartitionedDataset` aggregates its inner dataset's errors into
     // `PondError` itself, so this is its bound, not the node's.
     PondError: From<D1::Error> + From<D2::Error>,
@@ -105,13 +105,13 @@ where
             .into_iter()
             .map(|(key, elem)| {
                 let func = self.func.clone();
-                let in_thunk: Thunk<T1, E> = elem.into_thunk();
-                let out_thunk: Thunk<T2, E> = Box::new(move || {
-                    let value = in_thunk()?;
+                let in_lazy: Lazy<T1, E> = elem.into_lazy();
+                let out_lazy: Lazy<T2, E> = Box::new(move || {
+                    let value = in_lazy()?;
                     let (result,) = StableFn::call(&func, (value,)).into_node_result()?;
                     Ok(result)
                 });
-                let save_item = D2::SaveItem::from_thunk(out_thunk)?;
+                let save_item = D2::SaveItem::from_lazy(out_lazy)?;
                 Ok((key, save_item))
             })
             .collect::<Result<HashMap<_, _>, E>>()?;
@@ -125,9 +125,9 @@ impl<F, D1, D2, T1, T2, E> Step<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
-    D1::LoadItem: IntoThunk<T1, E> + Send + 'static,
+    D1::LoadItem: IntoLazy<T1, E> + Send + 'static,
     D1::SaveItem: Send,
-    D2::SaveItem: FromThunk<T2, E> + Send,
+    D2::SaveItem: FromLazy<T2, E> + Send,
     // `PartitionedDataset` aggregates its inner dataset's errors into
     // `PondError` itself, so this is its bound, not the node's.
     PondError: From<D1::Error> + From<D2::Error>,
