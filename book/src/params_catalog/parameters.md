@@ -13,7 +13,7 @@ pub struct Param<T: Clone>(pub T);
 
 - `LoadItem = T` — returns a clone of the inner value
 - `SaveItem = ()` — writing is forbidden; the pipeline validator rejects any node that writes to a `Param`
-- `Error = Infallible` — loading always succeeds
+- `Error = PondError` — loading always succeeds, but the declared error type is `PondError` so that no user error type has to implement `From<Infallible>`
 
 Because `is_param()` returns `true`, the viz dashboard and pipeline check treat parameters differently from regular datasets.
 

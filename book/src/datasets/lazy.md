@@ -100,8 +100,16 @@ PartitionedNode::new("uppercase", uppercase, &catalog.input, &catalog.output)
 `PartitionedNode` uses the `IntoThunk` and `FromThunk` traits to bridge eager and lazy datasets transparently:
 
 1. **Load** — loads the partitioned input as a `HashMap<String, D1::LoadItem>`
-2. **Map** — for each entry, wraps the loaded item as an input `Thunk<T1>` via `IntoThunk`, applies the function inside a new output `Thunk<T2>`, then converts back via `FromThunk`
+2. **Map** — for each entry, wraps the loaded item as an input `Thunk<T1, E>` via `IntoThunk`, applies the function inside a new output `Thunk<T2, E>`, then converts back via `FromThunk`
 3. **Save** — saves the output `HashMap`
+
+The thunk types carry the pipeline error type `E`, so a partitioned node's function may return a custom error just as a plain `Node`'s may:
+
+```rust,ignore
+fn shout(text: String) -> Result<(String,), MyError> { /* ... */ }
+
+PartitionedNode::new("shout", shout, &catalog.input, &catalog.output)
+```
 
 When both input and output are lazy, the per-partition function is captured inside the output thunk and only executed at save time — which happens in parallel if using `ParallelRunner`.
 

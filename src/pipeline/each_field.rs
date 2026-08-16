@@ -24,21 +24,25 @@ where
     S: Send + Sync,
     D: Dataset + Send + Sync,
     D::LoadItem: Send + Sync + 'static,
-    PondError: From<D::Error>,
 {
     type Item = HashMap<String, D::LoadItem>;
+    type Error = D::Error;
 
-    fn load_input(
+    fn load_input<E>(
         &self,
         on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>,
-    ) -> Result<Self::Item, PondError> {
+    ) -> Result<Self::Item, E>
+    where
+        E: From<Self::Error> + From<PondError>,
+    {
         let mut map = HashMap::with_capacity(self.catalog.len());
         for (key, entry) in self.catalog.iter() {
             let ds = (self.field)(entry);
             let ds_ref = DatasetRef::from_ref(ds);
-            on_event(&ds_ref, DatasetEvent::BeforeLoad)?;
-            let value = ds.load()?;
-            on_event(&ds_ref, DatasetEvent::AfterLoad(&value))?;
+            on_event(&ds_ref, DatasetEvent::BeforeLoad).map_err(|e| E::from(PondError::from(e)))?;
+            let value = ds.load().map_err(E::from)?;
+            on_event(&ds_ref, DatasetEvent::AfterLoad(&value))
+                .map_err(|e| E::from(PondError::from(e)))?;
             map.insert(key.to_string(), value);
         }
         Ok(map)
@@ -56,31 +60,39 @@ where
     S: Send + Sync,
     D: Dataset + Send + Sync,
     D::SaveItem: Send + Sync + 'static,
-    PondError: From<D::Error>,
 {
     type Item = HashMap<String, D::SaveItem>;
+    type Error = D::Error;
 
-    fn save_output(
+    fn save_output<E>(
         &self,
         mut value: Self::Item,
         on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>,
-    ) -> Result<(), PondError> {
+    ) -> Result<(), E>
+    where
+        E: From<Self::Error> + From<PondError>,
+    {
         let mut expected: Vec<String> = self.catalog.keys().to_vec();
         let mut actual: Vec<String> = value.keys().cloned().collect();
         expected.sort();
         actual.sort();
         if expected != actual {
-            return Err(PondError::KeyMismatch { expected, actual });
+            // `KeyMismatch` is the adapter's own failure, not the dataset's —
+            // it has no home in `Self::Error`, which is why `DatasetOutput`
+            // keeps the `E: From<PondError>` floor.
+            return Err(E::from(PondError::KeyMismatch { expected, actual }));
         }
 
         for (key, entry) in self.catalog.iter() {
             let item = value.remove(key).expect("key validated above");
             let ds = (self.field)(entry);
             let ds_ref = DatasetRef::from_ref(ds);
-            let control = on_event(&ds_ref, DatasetEvent::BeforeSave(&item))?;
+            let control = on_event(&ds_ref, DatasetEvent::BeforeSave(&item))
+                .map_err(|e| E::from(PondError::from(e)))?;
             if control != HookControl::Skip {
-                ds.save(item)?;
-                on_event(&ds_ref, DatasetEvent::AfterSave)?;
+                ds.save(item).map_err(E::from)?;
+                on_event(&ds_ref, DatasetEvent::AfterSave)
+                    .map_err(|e| E::from(PondError::from(e)))?;
             }
         }
         Ok(())

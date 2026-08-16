@@ -155,11 +155,35 @@ MyErr`. See [Error Type](../error_handling/error_type.md).
 
 ```text
 error[E0277]: the trait bound `PondError: From<MyErr>` is not satisfied
-   = note: required for `&MyDataset` to implement `DatasetInput`
+  --> src/main.rs
+   |
+   |     let _step: &dyn Step<PondError> = &n;
+   |                                       ^^ the trait `From<MyErr>` is not
+   |                                          implemented for `PondError`
+   |
+   = note: required for `(&MyDataset,)` to implement `NodeInput<PondError>`
 ```
 
-The trailing `note` is the important line: a custom `Dataset` can only be used in
-a node once `PondError: From<Self::Error>` holds. See
+The trailing `note` is the important line: every dataset in a node's input or
+output tuple must have its `Error` absorbed by the **pipeline** error type. Here
+that type is `PondError`, which knows nothing about `MyErr`.
+
+The fix is not an `impl From<MyErr> for PondError` — it is a pipeline error type
+that has a variant for `MyErr`:
+
+```rust,ignore
+#[derive(Debug, thiserror::Error)]
+enum AppError {
+    #[error(transparent)] Pond(#[from] PondError),
+    #[error(transparent)] My(#[from] MyErr),
+}
+```
+
+Note where this fires. The `Node { .. }` literal compiles fine — it only needs
+`Args` and the closure signature, neither of which mentions the error type. The
+error appears wherever the pipeline error type is named: the pipeline function's
+return type, or a `Step<E>` annotation as above. This is the same placement as
+[the node error case](#the-nodes-error-does-not-convert). See
 [Dataset Errors](../error_handling/datasets.md).
 
 ## Pipeline and hook errors

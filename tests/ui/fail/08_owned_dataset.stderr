@@ -10,4 +10,4 @@ error[E0277]: `Param<i32>` cannot be used as a node input
   = help: the following other types implement trait `DatasetInput`:
             &T
             EachField<'_, S, D>
-  = note: required for `(Param<i32>,)` to implement `NodeInput`
+  = note: required for `(Param<i32>,)` to implement `NodeInputMeta`

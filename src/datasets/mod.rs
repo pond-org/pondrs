@@ -84,9 +84,15 @@ pub use templated::TemplatedCatalog;
 
 /// Trait for datasets that can load and save data.
 ///
-/// Each dataset declares its own `Error` type. Infallible datasets (like `Param`)
-/// use `core::convert::Infallible`. The framework converts dataset errors to the
-/// pipeline's error type via `PondError: From<Self::Error>`.
+/// Each dataset declares its own `Error` type. It converts *directly* into the
+/// pipeline error type `E` — the node input/output tuples require
+/// `E: From<Self::Error>` — so a domain error keeps its type and `source()`
+/// chain all the way to the caller. No `PondError: From<Self::Error>` impl is
+/// needed, and none should be written.
+///
+/// Datasets that cannot fail still declare a real error type rather than
+/// `core::convert::Infallible` — see [`Param::Error`](Param#associatedtype.Error)
+/// for why.
 ///
 /// `Serialize` is a supertrait so that `DatasetMeta::yaml()` can automatically
 /// serialize any dataset's configuration to YAML.

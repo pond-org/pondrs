@@ -18,7 +18,7 @@ pub trait Dataset: serde::Serialize {
 
 - **`LoadItem`** — the type produced when loading (e.g. `DataFrame`, `String`, `f64`)
 - **`SaveItem`** — the type accepted when saving (often the same as `LoadItem`)
-- **`Error`** — the error type for I/O operations. Use `core::convert::Infallible` for datasets that never fail (like `Param`)
+- **`Error`** — the error type for I/O operations. Use `PondError` unless you have a domain error worth preserving; avoid `core::convert::Infallible` even for datasets that never fail, since it makes every pipeline error type owe a `From<Infallible>` impl
 - **`is_param()`** — returns `true` for read-only parameter datasets. The pipeline validator uses this to prevent writing to params.
 - **`Serialize` supertrait** — enables automatic YAML serialization of dataset configuration for the viz and catalog indexer.
 
