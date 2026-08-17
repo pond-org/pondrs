@@ -17,9 +17,9 @@ cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example weather_app -- run ||
 
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example sales_app -- run
 
-cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example ident_app -- \
-    --catalog-path "$ROOT_DIR/examples/ident_data/catalog.yml" \
-    --params-path "$ROOT_DIR/examples/ident_data/params.yml" \
+cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example alias_app -- \
+    --catalog-path "$ROOT_DIR/examples/alias_data/catalog.yml" \
+    --params-path "$ROOT_DIR/examples/alias_data/params.yml" \
     run
 
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example register_example -- run
@@ -38,10 +38,10 @@ cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example weather_app -- \
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example sales_app -- \
     viz --export "$ASSETS_DIR/sales_viz.html"
 
-cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example ident_app -- \
-    --catalog-path "$ROOT_DIR/examples/ident_data/catalog.yml" \
-    --params-path "$ROOT_DIR/examples/ident_data/params.yml" \
-    viz --export "$ASSETS_DIR/ident_viz.html"
+cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example alias_app -- \
+    --catalog-path "$ROOT_DIR/examples/alias_data/catalog.yml" \
+    --params-path "$ROOT_DIR/examples/alias_data/params.yml" \
+    viz --export "$ASSETS_DIR/alias_viz.html"
 
 cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --example register_example -- \
     viz --export "$ASSETS_DIR/register_viz.html"
