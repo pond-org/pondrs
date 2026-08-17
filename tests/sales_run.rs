@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-//! Integration test for the sales pipeline via App::from_args + dispatch.
+//! Integration test for the sales pipeline via `App::from_args` + dispatch.
 
 #[path = "../examples/sales/mod.rs"]
 mod sales;

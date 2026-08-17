@@ -10,7 +10,7 @@ use crate::datasets::Dataset;
 /// Creates an edge in the pipeline graph — so `output` counts as produced
 /// and downstream steps may consume it — without performing any computation
 /// or data transfer. Typically used when the same bytes are read back through
-/// a different dataset type (e.g. text written, then read as a DataFrame).
+/// a different dataset type (e.g. text written, then read as a `DataFrame`).
 pub struct Alias<'a, Input: Dataset + Send + Sync, Output: Dataset + Send + Sync> {
     pub name: &'static str,
     pub input: &'a Input,

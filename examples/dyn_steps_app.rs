@@ -4,8 +4,8 @@
 //! when the `include_report` param is `true`.
 //!
 //! Usage:
-//!   cargo run --example dyn_steps_app -- run
-//!   cargo run --example dyn_steps_app -- check
+//!   cargo run --example `dyn_steps_app` -- run
+//!   cargo run --example `dyn_steps_app` -- check
 
 #[path = "dyn_steps/mod.rs"]
 mod dyn_steps;

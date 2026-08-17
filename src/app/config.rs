@@ -20,12 +20,9 @@ pub fn load_yaml(path: &str) -> Result<serde_yaml::Value, PondError> {
 /// Values are parsed as YAML scalars (auto-detecting numbers, bools, strings, null).
 pub fn apply_overrides(value: &mut serde_yaml::Value, overrides: &[String]) {
     for entry in overrides {
-        let (dotted_key, raw_val) = match entry.split_once('=') {
-            Some(pair) => pair,
-            None => {
-                eprintln!("Warning: ignoring malformed override (expected KEY=VALUE): {entry}");
-                continue;
-            }
+        let Some((dotted_key, raw_val)) = entry.split_once('=') else {
+            eprintln!("Warning: ignoring malformed override (expected KEY=VALUE): {entry}");
+            continue;
         };
 
         let parts: Vec<&str> = dotted_key.split('.').collect();

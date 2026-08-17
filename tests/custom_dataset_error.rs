@@ -21,8 +21,8 @@ enum GpsError {
 impl std::fmt::Display for GpsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GpsError::NoFix { satellites } => write!(f, "no fix ({satellites} satellites)"),
-            GpsError::Garbled => write!(f, "garbled sentence"),
+            Self::NoFix { satellites } => write!(f, "no fix ({satellites} satellites)"),
+            Self::Garbled => write!(f, "garbled sentence"),
         }
     }
 }
@@ -78,21 +78,21 @@ enum AppError {
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AppError::Pond(e) => write!(f, "{e}"),
-            AppError::Gps(e) => write!(f, "{e}"),
+            Self::Pond(e) => write!(f, "{e}"),
+            Self::Gps(e) => write!(f, "{e}"),
         }
     }
 }
 
 impl From<PondError> for AppError {
     fn from(e: PondError) -> Self {
-        AppError::Pond(e)
+        Self::Pond(e)
     }
 }
 
 impl From<GpsError> for AppError {
     fn from(e: GpsError) -> Self {
-        AppError::Gps(e)
+        Self::Gps(e)
     }
 }
 
@@ -137,6 +137,10 @@ fn custom_dataset_save_error_flows_into_pipeline_error() {
 }
 
 #[test]
+#[allow(
+    clippy::float_cmp,
+    reason = "3.0 * 2.0 is exact in binary floating point"
+)]
 fn custom_and_builtin_dataset_errors_mix_in_one_tuple() {
     let gps = GpsDataset::with_fix(3.0);
     let factor = Param(2.0f64);
@@ -190,11 +194,11 @@ fn each_field_catalog(yaml: &str) -> TemplatedCatalog<GpsEntry> {
 #[test]
 fn each_field_propagates_dataset_error() {
     let catalog = each_field_catalog(
-        r#"
+        r"
 template:
   reading: { fix: null }
 names: [bow, stern]
-"#,
+",
     );
     let out = MemoryDataset::<HashMap<String, f64>>::new();
 
@@ -215,11 +219,11 @@ names: [bow, stern]
 #[test]
 fn each_field_key_mismatch_still_lands_in_the_pond_variant() {
     let catalog = each_field_catalog(
-        r#"
+        r"
 template:
   reading: { fix: 1.0 }
 names: [bow, stern]
-"#,
+",
     );
     let source = Param(vec!["bow".to_string(), "midships".to_string()]);
 

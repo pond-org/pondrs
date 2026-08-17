@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use serde::Serialize;
 use tempfile::TempDir;
@@ -85,7 +86,7 @@ fn lazy_partitioned_parallel() {
             func: uppercase,
             input: &catalog.input,
             output: &catalog.output_pnode,
-            _marker: Default::default(),
+            _marker: PhantomData,
         },
     );
 

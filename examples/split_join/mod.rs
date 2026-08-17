@@ -1,6 +1,6 @@
 //! Shared pipeline definition for the split/join example.
 //!
-//! Demonstrates: TemplatedCatalog, EachField, DynSteps,
+//! Demonstrates: `TemplatedCatalog`, `EachField`, `DynSteps`,
 //! fan-out/fan-in patterns with per-item parallel processing.
 
 use std::collections::HashMap;
@@ -53,7 +53,7 @@ fn group_by_store(df: DataFrame) -> Result<(HashMap<String, DataFrame>,), Polars
     let store_col = df.column("store")?.str()?;
     let unique: Vec<String> = store_col
         .into_no_null_iter()
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .collect::<std::collections::HashSet<_>>()
         .into_iter()
         .collect();
@@ -68,7 +68,7 @@ fn group_by_store(df: DataFrame) -> Result<(HashMap<String, DataFrame>,), Polars
 
 /// Compute the total stock value for a single store.
 ///
-/// For each row: value = quantity * unit_price.
+/// For each row: value = quantity * `unit_price`.
 /// Items below `low_stock_threshold` are flagged but still counted.
 fn compute_store_value(df: DataFrame, threshold: i64) -> (f64,) {
     let qty = df.column("quantity").unwrap().i64().unwrap();

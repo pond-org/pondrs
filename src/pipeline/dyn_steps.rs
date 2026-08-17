@@ -29,7 +29,7 @@ use super::traits::{StepMeta, Step};
 /// ```
 pub type DynSteps<'a, E = PondError> = Vec<Box<dyn Step<E> + Send + Sync + 'a>>;
 
-impl<'a, E> StepsMeta for Vec<Box<dyn Step<E> + Send + Sync + 'a>> {
+impl<E> StepsMeta for Vec<Box<dyn Step<E> + Send + Sync + '_>> {
     fn for_each_meta<'s>(&'s self, f: &mut dyn FnMut(&'s dyn StepMeta)) {
         for item in self {
             f(item.as_ref() as &dyn StepMeta);
@@ -37,7 +37,7 @@ impl<'a, E> StepsMeta for Vec<Box<dyn Step<E> + Send + Sync + 'a>> {
     }
 }
 
-impl<'a, E> Steps<E> for Vec<Box<dyn Step<E> + Send + Sync + 'a>> {
+impl<E> Steps<E> for Vec<Box<dyn Step<E> + Send + Sync + '_>> {
     fn for_each_step<'s>(&'s self, f: &mut dyn FnMut(&'s dyn Step<E>)) {
         for item in self {
             f(item.as_ref());

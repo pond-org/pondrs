@@ -1,11 +1,11 @@
-//! Example demonstrating pondrs running with only the no_std subset.
+//! Example demonstrating pondrs running with only the `no_std` subset.
 //!
 //! This binary itself uses std (it's a regular executable), but it only
 //! depends on pondrs features that work without std or alloc:
-//! - CellDataset (core::cell::Cell based, no allocator needed)
+//! - `CellDataset` (`core::cell::Cell` based, no allocator needed)
 //! - Param (read-only parameter)
 //! - Node, Pipeline, Steps
-//! - SequentialRunner with () hooks (no logging, no panic catching)
+//! - `SequentialRunner` with () hooks (no logging, no panic catching)
 
 use pondrs::datasets::{CellDataset, Param};
 use pondrs::error::PondError;
@@ -26,8 +26,8 @@ struct Params {
     offset: Param<i32>,
 }
 
-/// A node that returns Result with its natural error type (PondError here,
-/// since CellDataset::load returns PondError on failure).
+/// A node that returns Result with its natural error type (`PondError` here,
+/// since `CellDataset::load` returns `PondError` on failure).
 fn checked_square(b: i32) -> Result<(i32,), PondError> {
     if b == 0 {
         return Err(PondError::DatasetNotLoaded); // placeholder for a real check

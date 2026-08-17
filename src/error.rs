@@ -5,7 +5,7 @@ use thiserror::Error;
 /// Framework-level errors from dataset I/O and pipeline infrastructure.
 ///
 /// Feature-gated variants are only available when the corresponding feature
-/// is enabled. The `DatasetNotLoaded` variant is always available (no_std).
+/// is enabled. The `DatasetNotLoaded` variant is always available (`no_std`).
 ///
 /// Marked `#[non_exhaustive]`: which variants exist already depends on the
 /// feature set a build resolves to, so downstream code must not rely on
@@ -90,7 +90,7 @@ impl PondError {
     /// Wrap a foreign error in [`Other`](Self::Other), keeping it whole.
     #[cfg(feature = "std")]
     pub fn other<E: core::error::Error + Send + Sync + 'static>(e: E) -> Self {
-        PondError::Other(std::boxed::Box::new(e))
+        Self::Other(std::boxed::Box::new(e))
     }
 }
 
@@ -134,25 +134,25 @@ pub enum CheckError {
 impl core::fmt::Display for CheckError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            CheckError::InputNotProduced { node_name, dataset_id } => {
+            Self::InputNotProduced { node_name, dataset_id } => {
                 write!(f, "Node '{node_name}' requires dataset {dataset_id:#x}, which is produced by a later node")
             }
-            CheckError::DuplicateOutput { node_name, dataset_id } => {
+            Self::DuplicateOutput { node_name, dataset_id } => {
                 write!(f, "Node '{node_name}' produces dataset {dataset_id:#x}, which was already produced by an earlier node")
             }
-            CheckError::ParamWritten { node_name, dataset_id } => {
+            Self::ParamWritten { node_name, dataset_id } => {
                 write!(f, "Node '{node_name}' writes to param dataset {dataset_id:#x}, but params are read-only")
             }
-            CheckError::UnusedPipelineInput { pipeline_name, dataset_id } => {
+            Self::UnusedPipelineInput { pipeline_name, dataset_id } => {
                 write!(f, "Pipeline '{pipeline_name}' declares input {dataset_id:#x}, but none of its children consume it")
             }
-            CheckError::UnproducedPipelineOutput { pipeline_name, dataset_id } => {
+            Self::UnproducedPipelineOutput { pipeline_name, dataset_id } => {
                 write!(f, "Pipeline '{pipeline_name}' declares output {dataset_id:#x}, but none of its children produce it")
             }
-            CheckError::UndeclaredPipelineInput { pipeline_name, dataset_id } => {
+            Self::UndeclaredPipelineInput { pipeline_name, dataset_id } => {
                 write!(f, "Pipeline '{pipeline_name}' has a child that consumes external dataset {dataset_id:#x}, which is not declared in the pipeline's inputs")
             }
-            CheckError::CapacityExceeded => {
+            Self::CapacityExceeded => {
                 write!(f, "Dataset capacity exceeded; use check_with_capacity::<N>() with a larger N")
             }
         }
@@ -167,6 +167,6 @@ impl From<core::convert::Infallible> for PondError {
 
 impl From<crate::hooks::HookAbort> for PondError {
     fn from(e: crate::hooks::HookAbort) -> Self {
-        PondError::HookAbort(e.0)
+        Self::HookAbort(e.0)
     }
 }

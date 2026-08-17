@@ -1,4 +1,4 @@
-//! Sequential pipeline validation (no_std compatible).
+//! Sequential pipeline validation (`no_std` compatible).
 
 use super::id_set::IdSet;
 use super::traits::{DatasetRef, StepMeta};

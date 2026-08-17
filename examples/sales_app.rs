@@ -1,9 +1,9 @@
 //! Sales pipeline app.
 //!
 //! Usage:
-//!   cargo run --example sales_app -- run
-//!   cargo run --example sales_app -- check
-//!   cargo run --example sales_app -- viz
+//!   cargo run --example `sales_app` -- run
+//!   cargo run --example `sales_app` -- check
+//!   cargo run --example `sales_app` -- viz
 
 #[path = "sales/mod.rs"]
 mod sales;

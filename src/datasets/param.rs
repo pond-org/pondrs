@@ -44,8 +44,9 @@ impl<T: Clone + Serialize + 'static> Dataset for Param<T> {
 
     #[cfg(feature = "std")]
     fn content_hash(&self) -> Option<u64> {
-        let yaml = serde_yaml::to_string(&self.0).ok()?;
         use core::hash::{Hash, Hasher};
+
+        let yaml = serde_yaml::to_string(&self.0).ok()?;
         let mut hasher = std::hash::DefaultHasher::new();
         yaml.hash(&mut hasher);
         Some(hasher.finish())

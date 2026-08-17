@@ -1,4 +1,4 @@
-//! Shared pipeline definition for the dyn_steps_app example and integration tests.
+//! Shared pipeline definition for the `dyn_steps_app` example and integration tests.
 
 #[path = "../minimal_fixtures/mod.rs"]
 mod minimal_fixtures;

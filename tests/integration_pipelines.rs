@@ -192,7 +192,7 @@ struct MixedCatalog {
     input_data: PolarsCsvDataset,
     threshold: MemoryDataset<i64>,
     filtered_data: PolarsCsvDataset,
-    row_count: MemoryDataset<u32>,
+    row_count: MemoryDataset<usize>,
 }
 
 #[derive(Serialize)]
@@ -252,7 +252,7 @@ fn test_mixed_csv_yaml_pipeline() {
                 },
                 Node {
                     name: "count_rows",
-                    func: |df: DataFrame| (df.height() as u32,),
+                    func: |df: DataFrame| (df.height(),),
                     input: (&catalog.filtered_data,),
                     output: (&catalog.row_count,),
                 },

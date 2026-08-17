@@ -1,11 +1,12 @@
-//! Polars DataFrame dataset.
+//! Polars `DataFrame` dataset.
 
 use std::prelude::v1::*;
+use core::fmt::Write as _;
 use polars::prelude::{Column, CsvParseOptions, CsvReadOptions, CsvWriter, DataFrame, NamedFrom, ParquetReader, ParquetWriter, SerReader, SerWriter, Series};
 use serde::{Deserialize, Serialize};
 
 use crate::error::PondError;
-use super::{Dataset, FileDataset};
+use super::{Dataset, FileDataset, Never};
 
 const MAX_ROWS: usize = 50;
 
@@ -17,11 +18,14 @@ fn dataframe_to_html(df: &DataFrame) -> String {
         "<table style=\"border-collapse:collapse;font-size:13px;font-family:monospace\">\n\
          <thead><tr>",
     );
+    // Writing to a `String` cannot fail, so the `fmt::Result` carries no
+    // information here.
     for col in cols {
-        s.push_str(&format!(
+        let _ = write!(
+            s,
             "<th style=\"border:1px solid #ccc;padding:4px 8px;background:#f5f5f5;text-align:left\">{}</th>",
             col.name()
-        ));
+        );
     }
     s.push_str("</tr></thead>\n<tbody>\n");
 
@@ -32,21 +36,50 @@ fn dataframe_to_html(df: &DataFrame) -> String {
                 Ok(v) => format!("{v}"),
                 Err(_) => String::new(),
             };
-            s.push_str(&format!(
+            let _ = write!(
+                s,
                 "<td style=\"border:1px solid #ccc;padding:4px 8px\">{val}</td>"
-            ));
+            );
         }
         s.push_str("</tr>\n");
     }
 
     s.push_str("</tbody></table>");
     if df.height() > MAX_ROWS {
-        s.push_str(&format!(
+        let _ = write!(
+            s,
             "<p style=\"color:#888;font-size:12px\">Showing {MAX_ROWS} of {} rows</p>",
             df.height()
-        ));
+        );
     }
     s
+}
+
+/// Does `f` survive a round trip through `i64` unchanged?
+///
+/// Excel has no integer type — every number arrives as `f64` — so a column
+/// whose values are all exactly representable as `i64` is loaded as one.
+/// Float-to-int casts saturate rather than wrap, so the round trip also
+/// rejects values outside the `i64` range, along with infinities and NaN.
+#[allow(
+    clippy::float_cmp,
+    reason = "an exact round-trip test is the point; a tolerance would defeat it"
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "any value that would lose information fails the round trip"
+)]
+fn is_exact_i64(f: f64) -> bool {
+    f.is_finite() && f == (f as i64) as f64
+}
+
+/// Truncating cast, only ever reached for values [`is_exact_i64`] accepted.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "guarded by `is_exact_i64` at the call site"
+)]
+fn to_i64(f: f64) -> i64 {
+    f as i64
 }
 
 fn default_separator() -> char { ',' }
@@ -186,7 +219,9 @@ impl PolarsExcelDataset {
 
 impl Dataset for PolarsExcelDataset {
     type LoadItem = DataFrame;
-    type SaveItem = DataFrame;
+    /// Read-only: `Never` is uninhabited, so no node can name this dataset as
+    /// an output. See [`Param`](crate::datasets::Param).
+    type SaveItem = Never;
     type Error = PondError;
 
     fn load(&self) -> Result<Self::LoadItem, PondError> {
@@ -207,11 +242,8 @@ impl Dataset for PolarsExcelDataset {
                 fastexcel::FastExcelSeries::String(v) => Series::new(name.into(), &v),
                 fastexcel::FastExcelSeries::Int(v) => Series::new(name.into(), &v),
                 fastexcel::FastExcelSeries::Float(v) => {
-                    if v.iter().all(|x| match x {
-                        Some(f) => *f == (*f as i64) as f64 && f.is_finite(),
-                        None => true,
-                    }) {
-                        let ints: Vec<Option<i64>> = v.iter().map(|x| x.map(|f| f as i64)).collect();
+                    if v.iter().all(|x| x.is_none_or(is_exact_i64)) {
+                        let ints: Vec<Option<i64>> = v.iter().map(|x| x.map(to_i64)).collect();
                         Series::new(name.into(), &ints)
                     } else {
                         Series::new(name.into(), &v)
@@ -223,13 +255,13 @@ impl Dataset for PolarsExcelDataset {
             }
         }).collect();
         let columns: Vec<Column> = series.into_iter().map(Column::from).collect();
-        let height = columns.first().map_or(0, |c| c.len());
+        let height = columns.first().map_or(0, Column::len);
         let df = DataFrame::new(height, columns)?;
         Ok(df)
     }
 
-    fn save(&self, _df: Self::SaveItem) -> Result<(), PondError> {
-        unimplemented!("PolarsExcelDataset is read-only")
+    fn save(&self, output: Self::SaveItem) -> Result<(), PondError> {
+        match output {}
     }
 
     fn content_hash(&self) -> Option<u64> { self.file_content_hash() }

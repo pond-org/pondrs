@@ -91,22 +91,21 @@ fn resolve_keep_set(
                     return Err(PondError::NodeNotFound(name.clone()));
                 }
             }
-            resolve_from_to(graph, from, to)
+            Ok(resolve_from_to(graph, from, to))
         }
     }
 }
 
 /// Compute the subgraph between from-nodes and to-nodes using edge traversal.
+///
+/// Every name in `from` and `to` must name a leaf of `graph`; `resolve_keep_set`
+/// checks that first, which is what makes the lookups below infallible.
 fn resolve_from_to(
     graph: &crate::graph::PipelineGraph<'_>,
     from: &HashSet<String>,
     to: &HashSet<String>,
-) -> Result<HashSet<&'static str>, PondError> {
-    let leaves: Vec<usize> = graph
-        .node_indices
-        .iter()
-        .copied()
-        .collect();
+) -> HashSet<&'static str> {
+    let leaves = &graph.node_indices;
 
     // Map node names to graph indices (leaves only)
     let name_to_idx: std::collections::HashMap<&str, usize> = leaves
@@ -143,10 +142,10 @@ fn resolve_from_to(
     // Intersect
     let keep_indices: HashSet<usize> = forward_set.intersection(&backward_set).copied().collect();
 
-    Ok(keep_indices
+    keep_indices
         .iter()
         .map(|&i| graph.nodes[i].name)
-        .collect())
+        .collect()
 }
 
 /// BFS from seed nodes along the given adjacency.
@@ -219,11 +218,6 @@ struct DynPipeline<'a, E> {
     outputs: Vec<DatasetRef<'a>>,
     steps: DynSteps<'a, E>,
 }
-
-// SAFETY: DynPipeline contains only Send+Sync fields (DatasetRef is Copy,
-// DynSteps requires Send+Sync on its elements).
-unsafe impl<E> Send for DynPipeline<'_, E> {}
-unsafe impl<E> Sync for DynPipeline<'_, E> {}
 
 impl<E> StepMeta for DynPipeline<'_, E>
 where
@@ -331,7 +325,7 @@ mod tests {
             Node { name: "n3", func: |v| (v,), input: (&cat.b,), output: (&cat.c,) },
         );
 
-        let filter = NodeFilter::Nodes(["n1", "n3"].iter().map(|s| s.to_string()).collect());
+        let filter = NodeFilter::Nodes(["n1", "n3"].iter().map(|s| (*s).to_string()).collect());
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
 
         assert_eq!(leaf_names(&filtered), ["n1", "n3"]);
@@ -360,7 +354,7 @@ mod tests {
         );
 
         // Keep only n2 — should appear inside a DynPipeline wrapping "inner"
-        let filter = NodeFilter::Nodes(["n2"].iter().map(|s| s.to_string()).collect());
+        let filter = NodeFilter::Nodes(["n2"].iter().map(|s| (*s).to_string()).collect());
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
 
         assert_eq!(leaf_names(&filtered), ["n2"]);
@@ -389,8 +383,8 @@ mod tests {
         );
 
         let filter = NodeFilter::FromTo {
-            from: ["n2"].iter().map(|s| s.to_string()).collect(),
-            to: ["n3"].iter().map(|s| s.to_string()).collect(),
+            from: ["n2"].iter().map(|s| (*s).to_string()).collect(),
+            to: ["n3"].iter().map(|s| (*s).to_string()).collect(),
         };
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
 
@@ -413,7 +407,7 @@ mod tests {
         );
 
         let filter = NodeFilter::FromTo {
-            from: ["n2"].iter().map(|s| s.to_string()).collect(),
+            from: ["n2"].iter().map(|s| (*s).to_string()).collect(),
             to: HashSet::new(),
         };
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
@@ -438,7 +432,7 @@ mod tests {
 
         let filter = NodeFilter::FromTo {
             from: HashSet::new(),
-            to: ["n2"].iter().map(|s| s.to_string()).collect(),
+            to: ["n2"].iter().map(|s| (*s).to_string()).collect(),
         };
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
 
@@ -458,7 +452,7 @@ mod tests {
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
         );
 
-        let filter = NodeFilter::Nodes(["nonexistent"].iter().map(|s| s.to_string()).collect());
+        let filter = NodeFilter::Nodes(["nonexistent"].iter().map(|s| (*s).to_string()).collect());
         let result = filter_steps::<PondError>(&pipe, &cat, &params, &filter);
 
         assert!(matches!(result, Err(PondError::NodeNotFound(ref s)) if s == "nonexistent"));
@@ -486,7 +480,7 @@ mod tests {
         );
 
         // Keep only n1 — the inner pipeline should be dropped entirely
-        let filter = NodeFilter::Nodes(["n1"].iter().map(|s| s.to_string()).collect());
+        let filter = NodeFilter::Nodes(["n1"].iter().map(|s| (*s).to_string()).collect());
         let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
 
         let mut top_items = Vec::new();

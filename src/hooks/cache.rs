@@ -105,9 +105,8 @@ impl Hook for CacheHook {
         if !Self::outputs_are_persistent(n) {
             return Ok(HookControl::Continue);
         }
-        let key = match self.compute_cache_key(n) {
-            Some(k) => k,
-            None => return Ok(HookControl::Continue),
+        let Some(key) = self.compute_cache_key(n) else {
+            return Ok(HookControl::Continue);
         };
         match self.read_cached_key(n.name()) {
             Some(cached) if cached == key => Ok(HookControl::Skip),

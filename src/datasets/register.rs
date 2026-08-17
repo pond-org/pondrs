@@ -1,11 +1,13 @@
 //! Register-mapped dataset for volatile memory access.
 //!
 //! Reads and writes values at a raw memory address using volatile operations.
-//! Works on both no_std (embedded registers) and std (memory-mapped I/O).
+//! Works on both `no_std` (embedded registers) and std (memory-mapped I/O).
 
 #[cfg(feature = "std")]
 use std::prelude::v1::*;
 
+#[cfg(feature = "std")]
+use core::fmt::Write as _;
 use core::marker::PhantomData;
 
 use serde::Serialize;
@@ -30,9 +32,12 @@ pub struct RegisterDataset<T: Copy> {
     _marker: PhantomData<T>,
 }
 
-// SAFETY: Register access is inherently single-threaded in embedded contexts.
-// For std use, the caller is responsible for ensuring no data races.
+// SAFETY: the dataset holds only an address, and register access is inherently
+// single-threaded in embedded contexts. For std use, upholding the `new`
+// contract — that the address stays valid and race-free — is the caller's job.
 unsafe impl<T: Copy + Send> Send for RegisterDataset<T> {}
+// SAFETY: same as the `Send` impl above; `&self` access is read/write-volatile
+// on an address the caller has promised is free of concurrent conflicting use.
 unsafe impl<T: Copy + Send> Sync for RegisterDataset<T> {}
 
 impl<T: Copy> RegisterDataset<T> {
@@ -61,56 +66,65 @@ impl<T: Copy + 'static> Dataset for RegisterDataset<T> {
 
     fn load(&self) -> Result<T, PondError> {
         let ptr = self.address as *const T;
+        // SAFETY: `new` is unsafe precisely so the caller can guarantee that
+        // `address` is valid and aligned for reads of `T`.
         Ok(unsafe { core::ptr::read_volatile(ptr) })
     }
 
     fn save(&self, output: T) -> Result<(), PondError> {
         let ptr = self.address as *mut T;
+        // SAFETY: `new` is unsafe precisely so the caller can guarantee that
+        // `address` is valid and aligned for writes of `T`.
         unsafe { core::ptr::write_volatile(ptr, output) };
         Ok(())
     }
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> {
-        register_html(self.address, self.load().ok()?)
+        Some(register_html(self.address, self.load().ok()?))
     }
 }
 
 #[cfg(feature = "std")]
-fn register_html<T: Copy>(address: usize, value: T) -> Option<String> {
-    let size = core::mem::size_of::<T>();
+fn register_html<T: Copy>(address: usize, value: T) -> String {
+    let size = size_of::<T>();
+    // SAFETY: `value` is a live local of size `size`, and any byte pattern is a
+    // valid `u8`. The slice borrows `value`, so it cannot outlive it.
     let bytes = unsafe {
-        core::slice::from_raw_parts(&value as *const T as *const u8, size)
+        core::slice::from_raw_parts((&raw const value).cast::<u8>(), size)
     };
 
     // Build integer value from little-endian bytes
     let mut int_val: u64 = 0;
     for (i, &b) in bytes.iter().enumerate() {
-        int_val |= (b as u64) << (i * 8);
+        int_val |= u64::from(b) << (i * 8);
     }
 
-    let bits = size * 8;
+    let bit_count = size * 8;
     let hex_width = size * 2;
 
-    let hex_raw = format!("{int_val:0>width$x}", width = hex_width);
+    let hex_raw = format!("{int_val:0>hex_width$x}");
     let hex = insert_separators(&hex_raw, 4);
 
-    let bin_raw = format!("{int_val:0>width$b}", width = bits);
+    let bin_raw = format!("{int_val:0>bit_count$b}");
     let bin = insert_separators(&bin_raw, 4);
 
     // Bit grid: colored cells, MSB first
     let mut grid = String::from(
         "<div style=\"display:flex;gap:1px;margin-top:6px;font-family:monospace;font-size:11px\">"
     );
-    for i in (0..bits).rev() {
-        let bit = (int_val >> i) & 1;
-        let bg = if bit == 1 { "#4ade80" } else { "#e5e7eb" };
-        let fg = if bit == 1 { "#000" } else { "#888" };
-        grid.push_str(&format!(
+    // Writing to a `String` cannot fail, so the `fmt::Result` carries no
+    // information here.
+    for i in (0..bit_count).rev() {
+        let bit_value = (int_val >> i) & 1;
+        let bg = if bit_value == 1 { "#4ade80" } else { "#e5e7eb" };
+        let fg = if bit_value == 1 { "#000" } else { "#888" };
+        let _ = write!(
+            grid,
             "<div style=\"width:18px;height:24px;background:{bg};color:{fg};\
              display:flex;align-items:center;justify-content:center;\
-             border-radius:2px\" title=\"bit {i}\">{bit}</div>"
-        ));
+             border-radius:2px\" title=\"bit {i}\">{bit_value}</div>"
+        );
     }
     grid.push_str("</div>");
 
@@ -118,14 +132,12 @@ fn register_html<T: Copy>(address: usize, value: T) -> Option<String> {
     let mut bit_nums = String::from(
         "<div style=\"display:flex;gap:1px;font-family:monospace;font-size:9px;color:#888\">"
     );
-    for i in (0..bits).rev() {
-        bit_nums.push_str(&format!(
-            "<div style=\"width:18px;text-align:center\">{i}</div>"
-        ));
+    for i in (0..bit_count).rev() {
+        let _ = write!(bit_nums, "<div style=\"width:18px;text-align:center\">{i}</div>");
     }
     bit_nums.push_str("</div>");
 
-    Some(format!(
+    format!(
         "<div style=\"font-family:monospace;font-size:13px;padding:8px\">\
          <div><b>Address:</b> 0x{address:x}</div>\
          <div><b>Hex:</b> 0x{hex}</div>\
@@ -135,7 +147,7 @@ fn register_html<T: Copy>(address: usize, value: T) -> Option<String> {
          {grid}\
          {bit_nums}\
          </div>"
-    ))
+    )
 }
 
 #[cfg(feature = "std")]
@@ -159,7 +171,8 @@ mod tests {
     #[test]
     fn register_round_trip_u32() {
         let storage = Box::new(0u32);
-        let address = &*storage as *const u32 as usize;
+        let address = &raw const *storage as usize;
+        // SAFETY: `storage` is a live, aligned heap allocation that outlives `ds`.
         let ds = unsafe { RegisterDataset::<u32>::new(address) };
 
         ds.save(0xDEAD_BEEF).unwrap();
@@ -169,7 +182,8 @@ mod tests {
     #[test]
     fn register_round_trip_u8() {
         let storage = Box::new(0u8);
-        let address = &*storage as *const u8 as usize;
+        let address = &raw const *storage as usize;
+        // SAFETY: `storage` is a live, aligned heap allocation that outlives `ds`.
         let ds = unsafe { RegisterDataset::<u8>::new(address) };
 
         ds.save(0xFF).unwrap();
@@ -179,7 +193,8 @@ mod tests {
     #[test]
     fn register_round_trip_u16() {
         let storage = Box::new(0u16);
-        let address = &*storage as *const u16 as usize;
+        let address = &raw const *storage as usize;
+        // SAFETY: `storage` is a live, aligned heap allocation that outlives `ds`.
         let ds = unsafe { RegisterDataset::<u16>::new(address) };
 
         ds.save(0x1234).unwrap();
@@ -190,7 +205,8 @@ mod tests {
     #[test]
     fn register_html_shows_value() {
         let storage = Box::new(0u32);
-        let address = &*storage as *const u32 as usize;
+        let address = &raw const *storage as usize;
+        // SAFETY: `storage` is a live, aligned heap allocation that outlives `ds`.
         let ds = unsafe { RegisterDataset::<u32>::new(address) };
         ds.save(0b1010_0101).unwrap();
 

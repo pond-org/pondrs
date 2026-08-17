@@ -30,7 +30,7 @@ impl Default for LoggingHook {
 
 /// Use the data pointer of a trait object as a unique key for timing.
 fn item_key(item: &dyn StepMeta) -> usize {
-    item as *const dyn StepMeta as *const () as usize
+    core::ptr::from_ref::<dyn StepMeta>(item).cast::<()>() as usize
 }
 
 fn ds_name<'a>(ds: &'a DatasetRef) -> &'a str {

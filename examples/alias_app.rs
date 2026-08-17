@@ -1,9 +1,9 @@
 //! Example demonstrating the Alias node: write CSV as plain text, then read it
-//! back as a Polars DataFrame via Alias, and produce a Plotly bar chart.
+//! back as a Polars `DataFrame` via Alias, and produce a Plotly bar chart.
 //!
 //! Usage:
-//!   cargo run --example alias_app -- --catalog-path examples/alias_data/catalog.yml \
-//!       --params-path examples/alias_data/params.yml run
+//!   cargo run --example `alias_app` -- --catalog-path `examples/alias_data/catalog.yml` \
+//!       --params-path `examples/alias_data/params.yml` run
 
 use plotly::{Bar, Layout, Plot};
 use polars::prelude::*;
@@ -54,7 +54,7 @@ fn build_chart(df: DataFrame) -> (Plot,) {
         .str()
         .unwrap()
         .into_no_null_iter()
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .collect();
     let counts: Vec<i64> = df
         .column("count")

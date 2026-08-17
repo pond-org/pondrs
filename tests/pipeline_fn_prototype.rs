@@ -1,4 +1,4 @@
-//! Tests for the PipelineFn trait and its blanket impl for Fn.
+//! Tests for the `PipelineFn` trait and its blanket impl for Fn.
 
 use pondrs::app::App;
 use pondrs::datasets::{MemoryDataset, Param};
@@ -70,10 +70,9 @@ fn test_app_run_with_named_fn() {
     .with_runners((SequentialRunner,));
 
     let result: Result<(), PondError> = app.execute(my_pipeline);
-    // DatasetNotLoaded is expected since MemoryDataset::default() has no data
     match &result {
-        Ok(()) => {}
-        Err(PondError::DatasetNotLoaded) => {} // expected
+        // `DatasetNotLoaded` is expected: `MemoryDataset::default()` has no data.
+        Ok(()) | Err(PondError::DatasetNotLoaded) => {}
         Err(e) => core::panic!("unexpected error: {e}"),
     }
 }
@@ -93,8 +92,8 @@ fn test_app_run_multi_node() {
 
     let result: Result<(), PondError> = app.execute(multi_node_pipeline);
     match &result {
-        Ok(()) => {}
-        Err(PondError::DatasetNotLoaded) => {} // expected
+        // `DatasetNotLoaded` is expected: `MemoryDataset::default()` has no data.
+        Ok(()) | Err(PondError::DatasetNotLoaded) => {}
         Err(e) => core::panic!("unexpected error: {e}"),
     }
 }
