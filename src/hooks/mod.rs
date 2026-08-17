@@ -28,16 +28,11 @@ impl core::fmt::Display for HookAbort {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HookControl {
+    #[default]
     Continue,
     Skip,
-}
-
-impl Default for HookControl {
-    fn default() -> Self {
-        Self::Continue
-    }
 }
 
 impl HookControl {
