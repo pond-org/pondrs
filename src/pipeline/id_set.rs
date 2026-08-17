@@ -39,7 +39,7 @@ impl<const N: usize> IdSet<N> {
     }
 
     /// Copy all entries from `other` into `self`. Returns `false` if capacity exceeded.
-    pub fn copy_from(&mut self, other: &IdSet<N>) -> bool {
+    pub fn copy_from(&mut self, other: &Self) -> bool {
         let mut i = 0;
         while i < other.len {
             if !self.insert(other.ids[i]) {

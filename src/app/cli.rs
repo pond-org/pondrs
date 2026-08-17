@@ -28,7 +28,7 @@ pub enum Command {
         #[arg(long)]
         runner: Option<String>,
 
-        /// Override parameter values (dot notation for nesting, e.g. model.learning_rate=0.01).
+        /// Override parameter values (dot notation for nesting, e.g. `model.learning_rate=0.01`).
         #[arg(long = "params", value_name = "KEY=VALUE")]
         param_overrides: Vec<String>,
 

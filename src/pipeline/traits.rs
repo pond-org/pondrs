@@ -9,11 +9,12 @@ use crate::error::PondError;
 /// Convert a reference to a unique ID based on its pointer address.
 /// Uses the data pointer only (ignores vtable for trait objects).
 pub(crate) fn ptr_to_id<T: ?Sized>(r: &T) -> usize {
-    r as *const T as *const () as usize
+    core::ptr::from_ref::<T>(r).cast::<()>() as usize
 }
 
 /// A reference to a dataset, carrying its pointer ID, object-safe metadata,
 /// and an optionally resolved human-readable name.
+#[derive(Clone, Copy)]
 pub struct DatasetRef<'a> {
     pub id: usize,
     pub meta: &'a dyn DatasetMeta,
@@ -39,12 +40,6 @@ impl core::fmt::Debug for DatasetRef<'_> {
             .finish()
     }
 }
-
-impl Clone for DatasetRef<'_> {
-    fn clone(&self) -> Self { *self }
-}
-
-impl Copy for DatasetRef<'_> {}
 
 /// Events fired during dataset load/save operations.
 pub enum DatasetEvent<'v> {

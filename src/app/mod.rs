@@ -48,7 +48,7 @@ type DefaultRunners = (SequentialRunner,);
 ///
 /// # Construction
 ///
-/// - [`App::new`] — provide catalog and params directly (no_std + std)
+/// - [`App::new`] — provide catalog and params directly (`no_std` + std)
 /// - [`App::from_cli`] — load from YAML via parsed [`CliArgs`](cli::CliArgs) (std only)
 /// - [`App::from_args`] — parse CLI args and load from YAML (std only)
 ///
@@ -77,7 +77,7 @@ impl<C, P> App<C, P, (), DefaultRunners> {
     ///
     /// Uses default hooks (none) and default runners. Command defaults to `Run`.
     pub fn new(catalog: C, params: P) -> Self {
-        App {
+        Self {
             catalog,
             params,
             hooks: (),
@@ -141,6 +141,7 @@ impl<C, P, H, R> App<C, P, H, R> {
     }
 
     /// Set the command for dispatch.
+    #[must_use]
     pub fn with_command(mut self, command: Command) -> Self {
         self.command = command;
         self
@@ -234,6 +235,9 @@ impl<C: Serialize, P: Serialize, H: Hooks, R: Runners> App<C, P, H, R> {
 
 #[cfg(feature = "std")]
 mod std_app {
+    // Same-file submodule splitting off the std-only half of `App`; enumerating
+    // the parent's items here would just duplicate its import list.
+    #[allow(clippy::wildcard_imports)]
     use super::*;
     use crate::graph::build_pipeline_graph;
     use clap::Parser;
@@ -250,7 +254,7 @@ mod std_app {
         if !overrides.is_empty() {
             apply_overrides(&mut value, overrides);
         }
-        Ok(deserialize_config(value)?)
+        deserialize_config(value)
     }
 
     /// Convert a CLI Command to our core Command, extracting the runner name
@@ -305,7 +309,7 @@ mod std_app {
         pub fn from_yaml(catalog_path: &str, params_path: &str) -> Result<Self, PondError> {
             let catalog: C = load_config(catalog_path, &[])?;
             let params: P = load_config(params_path, &[])?;
-            Ok(App {
+            Ok(Self {
                 catalog,
                 params,
                 hooks: (),
@@ -345,7 +349,7 @@ mod std_app {
 
             let (command, runner_name, node_filter) = extract_command(&cli.command);
 
-            Ok(App {
+            Ok(Self {
                 catalog,
                 params,
                 hooks: (),
@@ -373,8 +377,10 @@ mod std_app {
                     let os: std::ffi::OsString = a.clone().into();
                     std::path::Path::new(&os)
                         .file_stem()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| os.to_string_lossy().into_owned())
+                        .map_or_else(
+                            || os.to_string_lossy().into_owned(),
+                            |s| s.to_string_lossy().into_owned(),
+                        )
                 })
                 .unwrap_or_default();
             let cli = CliArgs::parse_from(raw_args);
@@ -393,7 +399,7 @@ mod std_app {
         ///
         /// Serializes the current data, patches with CLI overrides,
         /// deserializes back. Stores the command for [`dispatch`](App::dispatch).
-        pub fn with_cli(self, cli: CliArgs) -> Result<App<C, P, H, R>, PondError> {
+        pub fn with_cli(self, cli: CliArgs) -> Result<Self, PondError> {
             let (catalog_overrides, param_overrides) = match &cli.command {
                 CliCommand::Run {
                     catalog_overrides,
@@ -423,7 +429,7 @@ mod std_app {
 
             let (command, runner_name, node_filter) = extract_command(&cli.command);
 
-            Ok(App {
+            Ok(Self {
                 catalog,
                 params,
                 hooks: self.hooks,
@@ -458,8 +464,10 @@ mod std_app {
                     let os: std::ffi::OsString = a.clone().into();
                     std::path::Path::new(&os)
                         .file_stem()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| os.to_string_lossy().into_owned())
+                        .map_or_else(
+                            || os.to_string_lossy().into_owned(),
+                            |s| s.to_string_lossy().into_owned(),
+                        )
                 })
                 .unwrap_or_default();
             let cli = CliArgs::parse_from(raw_args);
@@ -480,7 +488,7 @@ mod std_app {
 
             let (command, runner_name, node_filter) = extract_command(&cli.command);
 
-            Ok(App {
+            Ok(Self {
                 catalog: self.catalog,
                 params,
                 hooks: self.hooks,
@@ -527,7 +535,7 @@ mod std_app {
                 use std::collections::HashMap;
 
                 let mut viz_graph = viz_graph_from(&graph);
-                viz_graph.name = self.program_name.clone();
+                viz_graph.name.clone_from(&self.program_name);
                 let dataset_meta = collect_dataset_meta(&graph);
 
                 if let Some(path) = export {
@@ -553,8 +561,7 @@ mod std_app {
                         .ok_or_else(|| PondError::Custom("embedded index.html not found".into()))?;
                     let html = String::from_utf8_lossy(&template.data);
                     let script = std::format!(
-                        "<script>window.__STATIC_DATA__={};</script>",
-                        json
+                        "<script>window.__STATIC_DATA__={json};</script>"
                     );
                     let html_str = html.as_ref();
                     let output_html = match html_str.rfind("</head>") {

@@ -1,9 +1,9 @@
 //! Weather pipeline app.
 //!
 //! Usage:
-//!   cargo run --example weather_app -- run --runner parallel
-//!   cargo run --example weather_app -- check
-//!   cargo run --example weather_app -- viz
+//!   cargo run --example `weather_app` -- run --runner parallel
+//!   cargo run --example `weather_app` -- check
+//!   cargo run --example `weather_app` -- viz
 
 #[path = "weather/mod.rs"]
 mod weather;

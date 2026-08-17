@@ -26,7 +26,8 @@ struct Parameters {
 }
 
 fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps<PondError> {
-    let pipe = (
+    
+    (
         Node {
             name: "node1",
             func: |v| (v,),
@@ -64,12 +65,12 @@ fn construct_pipe1(params: &Parameters, catalog: &Catalog) -> impl Steps<PondErr
             input: (&catalog.d,),
             output: (),
         },
-    );
-    pipe
+    )
 }
 
 fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps<PondError> {
-    let pipe = (
+    
+    (
         Node {
             name: "node1",
             func: |v| (v,),
@@ -94,8 +95,7 @@ fn construct_pipe2(params: &Parameters, catalog: &Catalog) -> impl Steps<PondErr
             input: (&catalog.c,),
             output: (),
         },
-    );
-    pipe
+    )
 }
 
 #[derive(Serialize)]

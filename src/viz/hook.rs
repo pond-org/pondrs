@@ -1,4 +1,4 @@
-//! VizHook: fires HTTP events to a running viz server during pipeline execution.
+//! `VizHook`: fires HTTP events to a running viz server during pipeline execution.
 
 use std::prelude::v1::*;
 
@@ -10,7 +10,7 @@ use crate::hooks::timing::TimingTracker;
 
 /// The kind of execution event sent from `VizHook` to the viz server.
 ///
-/// Serializes to/from snake_case strings matching Kedro hook method names
+/// Serializes to/from `snake_case` strings matching Kedro hook method names
 /// (e.g. `BeforePipelineRun` ↔ `"before_pipeline_run"`).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -159,7 +159,7 @@ impl Hook for VizHook {
             duration_ms: None,
             error: None,
             dataset_id: Some(ds.id),
-            dataset_name: ds.name.map(|s| s.to_string()),
+            dataset_name: ds.name.map(ToString::to_string),
         });
         Ok(crate::hooks::HookControl::Continue)
     }
@@ -172,7 +172,7 @@ impl Hook for VizHook {
             duration_ms,
             error: None,
             dataset_id: Some(ds.id),
-            dataset_name: ds.name.map(|s| s.to_string()),
+            dataset_name: ds.name.map(ToString::to_string),
         });
         Ok(())
     }
@@ -185,7 +185,7 @@ impl Hook for VizHook {
             duration_ms: None,
             error: None,
             dataset_id: Some(ds.id),
-            dataset_name: ds.name.map(|s| s.to_string()),
+            dataset_name: ds.name.map(ToString::to_string),
         });
         Ok(crate::hooks::HookControl::Continue)
     }
@@ -198,7 +198,7 @@ impl Hook for VizHook {
             duration_ms,
             error: None,
             dataset_id: Some(ds.id),
-            dataset_name: ds.name.map(|s| s.to_string()),
+            dataset_name: ds.name.map(ToString::to_string),
         });
         Ok(())
     }

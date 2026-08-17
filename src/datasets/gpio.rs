@@ -24,8 +24,11 @@ pub struct GpioDataset {
     label: &'static str,
 }
 
-// SAFETY: Same as RegisterDataset — single-threaded access assumed.
+// SAFETY: the dataset holds only an address and a bit index; upholding the
+// `new` contract — that the address stays valid and free of racing access — is
+// the caller's job, exactly as for `RegisterDataset`.
 unsafe impl Send for GpioDataset {}
+// SAFETY: same as the `Send` impl above.
 unsafe impl Sync for GpioDataset {}
 
 impl GpioDataset {
@@ -67,18 +70,23 @@ impl Dataset for GpioDataset {
 
     fn load(&self) -> Result<bool, PondError> {
         let ptr = self.address as *const u32;
+        // SAFETY: `new` is unsafe precisely so the caller can guarantee that
+        // `address` is valid and aligned for reads of `u32`.
         let reg = unsafe { core::ptr::read_volatile(ptr) };
         Ok((reg >> self.bit) & 1 == 1)
     }
 
     fn save(&self, output: bool) -> Result<(), PondError> {
         let ptr = self.address as *mut u32;
+        // SAFETY: `new` is unsafe precisely so the caller can guarantee that
+        // `address` is valid and aligned for reads and writes of `u32`.
         let mut reg = unsafe { core::ptr::read_volatile(ptr) };
         if output {
             reg |= 1 << self.bit;
         } else {
             reg &= !(1 << self.bit);
         }
+        // SAFETY: as above — same pointer, same guarantee.
         unsafe { core::ptr::write_volatile(ptr, reg) };
         Ok(())
     }
@@ -117,8 +125,9 @@ mod tests {
     #[test]
     fn gpio_read_write_single_bit() {
         let storage = Box::new(0u32);
-        let address = &*storage as *const u32 as usize;
+        let address = &raw const *storage as usize;
 
+        // SAFETY: `storage` is a live, aligned `u32` that outlives `pin`.
         let pin = unsafe { GpioDataset::new(address, 5, "PA5") };
 
         assert!(!pin.load().unwrap());
@@ -127,12 +136,14 @@ mod tests {
         assert!(pin.load().unwrap());
 
         // Verify it set only bit 5
+        // SAFETY: `storage` is still alive and is a valid, aligned `u32`.
         let raw = unsafe { core::ptr::read_volatile(address as *const u32) };
         assert_eq!(raw, 1 << 5);
 
         pin.save(false).unwrap();
         assert!(!pin.load().unwrap());
 
+        // SAFETY: `storage` is still alive and is a valid, aligned `u32`.
         let raw = unsafe { core::ptr::read_volatile(address as *const u32) };
         assert_eq!(raw, 0);
     }
@@ -140,13 +151,15 @@ mod tests {
     #[test]
     fn gpio_preserves_other_bits() {
         let storage = Box::new(0xFFFF_FFFFu32);
-        let address = &*storage as *const u32 as usize;
+        let address = &raw const *storage as usize;
 
+        // SAFETY: `storage` is a live, aligned `u32` that outlives `pin`.
         let pin = unsafe { GpioDataset::new(address, 3, "PB3") };
 
         assert!(pin.load().unwrap());
 
         pin.save(false).unwrap();
+        // SAFETY: `storage` is still alive and is a valid, aligned `u32`.
         let raw = unsafe { core::ptr::read_volatile(address as *const u32) };
         assert_eq!(raw, 0xFFFF_FFF7);
     }
@@ -154,16 +167,23 @@ mod tests {
     #[test]
     fn gpio_multiple_pins_same_register() {
         let storage = Box::new(0u32);
-        let address = &*storage as *const u32 as usize;
+        let address = &raw const *storage as usize;
 
-        let led1 = unsafe { GpioDataset::new(address, 0, "LED1") };
-        let led2 = unsafe { GpioDataset::new(address, 4, "LED2") };
-        let led3 = unsafe { GpioDataset::new(address, 7, "LED3") };
+        // SAFETY: `storage` is a live, aligned `u32` that outlives all three
+        // pins, which address disjoint bits of it.
+        let (led1, led2, led3) = unsafe {
+            (
+                GpioDataset::new(address, 0, "LED1"),
+                GpioDataset::new(address, 4, "LED2"),
+                GpioDataset::new(address, 7, "LED3"),
+            )
+        };
 
         led1.save(true).unwrap();
         led2.save(true).unwrap();
         led3.save(true).unwrap();
 
+        // SAFETY: `storage` is still alive and is a valid, aligned `u32`.
         let raw = unsafe { core::ptr::read_volatile(address as *const u32) };
         assert_eq!(raw, (1 << 0) | (1 << 4) | (1 << 7));
 
@@ -176,7 +196,8 @@ mod tests {
     #[test]
     fn gpio_html_shows_led() {
         let storage = Box::new(0u32);
-        let address = &*storage as *const u32 as usize;
+        let address = &raw const *storage as usize;
+        // SAFETY: `storage` is a live, aligned `u32` that outlives `pin`.
         let pin = unsafe { GpioDataset::new(address, 0, "LED1") };
 
         pin.save(true).unwrap();

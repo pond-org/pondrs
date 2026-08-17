@@ -66,7 +66,7 @@ impl<S: Serialize> Serialize for TemplatedCatalog<S> {
     }
 }
 
-/// Recursively replace all occurrences of `pattern` in string values within a serde_yaml::Value.
+/// Recursively replace all occurrences of `pattern` in string values within a `serde_yaml::Value`.
 fn replace_in_value(value: &mut serde_yaml::Value, pattern: &str, replacement: &str) {
     match value {
         serde_yaml::Value::String(s) => {
@@ -128,14 +128,14 @@ impl<'de, S: serde::de::DeserializeOwned> Visitor<'de> for TemplatedCatalogVisit
         let template = template.ok_or_else(|| de::Error::missing_field("template"))?;
         let names = names.ok_or_else(|| de::Error::missing_field("names"))?;
         let placeholder_str = placeholder.unwrap_or_else(|| "name".to_string());
-        let pattern = format!("{{{}}}", placeholder_str);
+        let pattern = format!("{{{placeholder_str}}}");
 
         let mut items = HashMap::with_capacity(names.len());
         for name in &names {
             let mut value = template.clone();
             replace_in_value(&mut value, &pattern, name);
             let instance: S = serde_yaml::from_value(value)
-                .map_err(|e| de::Error::custom(format!("failed to expand template for '{}': {}", name, e)))?;
+                .map_err(|e| de::Error::custom(format!("failed to expand template for '{name}': {e}")))?;
             items.insert(name.clone(), instance);
         }
 
@@ -156,12 +156,12 @@ mod tests {
 
     #[test]
     fn deserialize_default_placeholder() {
-        let yaml = r#"
+        let yaml = r"
 template:
   raw: {}
   processed: {}
 names: [alpha, beta]
-"#;
+";
         let tc: TemplatedCatalog<ItemCatalog> = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(tc.len(), 2);
         assert_eq!(tc.keys(), &["alpha", "beta"]);
@@ -186,12 +186,12 @@ names: [london, paris]
 
     #[test]
     fn iter_preserves_order() {
-        let yaml = r#"
+        let yaml = r"
 template:
   raw: {}
   processed: {}
 names: [charlie, alpha, bravo]
-"#;
+";
         let tc: TemplatedCatalog<ItemCatalog> = serde_yaml::from_str(yaml).unwrap();
         let order: Vec<&str> = tc.iter().map(|(k, _)| k).collect();
         assert_eq!(order, vec!["charlie", "alpha", "bravo"]);
@@ -199,12 +199,12 @@ names: [charlie, alpha, bravo]
 
     #[test]
     fn serialize_as_map() {
-        let yaml = r#"
+        let yaml = r"
 template:
   raw: {}
   processed: {}
 names: [alpha, beta]
-"#;
+";
         let tc: TemplatedCatalog<ItemCatalog> = serde_yaml::from_str(yaml).unwrap();
         let value: serde_yaml::Value = serde_yaml::to_value(&tc).unwrap();
         assert!(value.is_mapping());

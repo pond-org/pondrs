@@ -41,7 +41,7 @@ pub struct VizState {
     /// See `collect_dataset_meta` for the safety argument.
     pub dataset_meta: HashMap<usize, &'static dyn crate::DatasetMeta>,
     pub node_statuses: Mutex<HashMap<String, NodeStatus>>,
-    /// Dataset activity keyed by dataset name (from VizEvent::dataset_name).
+    /// Dataset activity keyed by dataset name (from `VizEvent::dataset_name`).
     pub dataset_activity: Mutex<HashMap<String, DatasetActivity>>,
     pub tx: broadcast::Sender<String>,
 }
@@ -161,7 +161,9 @@ async fn handle_ws(mut socket: WebSocket, state: Arc<VizState>) {
                 }
             }
             Err(broadcast::error::RecvError::Closed) => break,
-            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            // A slow client that fell behind: skip the dropped events and
+            // keep streaming from the current position.
+            Err(broadcast::error::RecvError::Lagged(_)) => {}
         }
     }
 }

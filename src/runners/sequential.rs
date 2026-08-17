@@ -33,7 +33,6 @@ impl SequentialRunner {
     }
 
     fn run_item<E>(
-        &self,
         item: &dyn Step<E>,
         #[cfg(feature = "std")]
         names: &HashMap<usize, String>,
@@ -60,10 +59,10 @@ impl SequentialRunner {
                     }
                     Err(e) => {
                         #[cfg(feature = "std")]
-                        let msg = e.to_string();
+                        super::fire_node_error(hooks, item, &e.to_string());
+                        // Without an allocator there is nothing to render `e` into.
                         #[cfg(not(feature = "std"))]
-                        let msg = "node error";
-                        super::fire_node_error(hooks, item, &msg);
+                        super::fire_node_error(hooks, item, "node error");
                         Err(e)
                     }
                 }
@@ -74,21 +73,24 @@ impl SequentialRunner {
                 group.for_each_child_step(&mut |child| {
                     if result.is_ok() {
                         #[cfg(feature = "std")]
-                        { result = self.run_item(child, names, hooks); }
+                        { result = Self::run_item(child, names, hooks); }
                         #[cfg(not(feature = "std"))]
-                        { result = self.run_item(child, hooks); }
+                        { result = Self::run_item(child, hooks); }
                     }
                 });
                 match &result {
                     Ok(()) => {
                         super::fire_after_pipeline(hooks, item)?;
                     }
-                    Err(_e) => {
+                    Err(e) => {
                         #[cfg(feature = "std")]
-                        let msg = _e.to_string();
+                        super::fire_pipeline_error(hooks, item, &e.to_string());
+                        // Without an allocator there is nothing to render `e` into.
                         #[cfg(not(feature = "std"))]
-                        let msg = "pipeline error";
-                        super::fire_pipeline_error(hooks, item, &msg);
+                        {
+                            let _ = e;
+                            super::fire_pipeline_error(hooks, item, "pipeline error");
+                        }
                     }
                 }
                 result
@@ -115,9 +117,9 @@ impl Runner for SequentialRunner {
         pipe.for_each_step(&mut |item| {
             if result.is_ok() {
                 #[cfg(feature = "std")]
-                { result = self.run_item(item, &names, hooks); }
+                { result = Self::run_item(item, &names, hooks); }
                 #[cfg(not(feature = "std"))]
-                { result = self.run_item(item, hooks); }
+                { result = Self::run_item(item, hooks); }
             }
         });
         result

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-//! Integration test for the weather pipeline via App::from_args + dispatch.
+//! Integration test for the weather pipeline via `App::from_args` + dispatch.
 //!
 //! The weather pipeline's `validate_reports` node intentionally fails, so the
 //! test asserts that the pipeline returns an error.

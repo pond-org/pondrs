@@ -153,11 +153,12 @@ pub trait FileDataset: Dataset + Clone {
     fn prefer_parallel(&self) -> bool { false }
 
     fn file_content_hash(&self) -> Option<u64> {
+        use core::hash::{Hash, Hasher};
+
         let meta = std::fs::metadata(self.path()).ok()?;
         let mtime = meta.modified().ok()?
             .duration_since(std::time::UNIX_EPOCH).ok()?
             .as_nanos();
-        use core::hash::{Hash, Hasher};
         let mut hasher = std::hash::DefaultHasher::new();
         let canonical = std::fs::canonicalize(self.path()).ok()?;
         canonical.hash(&mut hasher);
@@ -184,12 +185,15 @@ pub trait FileDataset: Dataset + Clone {
     ) -> Result<Vec<String>, crate::error::PondError> {
         let dir = std::path::Path::new(path);
         let mut names: Vec<String> = std::fs::read_dir(dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter_map(|e| {
                 let file_name = e.file_name().to_string_lossy().into_owned();
                 if file_name.ends_with(ext) {
                     let entry_path = e.path();
-                    entry_path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+                    entry_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(ToString::to_string)
                 } else {
                     None
                 }
@@ -299,9 +303,9 @@ mod tests {
 
         // param, a, b should all be present
         assert_eq!(meta_map.len(), 3);
-        assert_eq!(meta_map[&ptr_to_id(&param)], true);
-        assert_eq!(meta_map[&ptr_to_id(&a)], false);
-        assert_eq!(meta_map[&ptr_to_id(&b)], false);
+        assert!(meta_map[&ptr_to_id(&param)]);
+        assert!(!meta_map[&ptr_to_id(&a)]);
+        assert!(!meta_map[&ptr_to_id(&b)]);
     }
 
     // ── content_hash / is_persistent ────────────────────────────────────────

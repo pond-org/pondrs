@@ -72,9 +72,9 @@ fn collect_node<'a>(
     let is_pipe = !item.is_leaf();
 
     let mut inputs = Vec::new();
-    item.for_each_input(&mut |d| inputs.push(d.clone()));
+    item.for_each_input(&mut |d| inputs.push(*d));
     let mut outputs = Vec::new();
-    item.for_each_output(&mut |d| outputs.push(d.clone()));
+    item.for_each_output(&mut |d| outputs.push(*d));
 
     nodes.push(GraphNode {
         id: ptr_to_id(item),
@@ -120,7 +120,7 @@ fn build_edges<'a>(nodes: &'_ [GraphNode<'a>]) -> Vec<Edge<'a>> {
                     edges.push(Edge {
                         from_node: producer_idx,
                         to_node: i,
-                        dataset: input.clone(),
+                        dataset: *input,
                     });
                 }
             }
@@ -204,7 +204,7 @@ mod tests {
         assert_eq!(graph.source_datasets.len(), 1);
         let source_id = *graph.source_datasets.iter().next().unwrap();
         assert_eq!(
-            graph.dataset_names.get(&source_id).map(|s| s.as_str()),
+            graph.dataset_names.get(&source_id).map(String::as_str),
             Some("params.initial_value")
         );
 

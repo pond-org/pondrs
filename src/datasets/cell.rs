@@ -1,4 +1,4 @@
-//! Cell-based dataset for no_std single-threaded use.
+//! Cell-based dataset for `no_std` single-threaded use.
 
 use core::cell::Cell;
 

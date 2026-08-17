@@ -54,3 +54,39 @@ trybuild = "1"
 [profile.dev]
 split-debuginfo = "unpacked"
 debuginfo = "line-tables-only"
+
+[lints.rust]
+# An `unsafe fn` body is not an implicit `unsafe` block; each operation states
+# its own justification. Matters for the MMIO datasets (register, gpio).
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+# --- opted out of `pedantic` ---------------------------------------------
+# Doc completeness is a separate effort from code correctness; these three fire
+# on ~100 public items and say nothing about whether the code is right.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+# A node function receives its inputs by value — that is the framework's
+# calling convention, not an oversight in the signature.
+needless_pass_by_value = "allow"
+# The long functions are CLI dispatch and graph building: flat, linear, and
+# less readable when split apart.
+too_many_lines = "allow"
+# Turning integer quantities into `f64` for arithmetic is routine in a data
+# pipeline and has no lossless alternative. `cast_possible_truncation` stays on:
+# that one catches narrowing that can actually change a value.
+cast_precision_loss = "allow"
+
+# --- selected `nursery` lints --------------------------------------------
+use_self = "warn"
+
+# --- selected `restriction` lints ----------------------------------------
+# Every `unsafe` block carries a `// SAFETY:` comment stating its invariants.
+undocumented_unsafe_blocks = "warn"
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "warn"
+mem_forget = "warn"

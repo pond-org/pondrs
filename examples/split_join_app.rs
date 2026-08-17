@@ -1,12 +1,12 @@
 //! Split/join pipeline example.
 //!
-//! Demonstrates TemplatedCatalog, EachField, and DynSteps for fan-out/fan-in
+//! Demonstrates `TemplatedCatalog`, `EachField`, and `DynSteps` for fan-out/fan-in
 //! patterns with per-item parallel processing.
 //!
 //! Usage:
-//!   cargo run --example split_join_app -- run
-//!   cargo run --example split_join_app -- check
-//!   cargo run --example split_join_app -- viz
+//!   cargo run --example `split_join_app` -- run
+//!   cargo run --example `split_join_app` -- check
+//!   cargo run --example `split_join_app` -- viz
 
 #[path = "split_join/mod.rs"]
 mod split_join;

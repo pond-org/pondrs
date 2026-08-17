@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-//! Integration tests for the dyn_steps pipeline.
+//! Integration tests for the `dyn_steps` pipeline.
 //!
 //! Covers both the normal run (report included) and the conditional case
 //! where `include_report: false` causes the report node to be skipped.

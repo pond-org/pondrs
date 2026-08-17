@@ -28,23 +28,19 @@ impl core::fmt::Display for HookAbort {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum HookControl {
+    #[default]
     Continue,
     Skip,
 }
 
-impl Default for HookControl {
-    fn default() -> Self {
-        HookControl::Continue
-    }
-}
-
 impl HookControl {
-    pub fn merge(self, other: HookControl) -> HookControl {
+    #[must_use]
+    pub fn merge(self, other: Self) -> Self {
         match (self, other) {
-            (HookControl::Skip, _) | (_, HookControl::Skip) => HookControl::Skip,
-            _ => HookControl::Continue,
+            (Self::Skip, _) | (_, Self::Skip) => Self::Skip,
+            _ => Self::Continue,
         }
     }
 }

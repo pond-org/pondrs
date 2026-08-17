@@ -28,6 +28,19 @@ jobs:
       - name: Build (no_std)
         run: cargo build --no-default-features --lib
 
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy (all features, all targets)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Clippy (no_std)
+        run: cargo clippy --no-default-features --lib -- -D warnings
+
   test:
     runs-on: ubuntu-latest
     steps:

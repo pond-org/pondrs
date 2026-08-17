@@ -26,7 +26,7 @@ pub struct CatalogIndex {
 impl CatalogIndex {
     /// Look up the name for a dataset pointer ID.
     pub fn get(&self, ptr_id: usize) -> Option<&str> {
-        self.names.get(&ptr_id).map(|s| s.as_str())
+        self.names.get(&ptr_id).map(String::as_str)
     }
 
     /// Return the inner map.
@@ -95,7 +95,7 @@ impl std::error::Error for IndexerError {}
 
 impl ser::Error for IndexerError {
     fn custom<T: fmt::Display>(_msg: T) -> Self {
-        IndexerError
+        Self
     }
 }
 
@@ -189,7 +189,7 @@ impl<'a> ser::Serializer for &'a mut CatalogIndexer {
 }
 
 // SerializeStruct — captures field pointers, with leaf detection.
-impl<'a> ser::SerializeStruct for StructSerializer<'a> {
+impl ser::SerializeStruct for StructSerializer<'_> {
     type Ok = ();
     type Error = IndexerError;
 
@@ -219,35 +219,35 @@ impl<'a> ser::SerializeStruct for StructSerializer<'a> {
 }
 
 // No-op implementations for the other SerializeX traits.
-impl<'a> ser::SerializeSeq for &'a mut CatalogIndexer {
+impl ser::SerializeSeq for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
     fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<(), Self::Error> { Ok(()) }
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
 
-impl<'a> ser::SerializeTuple for &'a mut CatalogIndexer {
+impl ser::SerializeTuple for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
     fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<(), Self::Error> { Ok(()) }
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
 
-impl<'a> ser::SerializeTupleStruct for &'a mut CatalogIndexer {
+impl ser::SerializeTupleStruct for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
     fn serialize_field<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<(), Self::Error> { Ok(()) }
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
 
-impl<'a> ser::SerializeTupleVariant for &'a mut CatalogIndexer {
+impl ser::SerializeTupleVariant for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
     fn serialize_field<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<(), Self::Error> { Ok(()) }
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
 
-impl<'a> ser::SerializeMap for &'a mut CatalogIndexer {
+impl ser::SerializeMap for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
 
@@ -274,7 +274,7 @@ impl<'a> ser::SerializeMap for &'a mut CatalogIndexer {
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
 
-impl<'a> ser::SerializeStructVariant for &'a mut CatalogIndexer {
+impl ser::SerializeStructVariant for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
     fn serialize_field<T: ?Sized + Serialize>(&mut self, _key: &'static str, _value: &T) -> Result<(), Self::Error> { Ok(()) }

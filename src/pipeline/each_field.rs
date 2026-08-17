@@ -1,4 +1,4 @@
-//! EachField port adapter for fan-out/fan-in patterns with TemplatedCatalog.
+//! `EachField` port adapter for fan-out/fan-in patterns with `TemplatedCatalog`.
 
 use std::prelude::v1::*;
 use std::collections::HashMap;
@@ -120,12 +120,12 @@ mod tests {
     }
 
     fn make_catalog() -> TemplatedCatalog<ItemCatalog> {
-        let yaml = r#"
+        let yaml = r"
 template:
   raw: {}
   processed: {}
 names: [alpha, beta]
-"#;
+";
         serde_yaml::from_str(yaml).unwrap()
     }
 
@@ -408,15 +408,19 @@ names: [alpha, beta]
 
     #[test]
     fn check_catches_param_written_through_each_field() {
-        let yaml = r#"
+        let yaml = r"
 template:
   setting: 0
 names: [alpha, beta]
-"#;
+";
         let catalog: TemplatedCatalog<ParamEntry> = serde_yaml::from_str(yaml).unwrap();
 
         // A `&Param` in an output tuple is a compile error (uninhabited SaveItem);
         // reaching one through EachField still needs the runtime check.
+        #[allow(
+            clippy::zero_sized_map_values,
+            reason = "the empty map's uninhabited value type is the point of the test"
+        )]
         let pipeline = (
             Node {
                 name: "write_params",

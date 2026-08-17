@@ -62,7 +62,6 @@ pub(crate) fn dispatch_dataset_event_raw(
     }
 }
 
-#[must_use]
 pub(crate) fn fire_before_node<E: From<PondError>>(
     hooks: &impl Hooks, item: &dyn StepMeta,
 ) -> Result<HookControl, E> {
@@ -89,7 +88,6 @@ pub(crate) fn fire_node_error(hooks: &impl Hooks, item: &dyn StepMeta, msg: &str
     hooks.for_each_hook(&mut |h| { h.on_node_error(item, msg); Ok(()) }).ok();
 }
 
-#[must_use]
 pub(crate) fn fire_before_pipeline<E: From<PondError>>(
     hooks: &impl Hooks, item: &dyn StepMeta,
 ) -> Result<HookControl, E> {

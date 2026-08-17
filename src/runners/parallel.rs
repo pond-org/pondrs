@@ -18,6 +18,7 @@ use super::Runner;
 ///
 /// Builds a dependency graph from the pipeline and schedules nodes
 /// as soon as their input datasets are produced. Requires `std`.
+#[derive(Default)]
 pub struct ParallelRunner {
     pub num_threads: usize,
 }
@@ -28,11 +29,6 @@ impl ParallelRunner {
     }
 }
 
-impl Default for ParallelRunner {
-    fn default() -> Self {
-        Self { num_threads: 0 }
-    }
-}
 
 /// Collect callable items by walking the tree in the same order as graph building.
 fn collect_items<'a, E>(items: &mut Vec<&'a dyn Step<E>>, item: &'a dyn Step<E>) {

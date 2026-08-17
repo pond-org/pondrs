@@ -1,13 +1,13 @@
-//! Example demonstrating RegisterDataset and GpioDataset with pipeline viz.
+//! Example demonstrating `RegisterDataset` and `GpioDataset` with pipeline viz.
 //!
 //! Allocates memory on the heap to simulate hardware registers, then runs
 //! a pipeline that reads a "sensor" register, processes the value, and
 //! sets GPIO pins based on thresholds.
 //!
 //! Usage:
-//!   cargo run --example register_example -- viz
-//!   # open http://localhost:8080, then in another terminal:
-//!   cargo run --example register_example -- run
+//!   cargo run --example `register_example` -- viz
+//!   # open <http://localhost:8080>, then in another terminal:
+//!   cargo run --example `register_example` -- run
 
 use serde::{Deserialize, Serialize};
 
@@ -38,11 +38,11 @@ impl SimulatedHardware {
     }
 
     fn sensor_address(&self) -> usize {
-        &*self.sensor_reg as *const u16 as usize
+        &raw const *self.sensor_reg as usize
     }
 
     fn status_address(&self) -> usize {
-        &*self.status_reg as *const u32 as usize
+        &raw const *self.status_reg as usize
     }
 }
 
@@ -80,7 +80,7 @@ fn register_pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<Pon
             output: (&cat.status,),
             func: |raw: u16| -> (u32,) {
                 println!("  Sensor reading: 0x{raw:04x} ({raw})");
-                (raw as u32,)
+                (u32::from(raw),)
             },
         },
         Node {
@@ -125,12 +125,17 @@ fn register_pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> impl Steps<Pon
 fn main() -> Result<(), PondError> {
     let hw = SimulatedHardware::new();
 
-    let catalog = Catalog {
-        sensor: unsafe { RegisterDataset::new(hw.sensor_address()) },
-        status: unsafe { RegisterDataset::new(hw.status_address()) },
-        led_ok: unsafe { GpioDataset::new(hw.status_address(), 0, "LED_OK") },
-        led_warn: unsafe { GpioDataset::new(hw.status_address(), 1, "LED_WARN") },
-        led_crit: unsafe { GpioDataset::new(hw.status_address(), 2, "LED_CRIT") },
+    // SAFETY: the addresses come from `hw`, whose backing storage is live,
+    // aligned for `u32`, and outlives the catalog. On real hardware these
+    // would instead be addresses from the chip's memory map.
+    let catalog = unsafe {
+        Catalog {
+            sensor: RegisterDataset::new(hw.sensor_address()),
+            status: RegisterDataset::new(hw.status_address()),
+            led_ok: GpioDataset::new(hw.status_address(), 0, "LED_OK"),
+            led_warn: GpioDataset::new(hw.status_address(), 1, "LED_WARN"),
+            led_crit: GpioDataset::new(hw.status_address(), 2, "LED_CRIT"),
+        }
     };
 
     let params = Params {

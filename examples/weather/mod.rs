@@ -1,7 +1,7 @@
 //! Shared pipeline definition for the weather station analysis example.
 //!
 //! Demonstrates: subpipelines, struct params, nested catalog/params,
-//! PartitionedDataset, MemoryDataset, YamlDataset, PlotlyDataset,
+//! `PartitionedDataset`, `MemoryDataset`, `YamlDataset`, `PlotlyDataset`,
 //! parallel nodes, and an intentional error node.
 
 use std::collections::HashMap;
@@ -31,22 +31,22 @@ pub enum WeatherError {
 
 impl From<PondError> for WeatherError {
     fn from(e: PondError) -> Self {
-        WeatherError::Pond(e)
+        Self::Pond(e)
     }
 }
 
 impl From<PolarsError> for WeatherError {
     fn from(e: PolarsError) -> Self {
-        WeatherError::Polars(e)
+        Self::Polars(e)
     }
 }
 
 impl std::fmt::Display for WeatherError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WeatherError::Pond(e) => write!(f, "{e}"),
-            WeatherError::Polars(e) => write!(f, "{e}"),
-            WeatherError::Validation(msg) => write!(f, "Validation failed: {msg}"),
+            Self::Pond(e) => write!(f, "{e}"),
+            Self::Polars(e) => write!(f, "{e}"),
+            Self::Validation(msg) => write!(f, "Validation failed: {msg}"),
         }
     }
 }
@@ -64,7 +64,7 @@ pub struct BaselinePeriod {
     pub end_month: u32,
 }
 
-/// Aggregated weather statistics (must be Copy for MemoryDataset).
+/// Aggregated weather statistics (must be Copy for `MemoryDataset`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WeatherSummary {
     pub avg_temp: f64,
@@ -176,18 +176,18 @@ fn compute_summary(
         .str()
         .unwrap()
         .into_no_null_iter()
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .collect();
     let unique_stations: std::collections::HashSet<&str> =
-        stations.iter().map(|s| s.as_str()).collect();
+        stations.iter().map(String::as_str).collect();
 
     let summary = WeatherSummary {
         avg_temp: temp.mean().unwrap_or(0.0),
         max_temp: temp.max().unwrap_or(0.0),
         min_temp: temp.min().unwrap_or(0.0),
         total_rainfall: rain.sum().unwrap_or(0.0),
-        station_count: unique_stations.len() as u32,
-        reading_count: df.height() as u32,
+        station_count: u32::try_from(unique_stations.len()).expect("station count fits in u32"),
+        reading_count: u32::try_from(df.height()).expect("reading count fits in u32"),
     };
     (summary,)
 }
@@ -229,7 +229,7 @@ fn plot_rainfall(summary: WeatherSummary, title: String) -> (Plot,) {
         format!("{} readings", summary.reading_count),
     ];
     let values = vec![
-        summary.total_rainfall / summary.station_count as f64,
+        summary.total_rainfall / f64::from(summary.station_count),
         summary.total_rainfall,
     ];
 

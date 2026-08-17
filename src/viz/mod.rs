@@ -1,4 +1,4 @@
-//! Pipeline visualization: axum server, serialization, and VizHook.
+//! Pipeline visualization: axum server, serialization, and `VizHook`.
 
 pub mod assets;
 pub mod hook;
