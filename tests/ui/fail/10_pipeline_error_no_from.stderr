@@ -2,10 +2,15 @@ error[E0277]: the trait bound `MyErr: From<PondError>` is not satisfied
   --> tests/ui/fail/10_pipeline_error_no_from.rs:24:53
    |
 24 |     let _: Result<(), MyErr> = SequentialRunner.run(&pipe, &(), &(), &());
-   |                                                 --- ^^^^^ the trait `From<PondError>` is not implemented for `MyErr`
+   |                                                 --- ^^^^^ unsatisfied trait bound
    |                                                 |
    |                                                 required by a bound introduced by this call
    |
+help: the trait `From<PondError>` is not implemented for `MyErr`
+  --> tests/ui/fail/10_pipeline_error_no_from.rs:7:1
+   |
+ 7 | struct MyErr;
+   | ^^^^^^^^^^^^
    = help: the following other types implement trait `Steps<E>`:
              (N0, N1)
              (N0, N1, N2)
