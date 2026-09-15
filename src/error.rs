@@ -127,6 +127,14 @@ pub enum CheckError {
         pipeline_name: &'static str,
         dataset_id: usize,
     },
+    /// Two datasets of different types share one pointer id — the DAG would
+    /// silently merge them. Usually caused by zero-sized dataset types.
+    AliasedDatasets {
+        node_name: &'static str,
+        dataset_id: usize,
+        type_name: &'static str,
+        conflicting_type_name: &'static str,
+    },
     /// The fixed-capacity dataset buffer overflowed.
     CapacityExceeded,
 }
@@ -152,8 +160,54 @@ impl core::fmt::Display for CheckError {
             Self::UndeclaredPipelineInput { pipeline_name, dataset_id } => {
                 write!(f, "Pipeline '{pipeline_name}' has a child that consumes external dataset {dataset_id:#x}, which is not declared in the pipeline's inputs")
             }
+            Self::AliasedDatasets { node_name, dataset_id, type_name, conflicting_type_name } => {
+                write!(f, "Node '{node_name}' uses dataset {dataset_id:#x} of type `{type_name}`, but `{conflicting_type_name}` was already seen at that same address; the two datasets would be merged into one graph node (a zero-sized dataset type is the usual cause)")
+            }
             Self::CapacityExceeded => {
                 write!(f, "Dataset capacity exceeded; use check_with_capacity::<N>() with a larger N")
+            }
+        }
+    }
+}
+
+/// Non-fatal diagnostic from
+/// [`StepsMeta::for_each_warning`](crate::pipeline::StepsMeta::for_each_warning).
+///
+/// Warnings describe catalogs that will *work* but whose datasets cannot be
+/// identified or named reliably. They never fail a `check`.
+#[non_exhaustive]
+#[derive(Debug)]
+pub enum CheckWarning {
+    /// Zero-sized dataset type: its address is not a reliable identity and may
+    /// collide with a sibling field.
+    ZeroSizedDataset {
+        node_name: &'static str,
+        dataset_id: usize,
+        type_name: &'static str,
+    },
+
+    /// Type ident does not follow the `*Dataset` / `Param` convention, so the
+    /// (std) catalog indexer will recurse into it and resolve an interior field
+    /// name instead of the dataset's own name in logs and viz.
+    ///
+    /// Emitted on `no_std` too, where no indexer exists: the same catalog is
+    /// typically also built for host tooling and viz, and the convention is a
+    /// property of the type, not of the build.
+    UnconventionalDatasetType {
+        node_name: &'static str,
+        dataset_id: usize,
+        type_name: &'static str,
+    },
+}
+
+impl core::fmt::Display for CheckWarning {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::ZeroSizedDataset { node_name, dataset_id, type_name } => {
+                write!(f, "dataset type `{type_name}` used by node '{node_name}' is zero-sized; its address ({dataset_id:#x}) is not a reliable identity and may collide with a sibling catalog field")
+            }
+            Self::UnconventionalDatasetType { node_name, dataset_id, type_name } => {
+                write!(f, "dataset type `{type_name}` used by node '{node_name}' does not end in `Dataset`; the catalog indexer will recurse into it and resolve an interior field name for dataset {dataset_id:#x} in logs and viz")
             }
         }
     }

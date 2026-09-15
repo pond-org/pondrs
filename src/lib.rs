@@ -22,6 +22,7 @@ pub mod error;
 #[cfg(feature = "std")]
 pub mod graph;
 pub mod hooks;
+pub(crate) mod naming;
 pub mod pipeline;
 pub mod runners;
 #[cfg(feature = "viz")]
@@ -30,11 +31,11 @@ pub mod viz;
 // Re-export commonly used items
 pub use app::App;
 #[cfg(feature = "std")]
-pub use catalog_indexer::{CatalogIndex, index_catalog, index_catalog_with_params};
+pub use catalog_indexer::{CatalogIndex, CatalogWarning, check_catalog, index_catalog, index_catalog_with_params};
 pub use datasets::{Dataset, DatasetMeta, Never};
 #[cfg(feature = "std")]
 pub use datasets::TemplatedCatalog;
-pub use error::{CheckError, PondError};
+pub use error::{CheckError, CheckWarning, PondError};
 #[cfg(feature = "std")]
 pub use graph::{PipelineGraph, build_pipeline_graph};
 pub use hooks::{Hook, Hooks, HookAbort, HookControl, TypedHook, TypedHookAdapter, IntoTypedHook};

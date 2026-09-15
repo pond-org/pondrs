@@ -1,8 +1,9 @@
 //! Steps trait and tuple implementations.
 
-use super::check::{CheckError, check_item, collect_all_outputs};
-use super::id_set::IdSet;
+use super::check::{CheckError, check_dataset_identity, check_item, collect_all_outputs, collect_warnings};
+use super::id_set::{IdSet, IdTypeMap};
 use super::traits::{StepMeta, Step};
+use crate::error::CheckWarning;
 
 /// Non-generic trait for a sequence of steps (metadata only).
 ///
@@ -31,6 +32,18 @@ pub trait StepsMeta {
 
     /// Like [`check`](Self::check), but with a custom dataset capacity `N`.
     fn check_with_capacity<const N: usize>(&self) -> Result<(), CheckError> {
+        // Pass 0: dataset identity. Aliased datasets make two distinct datasets
+        // look like one, which shows up as spurious `DuplicateOutput` /
+        // `InputNotProduced` further down — so report it before those run.
+        let mut seen_types = IdTypeMap::<N>::new();
+        let mut identity = Ok(());
+        self.for_each_meta(&mut |item| {
+            if identity.is_ok() {
+                identity = check_dataset_identity::<N>(item, &mut seen_types);
+            }
+        });
+        identity?;
+
         // Pass 1: collect all datasets produced by any node.
         let mut all_produced = IdSet::<N>::new();
         self.for_each_meta(&mut |item| {
@@ -47,6 +60,33 @@ pub trait StepsMeta {
             }
         });
         result
+    }
+
+    /// Report non-fatal diagnostics about dataset identity and naming.
+    ///
+    /// Unlike [`check`](Self::check), this is not fail-fast: every warning is
+    /// handed to `report`. The callback keeps it allocator-free, so it works
+    /// under `no_std` — pass a sink that writes to RTT, semihosting or defmt.
+    ///
+    /// Warnings are never errors. They flag catalogs that run correctly but
+    /// whose datasets will be named unreliably in logs, hooks and viz.
+    ///
+    /// Uses a default capacity of 20 datasets for deduplication; see
+    /// [`for_each_warning_with_capacity`](Self::for_each_warning_with_capacity).
+    fn for_each_warning(&self, report: &mut dyn FnMut(&CheckWarning)) {
+        self.for_each_warning_with_capacity::<20>(report);
+    }
+
+    /// Like [`for_each_warning`](Self::for_each_warning), but with a custom
+    /// dedup capacity `N`.
+    ///
+    /// Exceeding `N` is not an error: deduplication simply stops and the same
+    /// dataset may be reported more than once.
+    fn for_each_warning_with_capacity<const N: usize>(&self, report: &mut dyn FnMut(&CheckWarning)) {
+        let mut seen = IdSet::<N>::new();
+        self.for_each_meta(&mut |item| {
+            collect_warnings::<N>(item, &mut seen, report);
+        });
     }
 }
 

@@ -22,7 +22,7 @@ pub mod stable;
 mod steps;
 mod traits;
 
-pub use crate::error::CheckError;
+pub use crate::error::{CheckError, CheckWarning};
 pub use alias::Alias;
 pub use into_result::IntoNodeResult;
 pub use node::{CompatibleOutput, Node};

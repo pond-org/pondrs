@@ -117,6 +117,14 @@ pub trait DatasetMeta: Send + Sync {
     fn is_persistent(&self) -> bool;
     fn type_string(&self) -> &'static str;
 
+    /// `true` if the concrete dataset type is zero-sized.
+    ///
+    /// Datasets are identified by the address of their catalog field, and a
+    /// zero-sized field shares its address with whatever follows it — so a ZST
+    /// dataset has no reliable identity. Reported by
+    /// [`StepsMeta::for_each_warning`](crate::pipeline::StepsMeta::for_each_warning).
+    fn is_zero_sized(&self) -> bool;
+
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String>;
 
@@ -129,6 +137,7 @@ impl<T: Dataset + Send + Sync> DatasetMeta for T {
     fn content_hash(&self) -> Option<u64> { <T as Dataset>::content_hash(self) }
     fn is_persistent(&self) -> bool { <T as Dataset>::is_persistent(self) }
     fn type_string(&self) -> &'static str { core::any::type_name::<T>() }
+    fn is_zero_sized(&self) -> bool { core::mem::size_of::<T>() == 0 }
 
     #[cfg(feature = "std")]
     fn html(&self) -> Option<String> { <T as Dataset>::html(self) }

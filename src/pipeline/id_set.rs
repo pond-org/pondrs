@@ -50,3 +50,55 @@ impl<const N: usize> IdSet<N> {
         true
     }
 }
+
+/// Outcome of inserting an `(id, type)` pair into an [`IdTypeMap`].
+pub(crate) enum TypeInsert {
+    /// The id was not present; the pair was recorded.
+    Inserted,
+    /// The id was present with the same type — normal reuse of one dataset.
+    Match,
+    /// The id was present with a *different* type — two datasets share one
+    /// address. Carries the type already recorded.
+    Conflict(&'static str),
+    /// Capacity exceeded.
+    Full,
+}
+
+/// A fixed-capacity `usize -> &'static str` table, stack-allocated.
+///
+/// Used to detect pointer aliasing between datasets of different types: a
+/// second insert at a known id with a different type name is a [`Conflict`].
+///
+/// [`Conflict`]: TypeInsert::Conflict
+pub(crate) struct IdTypeMap<const N: usize> {
+    entries: [(usize, &'static str); N],
+    len: usize,
+}
+
+impl<const N: usize> IdTypeMap<N> {
+    pub const fn new() -> Self {
+        Self { entries: [(0, ""); N], len: 0 }
+    }
+
+    /// Record `id` as holding a dataset of type `ty`.
+    pub fn insert(&mut self, id: usize, ty: &'static str) -> TypeInsert {
+        let mut i = 0;
+        while i < self.len {
+            let (known_id, known_ty) = self.entries[i];
+            if known_id == id {
+                return if known_ty == ty {
+                    TypeInsert::Match
+                } else {
+                    TypeInsert::Conflict(known_ty)
+                };
+            }
+            i += 1;
+        }
+        if self.len >= N {
+            return TypeInsert::Full;
+        }
+        self.entries[self.len] = (id, ty);
+        self.len += 1;
+        TypeInsert::Inserted
+    }
+}
