@@ -201,10 +201,40 @@ impl<C: Serialize, P: Serialize, H: Hooks, R: Runners> App<C, P, H, R> {
             Command::Run => self.execute(f),
             Command::Check => {
                 let pipeline = f.call(&self.catalog, &self.params);
+
+                // Warnings first: they describe catalogs that run but are named
+                // unreliably, and a hard error below should not hide them.
+                // `no_std` has no sink to print to — embedded users call
+                // `for_each_warning` themselves with their own.
+                #[cfg(feature = "std")]
+                let mut warnings = 0usize;
+                #[cfg(feature = "std")]
+                {
+                    pipeline.for_each_warning(&mut |w| {
+                        warnings += 1;
+                        println!("warning: {w}");
+                    });
+                    crate::catalog_indexer::check_catalog(
+                        &pipeline,
+                        &self.catalog,
+                        &self.params,
+                        &mut |w| {
+                            warnings += 1;
+                            println!("warning: {w}");
+                        },
+                    );
+                }
+
                 match pipeline.check() {
                     Ok(()) => {
                         #[cfg(feature = "std")]
-                        println!("Pipeline is valid.");
+                        {
+                            println!("Pipeline is valid.");
+                            if warnings > 0 {
+                                let plural = if warnings == 1 { "" } else { "s" };
+                                println!("{warnings} warning{plural} emitted.");
+                            }
+                        }
                         Ok(())
                     }
                     Err(e) => {

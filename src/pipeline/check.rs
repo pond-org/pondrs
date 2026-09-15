@@ -1,8 +1,102 @@
 //! Sequential pipeline validation (`no_std` compatible).
 
-use super::id_set::IdSet;
+use super::id_set::{IdSet, IdTypeMap, TypeInsert};
 use super::traits::{DatasetRef, StepMeta};
+use crate::error::CheckWarning;
+use crate::naming::{is_leaf_type, type_ident};
 pub use crate::CheckError;
+
+/// Detect two datasets of different types sharing one pointer id.
+///
+/// Runs before the ordering checks: an alias makes two distinct datasets look
+/// like one, which produces spurious `DuplicateOutput` / `InputNotProduced`
+/// errors downstream. Reporting it first keeps the user off a phantom trail.
+///
+/// Groups contribute nothing of their own — their declared input/output refs
+/// duplicate their children's and would attribute the conflict to the wrong
+/// step.
+pub(crate) fn check_dataset_identity<const N: usize>(
+    item: &dyn StepMeta,
+    seen: &mut IdTypeMap<N>,
+) -> Result<(), CheckError> {
+    if !item.is_leaf() {
+        let mut child_err: Result<(), CheckError> = Ok(());
+        item.for_each_child(&mut |child| {
+            if child_err.is_ok() {
+                child_err = check_dataset_identity::<N>(child, seen);
+            }
+        });
+        return child_err;
+    }
+
+    let name = item.name();
+    let mut err: Result<(), CheckError> = Ok(());
+    let mut record = |d: &DatasetRef| {
+        if err.is_err() {
+            return;
+        }
+        let ty = d.meta.type_string();
+        match seen.insert(d.id, ty) {
+            TypeInsert::Inserted | TypeInsert::Match => {}
+            TypeInsert::Conflict(other) => {
+                err = Err(CheckError::AliasedDatasets {
+                    node_name: name,
+                    dataset_id: d.id,
+                    type_name: ty,
+                    conflicting_type_name: other,
+                });
+            }
+            TypeInsert::Full => err = Err(CheckError::CapacityExceeded),
+        }
+    };
+    item.for_each_input(&mut record);
+    item.for_each_output(&mut record);
+    err
+}
+
+/// Report non-fatal naming/identity diagnostics for one step, recursively.
+///
+/// `seen` dedupes by dataset id so a dataset consumed by several nodes warns
+/// once. If it fills up, deduping stops but reporting continues — dropping a
+/// warning is worse than repeating one, and there is no error path here.
+pub(crate) fn collect_warnings<const N: usize>(
+    item: &dyn StepMeta,
+    seen: &mut IdSet<N>,
+    report: &mut dyn FnMut(&CheckWarning),
+) {
+    if !item.is_leaf() {
+        item.for_each_child(&mut |child| collect_warnings::<N>(child, seen, report));
+        return;
+    }
+
+    let name = item.name();
+    let mut check_ref = |d: &DatasetRef| {
+        if seen.contains(d.id) {
+            return;
+        }
+        seen.insert(d.id);
+
+        let ty = d.meta.type_string();
+        if d.meta.is_zero_sized() {
+            report(&CheckWarning::ZeroSizedDataset {
+                node_name: name,
+                dataset_id: d.id,
+                type_name: ty,
+            });
+        }
+        // Params are recognised by the indexer under their own name, so the
+        // `*Dataset` suffix does not apply to them.
+        if !d.meta.is_param() && !is_leaf_type(type_ident(ty)) {
+            report(&CheckWarning::UnconventionalDatasetType {
+                node_name: name,
+                dataset_id: d.id,
+                type_name: ty,
+            });
+        }
+    };
+    item.for_each_input(&mut check_ref);
+    item.for_each_output(&mut check_ref);
+}
 
 /// Collect all output dataset IDs from all leaf nodes (recursively).
 pub(crate) fn collect_all_outputs<const N: usize>(
@@ -227,7 +321,169 @@ fn check_undeclared_inputs<const N: usize>(
 mod tests {
     use super::*;
     use crate::pipeline::{Node, Pipeline, StepsMeta};
-    use crate::datasets::{CellDataset, Param};
+    use crate::datasets::{CellDataset, Dataset, Param};
+    use serde::ser::{Serialize, Serializer};
+
+    /// A zero-sized dataset type. Two of these as adjacent catalog fields land
+    /// at one address, which is the whole point of the fixture.
+    struct ZstOneDataset;
+    /// A second, distinct zero-sized dataset type.
+    struct ZstTwoDataset;
+    /// A non-zero-sized dataset whose ident breaks the `*Dataset` convention.
+    struct MyStore {
+        tag: u32,
+    }
+
+    macro_rules! trivial_dataset {
+        ($t:ty, $val:expr) => {
+            impl Serialize for $t {
+                fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                    s.serialize_unit()
+                }
+            }
+            impl Dataset for $t {
+                type LoadItem = i32;
+                type SaveItem = i32;
+                type Error = crate::error::PondError;
+                fn load(&self) -> Result<i32, Self::Error> {
+                    Ok($val)
+                }
+                fn save(&self, _output: i32) -> Result<(), Self::Error> {
+                    Ok(())
+                }
+            }
+        };
+    }
+
+    trivial_dataset!(ZstOneDataset, 1);
+    trivial_dataset!(ZstTwoDataset, 2);
+
+    impl Serialize for MyStore {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            s.serialize_u32(self.tag)
+        }
+    }
+    impl Dataset for MyStore {
+        type LoadItem = i32;
+        type SaveItem = i32;
+        type Error = crate::error::PondError;
+        fn load(&self) -> Result<i32, Self::Error> {
+            Ok(i32::try_from(self.tag).unwrap_or(i32::MAX))
+        }
+        fn save(&self, _output: i32) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    struct ZstCatalog {
+        one: ZstOneDataset,
+        two: ZstTwoDataset,
+    }
+
+    /// Count warnings by variant: (zero-sized, unconventional).
+    fn warning_counts(pipe: &impl StepsMeta) -> (usize, usize) {
+        let mut zero = 0;
+        let mut unconventional = 0;
+        pipe.for_each_warning(&mut |w| match w {
+            CheckWarning::ZeroSizedDataset { .. } => zero += 1,
+            CheckWarning::UnconventionalDatasetType { .. } => unconventional += 1,
+        });
+        (zero, unconventional)
+    }
+
+    #[test]
+    fn aliased_zero_sized_datasets_are_rejected() {
+        let p = Param(1i32);
+        let cat = ZstCatalog { one: ZstOneDataset, two: ZstTwoDataset };
+
+        // The premise: two zero-sized fields share one address.
+        assert_eq!(super::super::ptr_to_id(&cat.one), super::super::ptr_to_id(&cat.two));
+
+        let pipe = (
+            Node { name: "n1", func: |v| (v,), input: (&p,), output: (&cat.one,) },
+            Node { name: "n2", func: |v| (v,), input: (&p,), output: (&cat.two,) },
+        );
+        let err = pipe.check().unwrap_err();
+        // Reported as aliasing, not as the `DuplicateOutput` it would otherwise
+        // masquerade as.
+        assert!(matches!(err, CheckError::AliasedDatasets { node_name: "n2", .. }), "got {err:?}");
+    }
+
+    #[test]
+    fn zero_sized_dataset_warns() {
+        let p = Param(1i32);
+        let ds = ZstOneDataset;
+
+        let pipe = (Node { name: "n1", func: |v| (v,), input: (&p,), output: (&ds,) },);
+        let (zero, _) = warning_counts(&pipe);
+        assert_eq!(zero, 1);
+    }
+
+    #[test]
+    fn unconventional_dataset_type_warns() {
+        let p = Param(1i32);
+        let store = MyStore { tag: 7 };
+
+        let pipe = (Node { name: "n1", func: |v| (v,), input: (&p,), output: (&store,) },);
+        let mut seen: Option<&'static str> = None;
+        pipe.for_each_warning(&mut |w| {
+            if let CheckWarning::UnconventionalDatasetType { type_name, .. } = w {
+                seen = Some(type_name);
+            }
+        });
+        assert!(seen.is_some_and(|t| t.ends_with("MyStore")), "got {seen:?}");
+    }
+
+    #[test]
+    fn conventional_pipeline_warns_about_nothing() {
+        let p = Param(1i32);
+        let a = CellDataset::<i32>::new();
+        let b = CellDataset::<i32>::new();
+
+        let pipe = (
+            Node { name: "n1", func: |v| (v,), input: (&p,), output: (&a,) },
+            Node { name: "n2", func: |v| (v,), input: (&a,), output: (&b,) },
+        );
+        let mut count = 0;
+        pipe.for_each_warning(&mut |_| count += 1);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn warnings_are_deduped_per_dataset() {
+        let p = Param(1i32);
+        let store = MyStore { tag: 1 };
+        let a = CellDataset::<i32>::new();
+        let b = CellDataset::<i32>::new();
+        let c = CellDataset::<i32>::new();
+
+        // `store` is read by three nodes but must warn only once.
+        let pipe = (
+            Node { name: "n1", func: |v| (v,), input: (&store,), output: (&a,) },
+            Node { name: "n2", func: |v| (v,), input: (&store,), output: (&b,) },
+            Node { name: "n3", func: |v| (v,), input: (&store,), output: (&c,) },
+        );
+        let _ = &p;
+        let (_, unconventional) = warning_counts(&pipe);
+        assert_eq!(unconventional, 1);
+    }
+
+    #[test]
+    fn warnings_recurse_into_nested_pipelines() {
+        let p = Param(1i32);
+        let store = MyStore { tag: 1 };
+        let a = CellDataset::<i32>::new();
+
+        let pipe = (Pipeline {
+            name: "inner",
+            steps: (Node { name: "n1", func: |v| (v,), input: (&store,), output: (&a,) },),
+            input: (&store,),
+            output: (&a,),
+        },);
+        let _ = &p;
+        let (_, unconventional) = warning_counts(&pipe);
+        assert_eq!(unconventional, 1);
+    }
 
     #[test]
     fn valid_linear_pipeline() {

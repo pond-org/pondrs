@@ -82,3 +82,41 @@ steps.check()?;
 // For pipelines with more than 20 datasets:
 steps.check_with_capacity::<64>()?;
 ```
+
+## Warnings
+
+`for_each_warning` also works fully in `no_std`. It reports datasets whose
+*identity* or *name* is unreliable rather than structural errors, and hands each
+one to a callback instead of collecting them — so it needs no allocator and you
+supply your own sink:
+
+```rust,ignore
+use core::fmt::Write as _;
+
+steps.for_each_warning(&mut |w| {
+    let mut buf = heapless::String::<256>::new();
+    let _ = write!(buf, "warning: {w}");
+    uart_print(&buf);
+});
+```
+
+Two warnings are reported:
+
+- `ZeroSizedDataset` — a zero-sized dataset type has no reliable address, so it
+  may collide with a sibling catalog field.
+- `UnconventionalDatasetType` — the type ident does not end in `Dataset`. This
+  fires under `no_std` too, even though there is no indexer here: the convention
+  is a property of the type, and the same catalog is typically also compiled for
+  host tooling and viz (see above).
+
+`for_each_warning_with_capacity::<N>` sets the dedup capacity (default 20).
+Overflowing it is not an error — deduplication just stops, and a dataset may be
+reported twice.
+
+The `check` subcommand does not print these under `no_std`: there is no sink to
+print to, and `PondError::CheckFailed` carries no payload. Call
+`for_each_warning` yourself as above.
+
+The catalog cross-check, `check_catalog`, is **not** available in `no_std` — it
+needs the serde catalog walk, which is `std` only. Run it from the host-side
+binary described at the top of this page.
