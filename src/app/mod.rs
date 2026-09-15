@@ -214,15 +214,21 @@ impl<C: Serialize, P: Serialize, H: Hooks, R: Runners> App<C, P, H, R> {
                         warnings += 1;
                         println!("warning: {w}");
                     });
-                    crate::catalog_indexer::check_catalog(
-                        &pipeline,
-                        &self.catalog,
-                        &self.params,
-                        &mut |w| {
-                            warnings += 1;
-                            println!("warning: {w}");
-                        },
-                    );
+                    // `check_catalog` needs the whole pipeline: under a node
+                    // filter every dataset of a filtered-out node looks unused.
+                    // `--nodes` and friends are `run`-only flags, so this holds
+                    // today; the guard keeps it holding if that ever changes.
+                    if self.node_filter.is_none() {
+                        crate::catalog_indexer::check_catalog(
+                            &pipeline,
+                            &self.catalog,
+                            &self.params,
+                            &mut |w| {
+                                warnings += 1;
+                                println!("warning: {w}");
+                            },
+                        );
+                    }
                 }
 
                 match pipeline.check() {

@@ -175,6 +175,15 @@ pub enum CatalogWarning {
         /// The name the dataset itself was recorded under.
         expected: String,
     },
+    /// A catalog entry that the naming convention identifies as a dataset or
+    /// param, but which no node in the pipeline reads or writes.
+    ///
+    /// Often dead config — but not always, and this is the one warning here
+    /// that can be outright wrong rather than merely incomplete. A param read
+    /// while *building* the pipeline (a flag gating whether a node is included)
+    /// is never seen by this check: it is a plain field access in the pipeline
+    /// function, with nothing to observe. See [`check_catalog`].
+    UnusedCatalogEntry { name: String },
 }
 
 impl fmt::Display for CatalogWarning {
@@ -189,6 +198,15 @@ impl fmt::Display for CatalogWarning {
                      (the indexer does not descend into sequences), a hand-written `Serialize` \
                      that does not pass `&self.field` through, or a dataset constructed outside \
                      the catalog"
+                )
+            }
+            Self::UnusedCatalogEntry { name } => {
+                write!(
+                    f,
+                    "catalog entry '{name}' is not read or written by any node; \
+                     it is dead config unless it is a param the pipeline function reads \
+                     while building the pipeline (a flag gating a node, say), or the \
+                     catalog is deliberately shared with another pipeline"
                 )
             }
             Self::MisresolvedName { node_name, dataset_id, type_name, resolved, expected } => {
@@ -211,8 +229,26 @@ impl fmt::Display for CatalogWarning {
 /// alone: this needs the catalog, and so exists only under `std`.
 ///
 /// Every warning is reported; nothing here is fatal and there is no error path.
-/// Pass the **unfiltered** pipeline — a node filter hides datasets and would
-/// silently narrow the check.
+///
+/// # Pass the unfiltered pipeline
+///
+/// A node filter (`--nodes`, `--from-nodes`, `--to-nodes`) hides datasets. For
+/// the naming warnings that only means a hidden dataset goes unchecked — a false
+/// negative. For [`UnusedCatalogEntry`] it inverts: every dataset belonging to a
+/// filtered-out node looks unused, and the output becomes noise.
+///
+/// # `UnusedCatalogEntry` has legitimate causes
+///
+/// It is the one warning here that can be *wrong* rather than merely
+/// incomplete. Two shapes it cannot see:
+///
+/// - **A param read while building the pipeline.** `if params.include_report.0 {
+///   steps.push(..) }` is a plain field access in the pipeline function — no
+///   node names the param, and there is nothing for this check to observe.
+/// - **A catalog shared between several pipelines**, which will always have
+///   entries this one does not touch.
+///
+/// [`UnusedCatalogEntry`]: CatalogWarning::UnusedCatalogEntry
 pub fn check_catalog(
     pipe: &impl StepsMeta,
     catalog: &impl Serialize,
@@ -224,6 +260,37 @@ pub fn check_catalog(
     pipe.for_each_meta(&mut |item| {
         check_step(item, &index, &mut seen, report);
     });
+    report_unused_entries(&index, &seen, report);
+}
+
+/// Report catalog entries the convention identifies as datasets that no node
+/// touched.
+///
+/// Only the *winning* entry at each address is considered, and only when its
+/// serde struct name says it is a dataset or param. An entry the convention
+/// cannot see — a `CellDataset`, whose hand-written `Serialize` emits no struct
+/// name, or an unconventionally-named type whose interior field won — is passed
+/// over rather than guessed at, the same conservative rule the naming checks use.
+fn report_unused_entries(
+    index: &CatalogIndex,
+    seen: &std::collections::HashSet<usize>,
+    report: &mut dyn FnMut(&CatalogWarning),
+) {
+    let mut unused: Vec<&str> = index
+        .entries
+        .iter()
+        .filter(|(id, _)| !seen.contains(*id))
+        .filter_map(|(_, v)| v.last())
+        .filter(|e| e.serde_ident.is_some_and(is_leaf_type))
+        .map(|e| e.name.as_str())
+        .collect();
+
+    // `HashMap` iteration order is nondeterministic; the output must not be.
+    unused.sort_unstable();
+
+    for name in unused {
+        report(&CatalogWarning::UnusedCatalogEntry { name: name.to_string() });
+    }
 }
 
 fn check_step(
@@ -616,6 +683,7 @@ mod tests {
             let tag = match w {
                 CatalogWarning::UnnamedDataset { .. } => "unnamed",
                 CatalogWarning::MisresolvedName { .. } => "misresolved",
+                CatalogWarning::UnusedCatalogEntry { .. } => "unused",
             };
             out.push((tag, w.to_string()));
         });
@@ -760,5 +828,133 @@ mod tests {
         let warnings = collect(&pipe, &catalog);
         assert_eq!(warnings.len(), 1, "got {warnings:?}");
         assert_eq!(warnings[0].0, "unnamed");
+    }
+
+    // --- UnusedCatalogEntry ------------------------------------------------
+
+    /// The names reported as unused, in the order `check_catalog` emits them.
+    fn unused_names(
+        pipe: &impl crate::pipeline::StepsMeta,
+        catalog: &impl Serialize,
+    ) -> Vec<String> {
+        let mut out = Vec::new();
+        check_catalog(pipe, catalog, &(), &mut |w| {
+            if let CatalogWarning::UnusedCatalogEntry { name } = w {
+                out.push(name.clone());
+            }
+        });
+        out
+    }
+
+    #[derive(Serialize)]
+    struct WideCatalog {
+        used_in: MemoryDataset<i32>,
+        used_out: MemoryDataset<i32>,
+        zulu: MemoryDataset<i32>,
+        alpha: MemoryDataset<i32>,
+    }
+
+    #[test]
+    fn check_catalog_flags_unused_entries_in_sorted_order() {
+        let catalog = WideCatalog {
+            used_in: MemoryDataset::new(),
+            used_out: MemoryDataset::new(),
+            zulu: MemoryDataset::new(),
+            alpha: MemoryDataset::new(),
+        };
+        let pipe = (Node {
+            name: "n1",
+            func: |v: i32| (v,),
+            input: (&catalog.used_in,),
+            output: (&catalog.used_out,),
+        },);
+
+        // Sorted, so the output does not depend on HashMap iteration order.
+        assert_eq!(
+            unused_names(&pipe, &catalog),
+            vec!["catalog.alpha".to_string(), "catalog.zulu".to_string()]
+        );
+    }
+
+    #[test]
+    fn check_catalog_does_not_flag_used_entries() {
+        let catalog = TestCatalog {
+            alpha: MemoryDataset::new(),
+            beta: MemoryDataset::new(),
+        };
+        let pipe = (Node {
+            name: "n1",
+            func: |v: i32| (v,),
+            input: (&catalog.alpha,),
+            output: (&catalog.beta,),
+        },);
+        assert_eq!(unused_names(&pipe, &catalog), Vec::<String>::new());
+    }
+
+    #[test]
+    fn check_catalog_flags_unused_params() {
+        let catalog = TestCatalog {
+            alpha: MemoryDataset::new(),
+            beta: MemoryDataset::new(),
+        };
+        let params = ParamsCatalog {
+            cfg: Param(MyConfig { value: 1.0 }),
+            threshold: Param(1.5),
+        };
+        let pipe = (Node {
+            name: "n1",
+            func: |v: i32, _t: f64| (v,),
+            input: (&catalog.alpha, &params.threshold),
+            output: (&catalog.beta,),
+        },);
+
+        let mut out = Vec::new();
+        check_catalog(&pipe, &catalog, &params, &mut |w| {
+            if let CatalogWarning::UnusedCatalogEntry { name } = w {
+                out.push(name.clone());
+            }
+        });
+        // `threshold` is read by the node; `cfg` is dead config.
+        assert_eq!(out, vec!["params.cfg".to_string()]);
+    }
+
+    #[test]
+    fn check_catalog_does_not_flag_entries_the_convention_cannot_see() {
+        // `CellDataset` serializes as a unit, so the walk never learns a struct
+        // name for it and cannot claim it is a dataset. Unused or not, it is
+        // passed over rather than guessed at.
+        let catalog = CellCatalog {
+            cell: crate::datasets::CellDataset::new(),
+            out: MemoryDataset::new(),
+        };
+        let pipe = (Node {
+            name: "n1",
+            func: |_v: i32| (),
+            input: (&catalog.out,),
+            output: (),
+        },);
+        assert_eq!(unused_names(&pipe, &catalog), Vec::<String>::new());
+    }
+
+    #[test]
+    fn check_catalog_does_not_flag_container_structs() {
+        // Only leaf entries count: `inner` itself must not be reported on top of
+        // the datasets inside it.
+        let catalog = OuterCatalog {
+            inner: InnerCatalog {
+                first: MemoryDataset::new(),
+                second: MemoryDataset::new(),
+            },
+        };
+        let pipe = (Node {
+            name: "n1",
+            func: |_v: i32| (),
+            input: (&catalog.inner.first,),
+            output: (),
+        },);
+        assert_eq!(
+            unused_names(&pipe, &catalog),
+            vec!["catalog.inner.second".to_string()]
+        );
     }
 }

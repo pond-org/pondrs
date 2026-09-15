@@ -172,12 +172,37 @@ pondrs::check_catalog(&steps, &catalog, &params, &mut |w| println!("warning: {w}
 |---------|---------|-----|
 | `UnnamedDataset` | The catalog walk never reached this dataset, so it has no name at all | Remove a `#[serde(skip)]`, move the dataset out of a `Vec`/tuple (the indexer does not descend into sequences), pass `&self.field` through a hand-written `Serialize`, or put the dataset in the catalog |
 | `MisresolvedName` | The walk reached the dataset, but a deeper entry at the same address won, so it resolves to an interior field name | Rename the type to end in `Dataset` |
+| `UnusedCatalogEntry` | A catalog or param entry no node reads or writes | Delete the entry — or ignore the warning, see below |
 
 `MisresolvedName` is deliberately conservative: it fires only when an entry can
 be *positively* identified as the dataset itself, by matching the serde struct
 name against the pipeline's real type. A dataset with a hand-written `Serialize`
 that emits no struct name (such as `CellDataset`) is left alone rather than
-guessed at.
+guessed at. `UnusedCatalogEntry` applies the same rule in reverse — an entry the
+convention cannot positively identify as a dataset is never reported unused.
+
+#### When `UnusedCatalogEntry` is wrong
+
+It is the one warning here that can be *wrong* rather than merely incomplete, so
+it is worth knowing the two shapes it cannot see:
+
+- **A param read while building the pipeline.** Dynamic pipelines gate nodes on
+  config, and that read is a plain field access in the pipeline function — no
+  node names the param, so the check has nothing to observe:
+
+  ```rust,ignore
+  if params.include_report.0 {          // ← invisible to check_catalog
+      steps.push(Node { name: "report", .. }.boxed());
+  }
+  ```
+
+- **A catalog shared between several pipelines**, which will always have entries
+  any one of them does not touch.
+
+The `check` subcommand skips `check_catalog` entirely when a node filter is
+active, since every dataset belonging to a filtered-out node would look unused.
+`--nodes`, `--from-nodes` and `--to-nodes` are `run`-only flags, so this does not
+arise today; the guard is there to keep it from arising later.
 
 These warnings detect; they do not repair. Resolved names are unchanged — fixing
 one means renaming the type or the catalog field.
