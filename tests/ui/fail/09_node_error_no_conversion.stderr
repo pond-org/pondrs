@@ -6,6 +6,16 @@ error[E0277]: node function returns `Result<(i32,), MyErr>`, which cannot produc
    |
    = help: the trait `IntoNodeResult<(i32,), PondError>` is not implemented for `Result<(i32,), MyErr>`
    = note: return `(i32,)`, or `Result<(i32,), E2>` where `PondError` implements `From<E2>`
-   = help: the trait `pondrs::Step<E>` is implemented for `Node<F, Input, Output>`
-   = note: required for `Node<{closure@$DIR/tests/ui/fail/09_node_error_no_conversion.rs:15:15: 15:48}, (&Param<i32>,), (&CellDataset<i32>,)>` to implement `pondrs::Step<PondError>`
-   = note: required for the cast from `&Node<{closure@$DIR/tests/ui/fail/09_node_error_no_conversion.rs:15:15: 15:48}, (&Param<i32>,), (&CellDataset<i32>,)>` to `&dyn pondrs::Step<PondError>`
+help: the trait `pondrs::Step<E>` is implemented for `Node<F, Input, Output, N>`
+  --> src/pipeline/node.rs
+   |
+   | / impl<F, Input, Output, E, R, N> Step<E> for Node<F, Input, Output, N>
+   | | where
+   | |     Input: NodeInput<E> + Send + Sync,
+   | |     Output: NodeOutput<E> + Send + Sync,
+...  |
+   | |     E: From<PondError>,
+   | |     N: AsRef<str> + Send + Sync,
+   | |________________________________^
+   = note: required for `Node<{closure@$DIR/tests/ui/fail/09_node_error_no_conversion.rs:15:15: 15:48}, (&Param<i32>,), (&CellDataset<i32>,), &str>` to implement `pondrs::Step<PondError>`
+   = note: required for the cast from `&Node<{closure@$DIR/tests/ui/fail/09_node_error_no_conversion.rs:15:15: 15:48}, (&Param<i32>,), (&CellDataset<i32>,), &str>` to `&dyn pondrs::Step<PondError>`

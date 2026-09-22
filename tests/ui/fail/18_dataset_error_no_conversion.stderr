@@ -4,16 +4,17 @@ error[E0277]: the trait bound `PondError: From<MyErr>` is not satisfied
 37 |     let _step: &dyn Step<PondError> = &n;
    |                                       ^^ the trait `From<MyErr>` is not implemented for `PondError`
    |
-   = help: the following other types implement trait `From<T>`:
-             `PondError` implements `From<Box<dyn StdError + Send + Sync>>`
-             `PondError` implements `From<Infallible>`
-             `PondError` implements `From<image::error::ImageError>`
-             `PondError` implements `From<polars_error::PolarsError>`
-             `PondError` implements `From<pondrs::HookAbort>`
-             `PondError` implements `From<serde_json::error::Error>`
-             `PondError` implements `From<serde_yaml::error::Error>`
-             `PondError` implements `From<std::io::Error>`
-           and $N others
+   = help: `PondError` implements trait `From<T>`:
+             From<Box<dyn StdError + Send + Sync>>
+             From<Infallible>
+             From<image::error::ImageError>
+             From<polars_error::PolarsError>
+             From<pondrs::HookAbort>
+             From<serde_json::error::Error>
+             From<serde_yaml::error::Error>
+             From<std::io::Error>
+             From<yaml_rust2::emitter::EmitError>
+             From<yaml_rust2::scanner::ScanError>
    = note: required for `(&MyDataset,)` to implement `NodeInput<PondError>`
-   = note: required for `Node<{closure@$DIR/tests/ui/fail/18_dataset_error_no_conversion.rs:33:15: 33:23}, (&MyDataset,), ()>` to implement `pondrs::Step<PondError>`
-   = note: required for the cast from `&Node<{closure@$DIR/tests/ui/fail/18_dataset_error_no_conversion.rs:33:15: 33:23}, (&MyDataset,), ()>` to `&dyn pondrs::Step<PondError>`
+   = note: required for `Node<{closure@$DIR/tests/ui/fail/18_dataset_error_no_conversion.rs:33:15: 33:23}, (&MyDataset,), (), &str>` to implement `pondrs::Step<PondError>`
+   = note: required for the cast from `&Node<{closure@$DIR/tests/ui/fail/18_dataset_error_no_conversion.rs:33:15: 33:23}, (&MyDataset,), (), &str>` to `&dyn pondrs::Step<PondError>`

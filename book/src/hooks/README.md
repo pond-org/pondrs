@@ -57,7 +57,7 @@ App::new(catalog, params)
 
 All hook methods receive `&dyn StepMeta`, which provides:
 
-- `name()` — the node or pipeline name (`&'static str`)
+- `name()` — the node or pipeline name (`&str`, borrowed from the step)
 - `is_leaf()` — `true` for nodes, `false` for pipelines
 - `type_string()` — the Rust type name of the underlying function
 - `for_each_input()` / `for_each_output()` — iterate over dataset references

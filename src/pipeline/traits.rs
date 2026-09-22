@@ -57,7 +57,7 @@ pub enum DatasetEvent<'v> {
 /// steps are pipelines (containers with children).
 pub trait StepMeta: Send + Sync {
     /// Human-readable name for this step.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
     /// `true` for nodes, `false` for pipelines.
     fn is_leaf(&self) -> bool;
     /// The Rust type name of the underlying function or `"pipeline"`.
@@ -93,7 +93,7 @@ pub enum StepKind<'a, E> {
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a pipeline step",
     label = "not a step",
-    note = "steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, or a boxed step in a `DynSteps`",
+    note = "steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, the `Unrolled` from `RecurrentNode::build()`, or a boxed step in a `DynSteps`",
     note = "if `{Self}` is a step, check that the pipeline error type `{E}` implements `From<PondError>`"
 )]
 pub trait Step<E>: StepMeta {
@@ -115,7 +115,7 @@ pub trait Step<E>: StepMeta {
 // These allow `&'a dyn Step<E>` to be boxed into a `DynSteps<'a, E>` directly.
 
 impl<T: StepMeta + ?Sized> StepMeta for &T {
-    fn name(&self) -> &'static str { (**self).name() }
+    fn name(&self) -> &str { (**self).name() }
     fn is_leaf(&self) -> bool { (**self).is_leaf() }
     fn type_string(&self) -> &'static str { (**self).type_string() }
     fn for_each_child<'a>(&'a self, f: &mut dyn FnMut(&'a dyn StepMeta)) {

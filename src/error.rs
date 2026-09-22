@@ -95,42 +95,45 @@ impl PondError {
 }
 
 /// Validation error from [`StepsMeta::check`](crate::pipeline::StepsMeta::check).
+///
+/// Borrows the node and pipeline names from the checked steps, so it lives no
+/// longer than the pipeline it describes.
 #[derive(Debug)]
-pub enum CheckError {
+pub enum CheckError<'a> {
     /// A node reads a dataset that is produced by a later node (wrong order).
     InputNotProduced {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
     },
     /// A dataset is produced by more than one node.
     DuplicateOutput {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
     },
     /// A node writes to a param dataset (params are read-only).
     ParamWritten {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
     },
     /// A pipeline declares an input that none of its children consume.
     UnusedPipelineInput {
-        pipeline_name: &'static str,
+        pipeline_name: &'a str,
         dataset_id: usize,
     },
     /// A pipeline declares an output that none of its children produce.
     UnproducedPipelineOutput {
-        pipeline_name: &'static str,
+        pipeline_name: &'a str,
         dataset_id: usize,
     },
     /// A child node consumes an external dataset not declared in the pipeline's inputs.
     UndeclaredPipelineInput {
-        pipeline_name: &'static str,
+        pipeline_name: &'a str,
         dataset_id: usize,
     },
     /// Two datasets of different types share one pointer id — the DAG would
     /// silently merge them. Usually caused by zero-sized dataset types.
     AliasedDatasets {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
         type_name: &'static str,
         conflicting_type_name: &'static str,
@@ -139,7 +142,7 @@ pub enum CheckError {
     CapacityExceeded,
 }
 
-impl core::fmt::Display for CheckError {
+impl core::fmt::Display for CheckError<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::InputNotProduced { node_name, dataset_id } => {
@@ -177,11 +180,11 @@ impl core::fmt::Display for CheckError {
 /// identified or named reliably. They never fail a `check`.
 #[non_exhaustive]
 #[derive(Debug)]
-pub enum CheckWarning {
+pub enum CheckWarning<'a> {
     /// Zero-sized dataset type: its address is not a reliable identity and may
     /// collide with a sibling field.
     ZeroSizedDataset {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
         type_name: &'static str,
     },
@@ -194,13 +197,13 @@ pub enum CheckWarning {
     /// typically also built for host tooling and viz, and the convention is a
     /// property of the type, not of the build.
     UnconventionalDatasetType {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
         type_name: &'static str,
     },
 }
 
-impl core::fmt::Display for CheckWarning {
+impl core::fmt::Display for CheckWarning<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::ZeroSizedDataset { node_name, dataset_id, type_name } => {

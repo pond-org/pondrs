@@ -6,9 +6,13 @@ error[E0277]: the input partition yields `String`, but the node function takes `
    |
    = help: the trait `IntoLazy<i32, PondError>` is not implemented for `String`
    = note: a partitioned node's function maps one element of the input partition to one element of the output partition
-   = help: the trait `IntoLazy<T, E>` is implemented for `Box<(dyn FnOnce() -> Result<T, E2> + Send + 'static)>`
-   = note: required for `PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to implement `pondrs::Step<PondError>`
-   = note: required for the cast from `&PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to `&dyn pondrs::Step<PondError>`
+help: the trait `IntoLazy<T, E>` is implemented for `Box<(dyn FnOnce() -> Result<T, E2> + Send + 'static)>`
+  --> src/datasets/lazy.rs
+   |
+   | impl<T: Send + 'static, E: From<E2>, E2: Send + 'static> IntoLazy<T, E> for Lazy<T, E2> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32, &str>` to implement `pondrs::Step<PondError>`
+   = note: required for the cast from `&PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32, &str>` to `&dyn pondrs::Step<PondError>`
 
 error[E0277]: the node function returns `i32`, but the output partition stores `String`
   --> tests/ui/fail/16_partitioned_node_mismatch.rs:17:39
@@ -18,6 +22,11 @@ error[E0277]: the node function returns `i32`, but the output partition stores `
    |
    = help: the trait `FromLazy<i32, PondError>` is not implemented for `String`
    = note: a partitioned node's function maps one element of the input partition to one element of the output partition
-   = help: the trait `FromLazy<T, E>` is implemented for `Box<(dyn FnOnce() -> Result<T, E2> + Send + 'static)>`
-   = note: required for `PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to implement `pondrs::Step<PondError>`
-   = note: required for the cast from `&PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32>` to `&dyn pondrs::Step<PondError>`
+help: the trait `FromLazy<T, E>` is implemented for `Box<(dyn FnOnce() -> Result<T, E2> + Send + 'static)>`
+  --> src/datasets/lazy.rs
+   |
+   | / impl<T: Send + 'static, E: Send + 'static, E2: From<E> + Send + 'static> FromLazy<T, E>
+   | |     for Lazy<T, E2>
+   | |___________________^
+   = note: required for `PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32, &str>` to implement `pondrs::Step<PondError>`
+   = note: required for the cast from `&PartitionedNode<'_, {closure@$DIR/tests/ui/fail/16_partitioned_node_mismatch.rs:16:39: 16:47}, TextDataset, TextDataset, i32, i32, &str>` to `&dyn pondrs::Step<PondError>`

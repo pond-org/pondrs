@@ -48,6 +48,8 @@ mod plotly_dataset;
 mod image_dataset;
 #[cfg(feature = "std")]
 mod templated;
+#[cfg(feature = "std")]
+mod expand;
 
 pub use cell::CellDataset;
 pub use gpio::GpioDataset;
@@ -77,6 +79,8 @@ pub use plotly_dataset::PlotlyDataset;
 pub use image_dataset::ImageDataset;
 #[cfg(feature = "std")]
 pub use templated::TemplatedCatalog;
+#[cfg(feature = "std")]
+pub use expand::expand_indexed;
 
 /// Trait for datasets that can load and save data.
 ///

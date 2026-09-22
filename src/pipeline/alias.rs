@@ -11,19 +11,20 @@ use crate::datasets::Dataset;
 /// and downstream steps may consume it — without performing any computation
 /// or data transfer. Typically used when the same bytes are read back through
 /// a different dataset type (e.g. text written, then read as a `DataFrame`).
-pub struct Alias<'a, Input: Dataset + Send + Sync, Output: Dataset + Send + Sync> {
-    pub name: &'static str,
+pub struct Alias<'a, Input: Dataset + Send + Sync, Output: Dataset + Send + Sync, N: AsRef<str> = &'static str> {
+    pub name: N,
     pub input: &'a Input,
     pub output: &'a Output,
 }
 
-impl<Input, Output> StepMeta for Alias<'_, Input, Output>
+impl<Input, Output, N> StepMeta for Alias<'_, Input, Output, N>
 where
     Input: Dataset + Send + Sync,
     Output: Dataset + Send + Sync,
+    N: AsRef<str> + Send + Sync,
 {
-    fn name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     fn is_leaf(&self) -> bool {
@@ -45,22 +46,24 @@ where
     }
 }
 
-impl<Input, Output, E> Leaf<E> for Alias<'_, Input, Output>
+impl<Input, Output, E, N> Leaf<E> for Alias<'_, Input, Output, N>
 where
     Input: Dataset + Send + Sync,
     Output: Dataset + Send + Sync,
     E: From<PondError>,
+    N: AsRef<str> + Send + Sync,
 {
     fn call(&self, _on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<crate::hooks::HookControl, crate::hooks::HookAbort>) -> Result<(), E> {
         Ok(())
     }
 }
 
-impl<Input, Output, E> Step<E> for Alias<'_, Input, Output>
+impl<Input, Output, E, N> Step<E> for Alias<'_, Input, Output, N>
 where
     Input: Dataset + Send + Sync,
     Output: Dataset + Send + Sync,
     E: From<PondError>,
+    N: AsRef<str> + Send + Sync,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
 }

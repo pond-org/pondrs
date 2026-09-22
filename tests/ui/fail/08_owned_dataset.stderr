@@ -1,13 +1,29 @@
 error[E0277]: `Param<i32>` cannot be used as a node input
- --> tests/ui/fail/08_owned_dataset.rs:8:14
-  |
-8 |     let _n = Node {
-  |              ^^^^ not a node input
-  |
-  = help: the trait `DatasetInput` is not implemented for `Param<i32>`
-  = note: input tuples hold dataset *references*: write `(&catalog.field,)`, not `(catalog.field,)`
-  = note: adapters such as `EachField` are also valid input slots
-  = help: the following other types implement trait `DatasetInput`:
-            &T
-            EachField<'_, S, D>
-  = note: required for `(Param<i32>,)` to implement `NodeInputMeta`
+  --> tests/ui/fail/08_owned_dataset.rs:10:16
+   |
+10 |         input: (p,),
+   |                ^^^^ not a node input
+   |
+   = help: the trait `DatasetInput` is not implemented for `Param<i32>`
+   = note: input tuples hold dataset *references*: write `(&catalog.field,)`, not `(catalog.field,)`
+   = note: adapters such as `EachField` are also valid input slots
+help: the following other types implement trait `DatasetInput`
+  --> src/pipeline/traits.rs
+   |
+   |   impl<T: Dataset + Send + Sync> DatasetInput for &T {
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `&T`
+   |
+  ::: src/pipeline/each_field.rs
+   |
+   | / impl<S, D> DatasetInput for EachField<'_, S, D>
+   | | where
+   | |     S: Send + Sync,
+   | |     D: Dataset + Send + Sync,
+   | |     D::LoadItem: Send + Sync + 'static,
+   | |_______________________________________^ `EachField<'_, S, D>`
+   = note: required for `(Param<i32>,)` to implement `NodeInputMeta`
+note: required by a bound in `Node`
+  --> src/pipeline/node.rs
+   |
+   | pub struct Node<F, Input: NodeInputMeta, Output: NodeOutputMeta, N = &'static str>
+   |                           ^^^^^^^^^^^^^ required by this bound in `Node`

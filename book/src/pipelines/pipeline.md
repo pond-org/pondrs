@@ -5,8 +5,8 @@ The `Pipeline` struct groups related steps into a named container with declared 
 ## Definition
 
 ```rust,ignore
-pub struct Pipeline<S: StepsMeta, Input: NodeInput, Output: NodeOutput> {
-    pub name: &'static str,
+pub struct Pipeline<S: StepsMeta, Input: NodeInputMeta, Output: NodeOutputMeta, N: AsRef<str> = &'static str> {
+    pub name: N,
     pub steps: S,
     pub input: Input,
     pub output: Output,

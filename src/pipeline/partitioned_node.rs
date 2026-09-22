@@ -12,29 +12,31 @@ use super::node::CompatibleOutput;
 use super::stable::StableFn;
 use super::traits::{DatasetEvent, DatasetRef, NodeInput, NodeOutput, StepMeta, Leaf, Step, StepKind};
 
-pub struct PartitionedNode<'a, F, D1, D2, T1, T2>
+pub struct PartitionedNode<'a, F, D1, D2, T1, T2, N = &'static str>
 where
     D1: FileDataset + Serialize + DeserializeOwned,
     D2: FileDataset + Serialize + DeserializeOwned,
     F: StableFn<(T1,)>,
     F::Output: CompatibleOutput<(T2,)>,
+    N: AsRef<str> + Send + Sync,
 {
-    pub name: &'static str,
+    pub name: N,
     pub func: F,
     pub input: &'a PartitionedDataset<D1>,
     pub output: &'a PartitionedDataset<D2>,
     pub _marker: PhantomData<(T1, T2)>,
 }
 
-impl<'a, F, D1, D2, T1, T2> PartitionedNode<'a, F, D1, D2, T1, T2>
+impl<'a, F, D1, D2, T1, T2, N> PartitionedNode<'a, F, D1, D2, T1, T2, N>
 where
     D1: FileDataset + Serialize + DeserializeOwned,
     D2: FileDataset + Serialize + DeserializeOwned,
     F: StableFn<(T1,)>,
     F::Output: CompatibleOutput<(T2,)>,
+    N: AsRef<str> + Send + Sync,
 {
     pub fn new(
-        name: &'static str,
+        name: N,
         func: F,
         input: &'a PartitionedDataset<D1>,
         output: &'a PartitionedDataset<D2>,
@@ -43,7 +45,7 @@ where
     }
 }
 
-impl<F, D1, D2, T1, T2> StepMeta for PartitionedNode<'_, F, D1, D2, T1, T2>
+impl<F, D1, D2, T1, T2, N> StepMeta for PartitionedNode<'_, F, D1, D2, T1, T2, N>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
@@ -56,9 +58,10 @@ where
     F::Output: CompatibleOutput<(T2,)>,
     T1: Send + Sync,
     T2: Send + Sync,
+    N: AsRef<str> + Send + Sync,
 {
-    fn name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     fn is_leaf(&self) -> bool {
@@ -80,7 +83,7 @@ where
     }
 }
 
-impl<F, D1, D2, T1, T2, E> Leaf<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
+impl<F, D1, D2, T1, T2, E, N> Leaf<E> for PartitionedNode<'_, F, D1, D2, T1, T2, N>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
@@ -97,6 +100,7 @@ where
     F: StableFn<(T1,)> + Clone + Send + Sync + 'static,
     F::Output: IntoNodeResult<(T2,), E>,
     E: From<PondError> + Send + 'static,
+    N: AsRef<str> + Send + Sync,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<crate::hooks::HookControl, crate::hooks::HookAbort>) -> Result<(), E> {
         let (input_map,) = NodeInput::<E>::load_data(&(self.input,), on_event)?;
@@ -121,7 +125,7 @@ where
     }
 }
 
-impl<F, D1, D2, T1, T2, E> Step<E> for PartitionedNode<'_, F, D1, D2, T1, T2>
+impl<F, D1, D2, T1, T2, E, N> Step<E> for PartitionedNode<'_, F, D1, D2, T1, T2, N>
 where
     D1: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
     D2: FileDataset + Serialize + DeserializeOwned + Send + Sync + 'static,
@@ -138,6 +142,7 @@ where
     F: StableFn<(T1,)> + Clone + Send + Sync + 'static,
     F::Output: IntoNodeResult<(T2,), E>,
     E: From<PondError> + Send + 'static,
+    N: AsRef<str> + Send + Sync,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
 }

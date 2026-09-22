@@ -18,6 +18,8 @@ mod pipeline;
 mod pipeline_fn;
 #[cfg(feature = "std")]
 mod each_field;
+#[cfg(feature = "std")]
+mod recurrent;
 pub mod stable;
 mod steps;
 mod traits;
@@ -37,6 +39,8 @@ pub use filter::{NodeFilter, filter_steps};
 pub use partitioned_node::PartitionedNode;
 #[cfg(feature = "std")]
 pub use each_field::EachField;
+#[cfg(feature = "std")]
+pub use recurrent::{RecurrentNode, Unrolled};
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
 pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeInputMeta, NodeOutput, NodeOutputMeta, StepMeta, Leaf, Group, StepKind, Step};

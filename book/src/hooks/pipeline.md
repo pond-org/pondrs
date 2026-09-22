@@ -50,12 +50,12 @@ Pipeline hooks only fire for `Pipeline` structs. A flat tuple of nodes at the to
 
 ```rust,ignore
 struct PipelineTimer {
-    timings: Mutex<HashMap<&'static str, Instant>>,
+    timings: Mutex<HashMap<String, Instant>>,
 }
 
 impl Hook for PipelineTimer {
     fn before_pipeline_run(&self, p: &dyn StepMeta) -> Result<HookControl, HookAbort> {
-        self.timings.lock().unwrap().insert(p.name(), Instant::now());
+        self.timings.lock().unwrap().insert(p.name().to_string(), Instant::now());
         Ok(HookControl::Continue)
     }
 

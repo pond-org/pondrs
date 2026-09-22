@@ -98,8 +98,9 @@ Two more identity rules follow from the same address-is-identity scheme:
   `check` reports this as `CheckError::AliasedDatasets`, and a single one as
   `CheckWarning::ZeroSizedDataset`. Give the type a real field.
 - **Keep datasets reachable by the serde walk.** A dataset behind
-  `#[serde(skip)]`, inside a `Vec` or tuple (the indexer does not descend into
-  sequences), or behind a hand-written `Serialize` that does not pass
+  `#[serde(skip)]`, inside a tuple (the indexer does not descend into tuples;
+  `Vec` elements *are* named, by index), or behind a hand-written `Serialize`
+  that does not pass
   `&self.field` through, is never named at all —
   `CatalogWarning::UnnamedDataset`.
 
