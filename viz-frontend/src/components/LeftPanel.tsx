@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { VizGraph, VizNode, NodeStatus, DatasetActivity } from '../api/types';
+import type { VizGraph, VizNode, VizDataset, NodeStatus, DatasetActivity } from '../api/types';
 import type { PanelSelection } from './DatasetPanel';
 
 interface Props {
@@ -282,6 +282,152 @@ function NodeTree({
   );
 }
 
+const shortName = (name: string) => name.replace(/^(catalog|params)\./, '');
+
+type DatasetEntry =
+  | { kind: 'single'; ds: VizDataset }
+  | { kind: 'group'; key: string; members: VizDataset[] };
+
+/**
+ * Fold datasets that live in one sequence (`checkpoints.0`, `checkpoints.1`, …
+ * or `epochs.0.weights`, `epochs.1.weights`, …) under the path before their
+ * first numeric segment. Groups appear where their first member did; a
+ * "sequence" of one is left as a plain item.
+ */
+function groupSequences(datasets: VizDataset[]): DatasetEntry[] {
+  const keyOf = (ds: VizDataset): string | null => {
+    const parts = shortName(ds.name).split('.');
+    const i = parts.findIndex(p => /^\d+$/.test(p));
+    return i > 0 ? parts.slice(0, i).join('.') : null;
+  };
+  const members = new Map<string, VizDataset[]>();
+  for (const ds of datasets) {
+    const key = keyOf(ds);
+    if (key != null) members.set(key, [...(members.get(key) ?? []), ds]);
+  }
+  const entries: DatasetEntry[] = [];
+  const emitted = new Set<string>();
+  for (const ds of datasets) {
+    const key = keyOf(ds);
+    const group = key != null ? members.get(key)! : null;
+    if (key == null || group == null || group.length < 2) {
+      entries.push({ kind: 'single', ds });
+    } else if (!emitted.has(key)) {
+      emitted.add(key);
+      // Natural order, so `checkpoints.10` follows `checkpoints.9`.
+      const members = [...group].sort((x, y) =>
+        shortName(x.name).localeCompare(shortName(y.name), undefined, { numeric: true }));
+      entries.push({ kind: 'group', key, members });
+    }
+  }
+  return entries;
+}
+
+interface DatasetListProps {
+  datasets: VizDataset[];
+  datasetActivity: Record<string, DatasetActivity>;
+  selection: PanelSelection | null;
+  onSelect: (rfId: string, selection: PanelSelection) => void;
+  dimmed?: boolean;
+}
+
+function DatasetList({ datasets, datasetActivity, selection, onSelect, dimmed }: DatasetListProps) {
+  // Groups start collapsed; toggling records an explicit choice per group.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+
+  const isActive = (id: number) => selection?.kind === 'dataset' && selection.id === id;
+
+  const item = (ds: VizDataset, indent = 0) => (
+    <Item
+      key={ds.id}
+      label={shortName(ds.name)}
+      active={isActive(ds.id)}
+      dimmed={dimmed}
+      indent={indent}
+      onClick={() => onSelect(`ds-${ds.id}`, {
+        kind: 'dataset',
+        id: ds.id,
+        name: ds.name,
+        type_string: ds.type_string,
+        is_param: ds.is_param,
+        activity: datasetActivity[ds.name] ?? null,
+      })}
+    />
+  );
+
+  if (datasets.length === 0) {
+    return <div style={{ padding: '8px 14px', fontSize: 14, color: 'var(--text-dim)' }}>—</div>;
+  }
+
+  return (
+    <>
+      {groupSequences(datasets).map(entry => {
+        if (entry.kind === 'single') return item(entry.ds);
+
+        const { key, members } = entry;
+        // Selecting a member (e.g. by clicking it in the graph) reveals it,
+        // unless the user has explicitly collapsed the group.
+        const containsActive = members.some(m => isActive(m.id));
+        const open = toggled[key] ?? containsActive;
+        return (
+          <div key={`group-${key}`}>
+            <button
+              onClick={() => setToggled(t => ({ ...t, [key]: !open }))}
+              onMouseEnter={() => setHoveredGroup(key)}
+              onMouseLeave={() => setHoveredGroup(null)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: containsActive && !open
+                  ? 'var(--bg-node-done)'
+                  : hoveredGroup === key ? 'var(--bg-tag)' : 'none',
+                border: 'none',
+                borderBottom: '1px solid var(--border)',
+                padding: '7px 14px 7px 16px',
+                cursor: 'pointer',
+                color: containsActive && !open ? 'var(--color-done)' : dimmed ? 'var(--text-dim)' : 'var(--text-sub)',
+                fontSize: 15,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                textAlign: 'left',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                transition: 'background 0.1s, color 0.1s',
+              }}
+              title={`${key} — ${members.length} datasets`}
+            >
+              <span style={{
+                fontSize: 11,
+                opacity: 0.7,
+                transition: 'transform 0.15s',
+                display: 'inline-block',
+                transform: open ? 'rotate(90deg)' : 'none',
+                flexShrink: 0,
+              }}>▶</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{key}</span>
+              <span style={{
+                fontSize: 11,
+                color: 'var(--text-dimmer)',
+                background: 'var(--bg-tag)',
+                border: '1px solid var(--border-tag)',
+                borderRadius: 8,
+                padding: '0 5px',
+                flexShrink: 0,
+                marginLeft: 'auto',
+              }}>
+                {members.length}
+              </span>
+            </button>
+            {open && members.map(m => item(m, 1))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function LeftPanel({
   graph, selection, nodeStatuses, datasetActivity,
   onSelect, expandedPipelines, onTogglePipeline,
@@ -294,9 +440,6 @@ export function LeftPanel({
   const topLevelNodes = graph?.nodes.filter(n => n.parent_pipe == null) ?? [];
   const datasets = graph?.datasets.filter(d => !d.is_param) ?? [];
   const params = graph?.datasets.filter(d => d.is_param) ?? [];
-
-  const isDatasetActive = (id: number) =>
-    selection?.kind === 'dataset' && selection.id === id;
 
   // Count all non-pipe nodes for the section header.
   const totalStepCount = graph?.nodes.filter(n => !n.is_pipe).length ?? 0;
@@ -341,25 +484,12 @@ export function LeftPanel({
         open={datasetsOpen}
         onToggle={() => setDatasetsOpen(o => !o)}
       >
-        {datasets.length === 0 ? (
-          <div style={{ padding: '8px 14px', fontSize: 14, color: 'var(--text-dim)' }}>—</div>
-        ) : (
-          datasets.map(ds => (
-            <Item
-              key={ds.id}
-              label={ds.name.replace(/^(catalog|params)\./, '')}
-              active={isDatasetActive(ds.id)}
-              onClick={() => onSelect(`ds-${ds.id}`, {
-                kind: 'dataset',
-                id: ds.id,
-                name: ds.name,
-                type_string: ds.type_string,
-                is_param: ds.is_param,
-                activity: datasetActivity[ds.name] ?? null,
-              })}
-            />
-          ))
-        )}
+        <DatasetList
+          datasets={datasets}
+          datasetActivity={datasetActivity}
+          selection={selection}
+          onSelect={onSelect}
+        />
       </Section>
 
       <Section
@@ -368,26 +498,13 @@ export function LeftPanel({
         open={paramsOpen}
         onToggle={() => setParamsOpen(o => !o)}
       >
-        {params.length === 0 ? (
-          <div style={{ padding: '8px 14px', fontSize: 14, color: 'var(--text-dim)' }}>—</div>
-        ) : (
-          params.map(ds => (
-            <Item
-              key={ds.id}
-              label={ds.name.replace(/^(catalog|params)\./, '')}
-              active={isDatasetActive(ds.id)}
-              dimmed
-              onClick={() => onSelect(`ds-${ds.id}`, {
-                kind: 'dataset',
-                id: ds.id,
-                name: ds.name,
-                type_string: ds.type_string,
-                is_param: ds.is_param,
-                activity: datasetActivity[ds.name] ?? null,
-              })}
-            />
-          ))
-        )}
+        <DatasetList
+          datasets={params}
+          datasetActivity={datasetActivity}
+          selection={selection}
+          onSelect={onSelect}
+          dimmed
+        />
       </Section>
     </div>
   );
