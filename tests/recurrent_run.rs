@@ -102,7 +102,12 @@ fn from_nodes_resumes_mid_chain() {
 
 fn catalog(dir: &Path, n: usize) -> Catalog {
     std::fs::create_dir_all(dir).unwrap();
-    std::fs::write(dir.join("init.txt"), "0").unwrap();
+    // Only seed the fixture once: `CacheHook` hashes a file by its mtime, so
+    // rewriting it here would count as a change on every call.
+    let init = dir.join("init.txt");
+    if !init.exists() {
+        std::fs::write(&init, "0").unwrap();
+    }
     Catalog {
         init_weights: TextDataset::new(dir.join("init.txt").to_str().unwrap()),
         checkpoints: (0..n)
@@ -125,7 +130,9 @@ fn cache_hook_keys_each_iteration_separately() {
         .unwrap();
     assert_eq!(*ran.0.lock().unwrap(), ["train/0", "train/1", "train/2", "report"]);
 
-    // Nothing changed: every iteration skips.
+    // Nothing changed: every iteration skips. The sleep puts any stray rewrite
+    // in a later mtime tick, as on a slow CI runner.
+    std::thread::sleep(std::time::Duration::from_millis(50));
     let ran = RanNodes::default();
     App::new(catalog(dir.path(), 3), params())
         .with_hooks((CacheHook::new(&cache_dir), ran.clone()))
