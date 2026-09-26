@@ -1,44 +1,57 @@
 //! Lazy dataset wrapper — defers load and save to call time.
 
 use std::prelude::v1::*;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use super::{Dataset, FileDataset};
 
-/// A deferred computation that produces a value on demand.
+/// A one-shot deferred computation that produces a value on demand.
 ///
-/// Used in two positions. As [`LazyDataset`]'s `LoadItem`/`SaveItem`, `E` is the
-/// inner dataset's error. Inside a [`PartitionedNode`], `E` is the pipeline error
+/// Used in two positions. As [`LazyDataset`]'s `SaveItem`, `E` is the inner
+/// dataset's error. Inside a [`PartitionedNode`], `E` is the pipeline error
 /// type — generic rather than pinned to [`PondError`](crate::error::PondError) so
 /// that a partitioned node's function may return a custom error type, exactly as a
 /// plain [`Node`](crate::pipeline::Node)'s may. [`IntoLazy`] and [`FromLazy`]
 /// bridge the two.
 ///
+/// It is `FnOnce` so that an already-computed eager value can be moved into it
+/// without requiring `T: Clone`. The repeatable load-side handle is [`Loader`].
+///
 /// [`PartitionedNode`]: crate::pipeline::PartitionedNode
 pub type Lazy<T, E> = Box<dyn FnOnce() -> Result<T, E> + Send>;
 
+/// A repeatable load handle: each call loads the value again.
+///
+/// [`LazyDataset`]'s `LoadItem`. It holds a clone of the inner dataset and calls
+/// its `load()` on every invocation, so the same entry can be read once per epoch
+/// without caching it in memory. It is an `Arc`, so it is cheap to clone and can
+/// be shared across threads.
+pub type Loader<T, E> = Arc<dyn Fn() -> Result<T, E> + Send + Sync>;
+
 /// Lazy wrapper around any dataset — defers load and save to call time.
 ///
-/// On load, returns a closure that loads from the inner dataset when called.
-/// On save, accepts a closure that produces the value, calls it, then saves.
+/// On load, returns a [`Loader`] that loads from the inner dataset each time it
+/// is called. On save, accepts a [`Lazy`] that produces the value, calls it,
+/// then saves.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct LazyDataset<D> {
     pub dataset: D,
 }
 
-impl<D: Dataset + Clone + Send + 'static> Dataset for LazyDataset<D>
+impl<D: Dataset + Clone + Send + Sync + 'static> Dataset for LazyDataset<D>
 where
     D::Error: Send,
 {
-    type LoadItem = Lazy<D::LoadItem, D::Error>;
+    type LoadItem = Loader<D::LoadItem, D::Error>;
     type SaveItem = Lazy<D::SaveItem, D::Error>;
     type Error = D::Error;
 
     fn load(&self) -> Result<Self::LoadItem, D::Error> {
         let ds = self.dataset.clone();
-        Ok(Box::new(move || ds.load()))
+        Ok(Arc::new(move || ds.load()))
     }
 
     fn save(&self, thunk: Self::SaveItem) -> Result<(), D::Error> {
@@ -79,7 +92,7 @@ pub type LazyPartitionedDataset<D> = super::PartitionedDataset<LazyDataset<D>>;
 /// Adapts a loaded partition element into a [`Lazy`].
 ///
 /// Implemented for `T` itself (eager datasets, whose `LoadItem` is the element)
-/// and for a [`Lazy`] (lazy datasets). A failure to satisfy it in a
+/// and for a [`Loader`] (lazy datasets). A failure to satisfy it in a
 /// [`PartitionedNode`] means the input element type and the function's parameter
 /// type disagree.
 ///
@@ -99,7 +112,7 @@ impl<T: Send + 'static, E> IntoLazy<T, E> for T {
     }
 }
 
-impl<T: Send + 'static, E: From<E2>, E2: Send + 'static> IntoLazy<T, E> for Lazy<T, E2> {
+impl<T: Send + 'static, E: From<E2>, E2: Send + 'static> IntoLazy<T, E> for Loader<T, E2> {
     fn into_lazy(self) -> Lazy<T, E> {
         Box::new(move || self().map_err(E::from))
     }

@@ -60,7 +60,7 @@ pub use memory::MemoryDataset;
 pub use param::Param;
 pub use register::RegisterDataset;
 #[cfg(feature = "std")]
-pub use lazy::{FromLazy, IntoLazy, Lazy, LazyDataset};
+pub use lazy::{FromLazy, IntoLazy, Lazy, LazyDataset, Loader};
 #[cfg(feature = "std")]
 pub use lazy::LazyPartitionedDataset;
 #[cfg(feature = "std")]

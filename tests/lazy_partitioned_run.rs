@@ -1,10 +1,12 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
 use serde::Serialize;
 use tempfile::TempDir;
 
-use pondrs::datasets::{Lazy, LazyDataset, LazyPartitionedDataset, TextDataset};
+use pondrs::datasets::{
+    Dataset, Lazy, LazyDataset, LazyPartitionedDataset, Loader, PartitionedDataset, TextDataset,
+};
 use pondrs::error::PondError;
 use pondrs::hooks::LoggingHook;
 use pondrs::{Node, PartitionedNode, ParallelRunner, Runner};
@@ -17,9 +19,9 @@ struct Catalog {
 }
 
 fn copy_texts(
-    input: HashMap<String, Lazy<String, PondError>>,
-) -> (HashMap<String, Lazy<String, PondError>>,) {
-    let output: HashMap<String, Lazy<String, PondError>> = input
+    input: BTreeMap<String, Loader<String, PondError>>,
+) -> (BTreeMap<String, Lazy<String, PondError>>,) {
+    let output: BTreeMap<String, Lazy<String, PondError>> = input
         .into_iter()
         .map(|(name, load_thunk)| {
             let save_thunk: Lazy<String, PondError> = Box::new(move || {
@@ -103,5 +105,136 @@ fn lazy_partitioned_parallel() {
         let pnode_content = std::fs::read_to_string(&pnode_path).unwrap();
         assert_eq!(node_content, format!("CONTENT OF FILE {i:03}"));
         assert_eq!(node_content, pnode_content);
+    }
+}
+
+fn lazy_text(dir: &std::path::Path) -> LazyPartitionedDataset<TextDataset> {
+    LazyPartitionedDataset::<TextDataset> {
+        path: dir.to_str().unwrap().to_string(),
+        ext: "txt".into(),
+        dataset: LazyDataset {
+            dataset: TextDataset::new(""),
+        },
+    }
+}
+
+fn eager_text(dir: &std::path::Path) -> PartitionedDataset<TextDataset> {
+    PartitionedDataset {
+        path: dir.to_str().unwrap().to_string(),
+        ext: "txt".into(),
+        dataset: TextDataset::new(""),
+    }
+}
+
+fn write_inputs(dir: &std::path::Path, names: &[&str]) {
+    std::fs::create_dir_all(dir).unwrap();
+    for name in names {
+        std::fs::write(dir.join(format!("{name}.txt")), format!("content of {name}")).unwrap();
+    }
+}
+
+#[test]
+fn lazy_partitioned_loaders_are_ordered_and_repeatable() {
+    let dir = TempDir::new().unwrap();
+    // Written out of order, so a sorted result can't come from creation order.
+    let names = ["delta", "alpha", "charlie", "bravo", "echo"];
+    write_inputs(dir.path(), &names);
+
+    let loaders = lazy_text(dir.path()).load().unwrap();
+
+    let keys: Vec<&str> = loaders.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["alpha", "bravo", "charlie", "delta", "echo"]);
+
+    for (name, loader) in &loaders {
+        let first = loader().unwrap();
+        let second = loader().unwrap();
+        assert_eq!(first, format!("content of {name}"));
+        assert_eq!(first, second);
+    }
+
+    // Each call re-reads the file: nothing is cached.
+    let loader = &loaders["alpha"];
+    std::fs::write(dir.path().join("alpha.txt"), "rewritten").unwrap();
+    assert_eq!(loader().unwrap(), "rewritten");
+
+    let loader = loaders["bravo"].clone();
+    std::thread::scope(|s| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let loader = loader.clone();
+                s.spawn(move || loader().unwrap())
+            })
+            .collect();
+        for h in handles {
+            assert_eq!(h.join().unwrap(), "content of bravo");
+        }
+    });
+}
+
+#[derive(Serialize)]
+struct LazyToEagerCatalog {
+    input: LazyPartitionedDataset<TextDataset>,
+    output: PartitionedDataset<TextDataset>,
+}
+
+#[test]
+fn partitioned_node_lazy_to_eager() {
+    let dir = TempDir::new().unwrap();
+    let names = ["a", "b", "c"];
+    write_inputs(&dir.path().join("input"), &names);
+
+    let catalog = LazyToEagerCatalog {
+        input: lazy_text(&dir.path().join("input")),
+        output: eager_text(&dir.path().join("output")),
+    };
+    let pipe = (PartitionedNode {
+        name: "uppercase",
+        func: uppercase,
+        input: &catalog.input,
+        output: &catalog.output,
+        _marker: PhantomData,
+    },);
+
+    ParallelRunner::new(2)
+        .run::<PondError>(&pipe, &catalog, &(), &())
+        .unwrap();
+
+    for name in names {
+        let content = std::fs::read_to_string(dir.path().join(format!("output/{name}.txt"))).unwrap();
+        assert_eq!(content, format!("CONTENT OF {}", name.to_uppercase()));
+    }
+}
+
+#[derive(Serialize)]
+struct EagerToLazyCatalog {
+    input: PartitionedDataset<TextDataset>,
+    output: LazyPartitionedDataset<TextDataset>,
+}
+
+#[test]
+fn partitioned_node_eager_to_lazy() {
+    let dir = TempDir::new().unwrap();
+    let names = ["a", "b", "c"];
+    write_inputs(&dir.path().join("input"), &names);
+
+    let catalog = EagerToLazyCatalog {
+        input: eager_text(&dir.path().join("input")),
+        output: lazy_text(&dir.path().join("output")),
+    };
+    let pipe = (PartitionedNode {
+        name: "uppercase",
+        func: uppercase,
+        input: &catalog.input,
+        output: &catalog.output,
+        _marker: PhantomData,
+    },);
+
+    ParallelRunner::new(2)
+        .run::<PondError>(&pipe, &catalog, &(), &())
+        .unwrap();
+
+    for name in names {
+        let content = std::fs::read_to_string(dir.path().join(format!("output/{name}.txt"))).unwrap();
+        assert_eq!(content, format!("CONTENT OF {}", name.to_uppercase()));
     }
 }

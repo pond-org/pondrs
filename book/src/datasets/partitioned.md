@@ -20,7 +20,7 @@ pub struct PartitionedDataset<D: FileDataset> {
 
 ## Loading
 
-Returns `HashMap<String, D::LoadItem>` where keys are filename stems:
+Returns `BTreeMap<String, D::LoadItem>` where keys are filename stems, iterated in sorted order:
 
 ```text
 data/partitions/
@@ -30,14 +30,14 @@ data/partitions/
 ```
 
 ```rust,ignore
-// loads as HashMap { "february" => ..., "january" => ..., "march" => ... }
+// loads as BTreeMap { "february" => ..., "january" => ..., "march" => ... }
 ```
 
 The template dataset is cloned for each file, its path is set to the full file path, and `load()` is called on the clone.
 
 ## Saving
 
-Accepts `HashMap<String, D::SaveItem>` and writes each entry as `{path}/{name}.{ext}`. Parent directories are created automatically.
+Accepts `BTreeMap<String, D::SaveItem>` and writes each entry as `{path}/{name}.{ext}`. Parent directories are created automatically.
 
 When the inner dataset's `prefer_parallel()` returns `true` and the pipeline is running inside a rayon thread pool (e.g. via `ParallelRunner`), partition saves are distributed across threads. This is the default behavior for [`LazyDataset`](./lazy.md) wrappers.
 
@@ -46,7 +46,7 @@ Node {
     name: "split_by_month",
     input: (&cat.all_data,),
     output: (&cat.monthly,),  // PartitionedDataset<PolarsCsvDataset>,
-    func: |df: DataFrame| -> (HashMap<String, DataFrame>,) {
+    func: |df: DataFrame| -> (BTreeMap<String, DataFrame>,) {
         // split DataFrame into partitions...
     },
 }

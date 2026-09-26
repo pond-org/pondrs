@@ -1,5 +1,5 @@
 use std::prelude::v1::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use core::marker::PhantomData;
 use serde::{Serialize, de::DeserializeOwned};
@@ -118,7 +118,7 @@ where
                 let save_item = D2::SaveItem::from_lazy(out_lazy)?;
                 Ok((key, save_item))
             })
-            .collect::<Result<HashMap<_, _>, E>>()?;
+            .collect::<Result<BTreeMap<_, _>, E>>()?;
 
         NodeOutput::<E>::save_data(&(self.output,), (output_map,), on_event)?;
         Ok(())
