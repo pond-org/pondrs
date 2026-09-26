@@ -1,7 +1,9 @@
 //! Steps trait and tuple implementations.
 
 use super::check::{CheckError, check_dataset_identity, check_item, collect_all_outputs, collect_warnings};
-use super::id_set::{IdSet, IdTypeMap};
+#[cfg(feature = "std")]
+use super::id_set::{HeapIdSet, HeapIdTypeMap};
+use super::id_set::{IdCollector, IdSet, IdTypeMap, TypeCollector};
 use super::traits::{StepMeta, Step};
 use crate::error::CheckWarning;
 
@@ -24,42 +26,27 @@ pub trait StepsMeta {
     /// Datasets that are consumed but not produced by any node are treated
     /// as external inputs and are not flagged.
     ///
-    /// Uses a default capacity of 20 datasets. For larger pipelines,
-    /// use [`check_with_capacity`](Self::check_with_capacity).
-    fn check(&self) -> Result<(), CheckError> {
-        self.check_with_capacity::<20>()
+    /// Under `std` the bookkeeping is heap-allocated and has no capacity
+    /// limit. Under `no_std` it uses a fixed capacity of 20 datasets; for
+    /// larger pipelines use [`check_with_capacity`](Self::check_with_capacity).
+    ///
+    /// The error borrows step names from `self`.
+    fn check(&self) -> Result<(), CheckError<'_>> {
+        #[cfg(feature = "std")]
+        {
+            run_check::<HeapIdSet, HeapIdTypeMap, _>(self)
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.check_with_capacity::<20>()
+        }
     }
 
-    /// Like [`check`](Self::check), but with a custom dataset capacity `N`.
-    fn check_with_capacity<const N: usize>(&self) -> Result<(), CheckError> {
-        // Pass 0: dataset identity. Aliased datasets make two distinct datasets
-        // look like one, which shows up as spurious `DuplicateOutput` /
-        // `InputNotProduced` further down — so report it before those run.
-        let mut seen_types = IdTypeMap::<N>::new();
-        let mut identity = Ok(());
-        self.for_each_meta(&mut |item| {
-            if identity.is_ok() {
-                identity = check_dataset_identity::<N>(item, &mut seen_types);
-            }
-        });
-        identity?;
-
-        // Pass 1: collect all datasets produced by any node.
-        let mut all_produced = IdSet::<N>::new();
-        self.for_each_meta(&mut |item| {
-            collect_all_outputs::<N>(item, &mut all_produced);
-        });
-
-        // Pass 2: walk in order, checking sequential validity.
-        let mut produced = IdSet::<N>::new();
-        let mut consumed = IdSet::<N>::new();
-        let mut result = Ok(());
-        self.for_each_meta(&mut |item| {
-            if result.is_ok() {
-                result = check_item::<N>(item, &all_produced, &mut produced, &mut consumed);
-            }
-        });
-        result
+    /// Like [`check`](Self::check), but with stack-allocated bookkeeping of a
+    /// fixed dataset capacity `N`. Returns [`CheckError::CapacityExceeded`]
+    /// if the pipeline touches more than `N` distinct datasets.
+    fn check_with_capacity<const N: usize>(&self) -> Result<(), CheckError<'_>> {
+        run_check::<IdSet<N>, IdTypeMap<N>, _>(self)
     }
 
     /// Report non-fatal diagnostics about dataset identity and naming.
@@ -71,10 +58,19 @@ pub trait StepsMeta {
     /// Warnings are never errors. They flag catalogs that run correctly but
     /// whose datasets will be named unreliably in logs, hooks and viz.
     ///
-    /// Uses a default capacity of 20 datasets for deduplication; see
+    /// Deduplication is unbounded under `std`; under `no_std` it uses a
+    /// capacity of 20 datasets — see
     /// [`for_each_warning_with_capacity`](Self::for_each_warning_with_capacity).
     fn for_each_warning(&self, report: &mut dyn FnMut(&CheckWarning)) {
-        self.for_each_warning_with_capacity::<20>(report);
+        #[cfg(feature = "std")]
+        {
+            let mut seen = HeapIdSet::empty();
+            self.for_each_meta(&mut |item| collect_warnings(item, &mut seen, report));
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.for_each_warning_with_capacity::<20>(report);
+        }
     }
 
     /// Like [`for_each_warning`](Self::for_each_warning), but with a custom
@@ -83,11 +79,48 @@ pub trait StepsMeta {
     /// Exceeding `N` is not an error: deduplication simply stops and the same
     /// dataset may be reported more than once.
     fn for_each_warning_with_capacity<const N: usize>(&self, report: &mut dyn FnMut(&CheckWarning)) {
-        let mut seen = IdSet::<N>::new();
+        let mut seen = IdSet::<N>::empty();
         self.for_each_meta(&mut |item| {
-            collect_warnings::<N>(item, &mut seen, report);
+            collect_warnings(item, &mut seen, report);
         });
     }
+}
+
+/// The three `check` passes, generic over the id bookkeeping.
+///
+/// A free function rather than a provided method, so the collector types stay
+/// out of `StepsMeta`'s public surface.
+fn run_check<C: IdCollector, T: TypeCollector, S: StepsMeta + ?Sized>(
+    steps: &S,
+) -> Result<(), CheckError<'_>> {
+    // Pass 0: dataset identity. Aliased datasets make two distinct datasets
+    // look like one, which shows up as spurious `DuplicateOutput` /
+    // `InputNotProduced` further down — so report it before those run.
+    let mut seen_types = T::empty();
+    let mut identity = Ok(());
+    steps.for_each_meta(&mut |item| {
+        if identity.is_ok() {
+            identity = check_dataset_identity(item, &mut seen_types);
+        }
+    });
+    identity?;
+
+    // Pass 1: collect all datasets produced by any node.
+    let mut all_produced = C::empty();
+    steps.for_each_meta(&mut |item| {
+        collect_all_outputs(item, &mut all_produced);
+    });
+
+    // Pass 2: walk in order, checking sequential validity.
+    let mut produced = C::empty();
+    let mut consumed = C::empty();
+    let mut result = Ok(());
+    steps.for_each_meta(&mut |item| {
+        if result.is_ok() {
+            result = check_item(item, &all_produced, &mut produced, &mut consumed);
+        }
+    });
+    result
 }
 
 /// Generic trait for a sequence of executable steps.

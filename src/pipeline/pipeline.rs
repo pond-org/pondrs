@@ -7,18 +7,20 @@ use super::traits::{DatasetRef, NodeInputMeta, NodeOutputMeta, StepMeta, Group, 
 ///
 /// Pipelines are containers — they delegate execution to their child steps
 /// and are never called directly by runners.
-pub struct Pipeline<S: StepsMeta, Input: NodeInputMeta, Output: NodeOutputMeta> {
-    pub name: &'static str,
+///
+/// `name` takes any `AsRef<str>`; see [`Node`](super::Node) for why.
+pub struct Pipeline<S: StepsMeta, Input: NodeInputMeta, Output: NodeOutputMeta, N: AsRef<str> = &'static str> {
+    pub name: N,
     pub steps: S,
     pub input: Input,
     pub output: Output,
 }
 
-impl<S: StepsMeta + Send + Sync, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync>
-    StepMeta for Pipeline<S, Input, Output>
+impl<S: StepsMeta + Send + Sync, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync, N: AsRef<str> + Send + Sync>
+    StepMeta for Pipeline<S, Input, Output, N>
 {
-    fn name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     fn is_leaf(&self) -> bool {
@@ -42,8 +44,8 @@ impl<S: StepsMeta + Send + Sync, Input: NodeInputMeta + Send + Sync, Output: Nod
     }
 }
 
-impl<E, S, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync>
-    Group<E> for Pipeline<S, Input, Output>
+impl<E, S, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync, N: AsRef<str> + Send + Sync>
+    Group<E> for Pipeline<S, Input, Output, N>
 where
     S: Steps<E> + Send + Sync,
 {
@@ -52,8 +54,8 @@ where
     }
 }
 
-impl<E, S, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync>
-    Step<E> for Pipeline<S, Input, Output>
+impl<E, S, Input: NodeInputMeta + Send + Sync, Output: NodeOutputMeta + Send + Sync, N: AsRef<str> + Send + Sync>
+    Step<E> for Pipeline<S, Input, Output, N>
 where
     S: Steps<E> + Send + Sync,
 {

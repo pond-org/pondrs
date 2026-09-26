@@ -170,7 +170,7 @@ pondrs::check_catalog(&steps, &catalog, &params, &mut |w| println!("warning: {w}
 
 | Variant | Meaning | Fix |
 |---------|---------|-----|
-| `UnnamedDataset` | The catalog walk never reached this dataset, so it has no name at all | Remove a `#[serde(skip)]`, move the dataset out of a `Vec`/tuple (the indexer does not descend into sequences), pass `&self.field` through a hand-written `Serialize`, or put the dataset in the catalog |
+| `UnnamedDataset` | The catalog walk never reached this dataset, so it has no name at all | Remove a `#[serde(skip)]`, move the dataset out of a tuple (the indexer does not descend into tuples), pass `&self.field` through a hand-written `Serialize`, or put the dataset in the catalog |
 | `MisresolvedName` | The walk reached the dataset, but a deeper entry at the same address won, so it resolves to an interior field name | Rename the type to end in `Dataset` |
 | `UnusedCatalogEntry` | A catalog or param entry no node reads or writes | Delete the entry — or ignore the warning, see below |
 
@@ -209,19 +209,27 @@ one means renaming the type or the catalog field.
 
 ## Capacity
 
-`check()` uses a fixed-capacity buffer (default 20 datasets) for `no_std` compatibility. If your pipeline has more than 20 unique datasets, use `check_with_capacity`:
+Under `std`, `check()` tracks datasets in heap-allocated sets and has no size
+limit. Under `no_std` it uses a fixed-capacity buffer of 20 datasets and returns
+`CheckError::CapacityExceeded` beyond that; use `check_with_capacity` to size it:
 
 ```rust,ignore
 steps.check_with_capacity::<64>()?;
 ```
 
+`check_with_capacity` always uses the fixed-capacity buffer, `std` or not.
+
+The error borrows node and pipeline names from the steps (`CheckError<'a>`), so
+it cannot outlive them.
+
 ## no_std compatibility
 
-`check()` and `for_each_warning()` both work in `no_std` environments. They use
-no allocation — all dataset tracking is done in fixed-size arrays on the stack,
+`check()` and `for_each_warning()` both work in `no_std` environments. There they
+use no allocation — all dataset tracking is done in fixed-size arrays on the stack,
 and warnings are handed to a callback rather than collected into a `Vec`.
 
-`for_each_warning_with_capacity::<N>` sets the dedup capacity (default 20).
+`for_each_warning_with_capacity::<N>` sets the dedup capacity (default 20 under
+`no_std`; unbounded under `std`).
 Exceeding it is not an error: deduplication simply stops, and a dataset may be
 reported more than once. Dropping a warning would be worse than repeating one.
 

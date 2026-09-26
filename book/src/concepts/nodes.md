@@ -5,19 +5,20 @@ A `Node` is a single computation unit in the pipeline. It connects a function to
 ## Definition
 
 ```rust,ignore
-pub struct Node<F, Input: NodeInput, Output: NodeOutput>
+pub struct Node<F, Input: NodeInputMeta, Output: NodeOutputMeta, N = &'static str>
 where
     F: StableFn<Input::Args>,
     F::Output: CompatibleOutput<Output::Output>,
+    N: AsRef<str> + Send + Sync,
 {
-    pub name: &'static str,
+    pub name: N,
     pub func: F,
     pub input: Input,
     pub output: Output,
 }
 ```
 
-- **`name`** — a human-readable label used in logging, hooks, and visualization.
+- **`name`** — a human-readable label used in logging, hooks, visualization, node filtering and caching. Usually a string literal; any `AsRef<str>` works, so steps built in a loop can carry distinct names (`format!("train/{k}")`).
 - **`func`** — the function to execute. Can be a closure or a named function.
 - **`input`** — a tuple of dataset references to load before calling `func`.
 - **`output`** — a tuple of dataset references to save the return value to.

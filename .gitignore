@@ -6,6 +6,7 @@
 /examples/dyn_steps_data/
 /examples/weather_data/
 /examples/split_join_data/
+/examples/recurrent_data/
 /book/book/
 /book/src/assets/
 .pondcache/

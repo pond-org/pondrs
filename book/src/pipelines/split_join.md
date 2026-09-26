@@ -107,7 +107,7 @@ Each call to `cat.stores.iter()` yields `(&str, &StoreCatalog)` pairs in name-in
 
 ## Comparison with `PartitionedDataset`
 
-`PartitionedDataset` handles a similar concept — a directory of files keyed by name — but at the dataset level. A single node reads or writes all partitions at once as a `HashMap`. Fan-out & fan-in with `EachField` operate at the pipeline level: they let you run separate nodes for each item, with each item having its own arbitrarily complex set of datasets.
+`PartitionedDataset` handles a similar concept — a directory of files keyed by name — but at the dataset level. A single node reads or writes all partitions at once as a `BTreeMap`. Fan-out & fan-in with `EachField` operate at the pipeline level: they let you run separate nodes for each item, with each item having its own arbitrarily complex set of datasets.
 
 Use `PartitionedDataset` when a single node can handle all items. Use `EachField` when each item needs its own processing sub-pipeline.
 

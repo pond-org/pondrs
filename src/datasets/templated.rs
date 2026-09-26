@@ -67,7 +67,7 @@ impl<S: Serialize> Serialize for TemplatedCatalog<S> {
 }
 
 /// Recursively replace all occurrences of `pattern` in string values within a `serde_yaml::Value`.
-fn replace_in_value(value: &mut serde_yaml::Value, pattern: &str, replacement: &str) {
+pub(super) fn replace_in_value(value: &mut serde_yaml::Value, pattern: &str, replacement: &str) {
     match value {
         serde_yaml::Value::String(s) => {
             if s.contains(pattern) {

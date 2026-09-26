@@ -50,26 +50,34 @@ impl<O: StableTuple, E> CompatibleOutput<O> for Result<O, E> {}
 /// A node function takes the `LoadItem` of each input, in order, and returns a
 /// tuple of the `SaveItem` of each output, in order — or a `Result` of that tuple
 /// when it can fail. A single output is a one-element tuple: `(value,)`.
-pub struct Node<F, Input: NodeInputMeta, Output: NodeOutputMeta>
+///
+/// # Names
+///
+/// `name` is usually a string literal, but any `AsRef<str>` works — a `String`
+/// lets steps generated in a loop carry distinct names (`format!("train/{k}")`),
+/// which node filtering and `CacheHook` both key on.
+pub struct Node<F, Input: NodeInputMeta, Output: NodeOutputMeta, N = &'static str>
 where
     F: StableFn<Input::Args>,
     F::Output: CompatibleOutput<Output::Output>,
+    N: AsRef<str> + Send + Sync,
 {
-    pub name: &'static str,
+    pub name: N,
     pub func: F,
     pub input: Input,
     pub output: Output,
 }
 
-impl<F, Input, Output> StepMeta for Node<F, Input, Output>
+impl<F, Input, Output, N> StepMeta for Node<F, Input, Output, N>
 where
     Input: NodeInputMeta + Send + Sync,
     Output: NodeOutputMeta + Send + Sync,
     F: StableFn<Input::Args> + Send + Sync,
     F::Output: CompatibleOutput<Output::Output>,
+    N: AsRef<str> + Send + Sync,
 {
-    fn name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &str {
+        self.name.as_ref()
     }
 
     fn is_leaf(&self) -> bool {
@@ -91,13 +99,14 @@ where
     }
 }
 
-impl<F, Input, Output, E, R> Leaf<E> for Node<F, Input, Output>
+impl<F, Input, Output, E, R, N> Leaf<E> for Node<F, Input, Output, N>
 where
     Input: NodeInput<E> + Send + Sync,
     Output: NodeOutput<E> + Send + Sync,
     F: StableFn<Input::Args, Output = R> + Send + Sync,
     R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,
+    N: AsRef<str> + Send + Sync,
 {
     fn call(&self, on_event: &mut dyn FnMut(&DatasetRef<'_>, DatasetEvent<'_>) -> Result<HookControl, HookAbort>) -> Result<(), E> {
         let args = self.input.load_data(on_event)?;
@@ -112,13 +121,14 @@ where
 // replaces the precise `IntoNodeResult` / `From<PondError>` diagnostics with a
 // generic "`Node<...>` is not a pipeline step" that spells out the whole closure
 // type. The chain through this impl is what makes those messages readable.
-impl<F, Input, Output, E, R> Step<E> for Node<F, Input, Output>
+impl<F, Input, Output, E, R, N> Step<E> for Node<F, Input, Output, N>
 where
     Input: NodeInput<E> + Send + Sync,
     Output: NodeOutput<E> + Send + Sync,
     F: StableFn<Input::Args, Output = R> + Send + Sync,
     R: IntoNodeResult<Output::Output, E>,
     E: From<PondError>,
+    N: AsRef<str> + Send + Sync,
 {
     fn kind(&self) -> StepKind<'_, E> { StepKind::Leaf(self) }
 }

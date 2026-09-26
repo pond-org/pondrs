@@ -4,7 +4,7 @@
 //! `PartitionedDataset`, `MemoryDataset`, `YamlDataset`, `PlotlyDataset`,
 //! parallel nodes, and an intentional error node.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use plotly::{Bar, Layout, Plot};
 use polars::prelude::*;
@@ -136,7 +136,7 @@ pub struct ReportsCatalog {
 // ---------------------------------------------------------------------------
 
 fn merge_stations(
-    partitions: HashMap<String, DataFrame>,
+    partitions: BTreeMap<String, DataFrame>,
 ) -> Result<(DataFrame,), PolarsError> {
     let mut combined: Option<DataFrame> = None;
     for (station_name, mut df) in partitions {

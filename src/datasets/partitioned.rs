@@ -1,5 +1,5 @@
 use std::prelude::v1::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -20,12 +20,12 @@ where
     D::SaveItem: Send,
     D::Error: Send,
 {
-    type LoadItem = HashMap<String, D::LoadItem>;
-    type SaveItem = HashMap<String, D::SaveItem>;
+    type LoadItem = BTreeMap<String, D::LoadItem>;
+    type SaveItem = BTreeMap<String, D::SaveItem>;
     type Error = PondError;
 
     fn load(&self) -> Result<Self::LoadItem, PondError> {
-        let mut items = HashMap::new();
+        let mut items = BTreeMap::new();
         for name in self.dataset.list_entries(&self.path, &self.ext)? {
             let file_path = format!("{}/{name}.{}", self.path, self.ext);
             let mut ds = self.dataset.clone();

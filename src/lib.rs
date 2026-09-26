@@ -46,7 +46,7 @@ pub use pipeline::{
     Pipeline, PipelineFn, Step, StepKind, StepMeta, Steps, StepsMeta,
 };
 #[cfg(feature = "std")]
-pub use pipeline::{DynSteps, EachField, PartitionedNode};
+pub use pipeline::{DynSteps, EachField, PartitionedNode, RecurrentNode, Unrolled};
 #[cfg(feature = "std")]
 pub use runners::ParallelRunner;
 pub use runners::{Runner, Runners, SequentialRunner};

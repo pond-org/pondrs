@@ -1,6 +1,6 @@
 //! Sequential pipeline validation (`no_std` compatible).
 
-use super::id_set::{IdSet, IdTypeMap, TypeInsert};
+use super::id_set::{IdCollector, TypeCollector, TypeInsert};
 use super::traits::{DatasetRef, StepMeta};
 use crate::error::CheckWarning;
 use crate::naming::{is_leaf_type, type_ident};
@@ -15,22 +15,22 @@ pub use crate::CheckError;
 /// Groups contribute nothing of their own — their declared input/output refs
 /// duplicate their children's and would attribute the conflict to the wrong
 /// step.
-pub(crate) fn check_dataset_identity<const N: usize>(
-    item: &dyn StepMeta,
-    seen: &mut IdTypeMap<N>,
-) -> Result<(), CheckError> {
+pub(crate) fn check_dataset_identity<'a, T: TypeCollector>(
+    item: &'a dyn StepMeta,
+    seen: &mut T,
+) -> Result<(), CheckError<'a>> {
     if !item.is_leaf() {
-        let mut child_err: Result<(), CheckError> = Ok(());
+        let mut child_err: Result<(), CheckError<'a>> = Ok(());
         item.for_each_child(&mut |child| {
             if child_err.is_ok() {
-                child_err = check_dataset_identity::<N>(child, seen);
+                child_err = check_dataset_identity(child, seen);
             }
         });
         return child_err;
     }
 
     let name = item.name();
-    let mut err: Result<(), CheckError> = Ok(());
+    let mut err: Result<(), CheckError<'a>> = Ok(());
     let mut record = |d: &DatasetRef| {
         if err.is_err() {
             return;
@@ -59,13 +59,13 @@ pub(crate) fn check_dataset_identity<const N: usize>(
 /// `seen` dedupes by dataset id so a dataset consumed by several nodes warns
 /// once. If it fills up, deduping stops but reporting continues — dropping a
 /// warning is worse than repeating one, and there is no error path here.
-pub(crate) fn collect_warnings<const N: usize>(
+pub(crate) fn collect_warnings<C: IdCollector>(
     item: &dyn StepMeta,
-    seen: &mut IdSet<N>,
+    seen: &mut C,
     report: &mut dyn FnMut(&CheckWarning),
 ) {
     if !item.is_leaf() {
-        item.for_each_child(&mut |child| collect_warnings::<N>(child, seen, report));
+        item.for_each_child(&mut |child| collect_warnings(child, seen, report));
         return;
     }
 
@@ -99,9 +99,9 @@ pub(crate) fn collect_warnings<const N: usize>(
 }
 
 /// Collect all output dataset IDs from all leaf nodes (recursively).
-pub(crate) fn collect_all_outputs<const N: usize>(
+pub(crate) fn collect_all_outputs<C: IdCollector>(
     item: &dyn StepMeta,
-    all_produced: &mut IdSet<N>,
+    all_produced: &mut C,
 ) {
     if item.is_leaf() {
         item.for_each_output(&mut |d: &DatasetRef| {
@@ -109,7 +109,7 @@ pub(crate) fn collect_all_outputs<const N: usize>(
         });
     } else {
         item.for_each_child(&mut |child| {
-            collect_all_outputs::<N>(child, all_produced);
+            collect_all_outputs(child, all_produced);
         });
     }
 }
@@ -122,31 +122,31 @@ pub(crate) fn collect_all_outputs<const N: usize>(
 ///
 /// `produced` tracks what has been produced by earlier nodes so far.
 /// `consumed` tracks what has been consumed (for pipeline contract checks).
-pub(crate) fn check_item<const N: usize>(
-    item: &dyn StepMeta,
-    all_produced: &IdSet<N>,
-    produced: &mut IdSet<N>,
-    consumed: &mut IdSet<N>,
-) -> Result<(), CheckError> {
+pub(crate) fn check_item<'a, C: IdCollector>(
+    item: &'a dyn StepMeta,
+    all_produced: &C,
+    produced: &mut C,
+    consumed: &mut C,
+) -> Result<(), CheckError<'a>> {
     if item.is_leaf() {
-        check_leaf::<N>(item, all_produced, produced, consumed)
+        check_leaf(item, all_produced, produced, consumed)
     } else {
-        check_pipeline::<N>(item, all_produced, produced, consumed)
+        check_pipeline(item, all_produced, produced, consumed)
     }
 }
 
-fn check_leaf<const N: usize>(
-    item: &dyn StepMeta,
-    all_produced: &IdSet<N>,
-    produced: &mut IdSet<N>,
-    consumed: &mut IdSet<N>,
-) -> Result<(), CheckError> {
+fn check_leaf<'a, C: IdCollector>(
+    item: &'a dyn StepMeta,
+    all_produced: &C,
+    produced: &mut C,
+    consumed: &mut C,
+) -> Result<(), CheckError<'a>> {
     let name = item.name();
 
     // Check inputs: if a dataset is produced somewhere in this pipeline
     // but not yet by an earlier node, it's an ordering error.
     // Datasets not produced by anyone are external inputs — valid.
-    let mut input_err: Result<(), CheckError> = Ok(());
+    let mut input_err: Result<(), CheckError<'a>> = Ok(());
     item.for_each_input(&mut |d: &DatasetRef| {
         if input_err.is_err() {
             return;
@@ -165,7 +165,7 @@ fn check_leaf<const N: usize>(
     input_err?;
 
     // Check outputs: no params, no duplicates.
-    let mut output_err: Result<(), CheckError> = Ok(());
+    let mut output_err: Result<(), CheckError<'a>> = Ok(());
     item.for_each_output(&mut |d: &DatasetRef| {
         if output_err.is_err() {
             return;
@@ -191,26 +191,26 @@ fn check_leaf<const N: usize>(
     output_err
 }
 
-fn check_pipeline<const N: usize>(
-    item: &dyn StepMeta,
-    all_produced: &IdSet<N>,
-    produced: &mut IdSet<N>,
-    consumed: &mut IdSet<N>,
-) -> Result<(), CheckError> {
+fn check_pipeline<'a, C: IdCollector>(
+    item: &'a dyn StepMeta,
+    all_produced: &C,
+    produced: &mut C,
+    consumed: &mut C,
+) -> Result<(), CheckError<'a>> {
     let name = item.name();
 
     // Snapshot parent produced set so children can see it.
-    let mut inner_produced = IdSet::<N>::new();
+    let mut inner_produced = C::empty();
     if !inner_produced.copy_from(produced) {
         return Err(CheckError::CapacityExceeded);
     }
-    let mut child_consumed = IdSet::<N>::new();
+    let mut child_consumed = C::empty();
 
     // Recurse into children in definition order.
-    let mut child_err: Result<(), CheckError> = Ok(());
+    let mut child_err: Result<(), CheckError<'a>> = Ok(());
     item.for_each_child(&mut |child| {
         if child_err.is_ok() {
-            child_err = check_item::<N>(child, all_produced, &mut inner_produced, &mut child_consumed);
+            child_err = check_item(child, all_produced, &mut inner_produced, &mut child_consumed);
         }
     });
     child_err?;
@@ -225,7 +225,7 @@ fn check_pipeline<const N: usize>(
     }
 
     // Check pipeline contract: declared outputs must be produced by children.
-    let mut output_err: Result<(), CheckError> = Ok(());
+    let mut output_err: Result<(), CheckError<'a>> = Ok(());
     item.for_each_output(&mut |d: &DatasetRef| {
         if output_err.is_err() {
             return;
@@ -240,8 +240,8 @@ fn check_pipeline<const N: usize>(
     output_err?;
 
     // Check pipeline contract: declared inputs must be consumed by children.
-    let mut input_err: Result<(), CheckError> = Ok(());
-    let mut declared_inputs = IdSet::<N>::new();
+    let mut input_err: Result<(), CheckError<'a>> = Ok(());
+    let mut declared_inputs = C::empty();
     item.for_each_input(&mut |d: &DatasetRef| {
         if input_err.is_err() {
             return;
@@ -262,25 +262,25 @@ fn check_pipeline<const N: usize>(
     // Check that children don't consume external datasets not declared in pipeline inputs.
     // External = consumed but not produced internally and not a param.
     // We need to walk child_consumed and check each against inner_produced + declared_inputs.
-    // Since IdSet doesn't expose iteration, we re-walk children to find their inputs.
-    let mut undeclared_err: Result<(), CheckError> = Ok(());
+    // Since IdCollector doesn't expose iteration, we re-walk children to find their inputs.
+    let mut undeclared_err: Result<(), CheckError<'a>> = Ok(());
     item.for_each_child(&mut |child| {
         if undeclared_err.is_err() {
             return;
         }
-        check_undeclared_inputs::<N>(child, &inner_produced, &declared_inputs, name, &mut undeclared_err);
+        check_undeclared_inputs(child, &inner_produced, &declared_inputs, name, &mut undeclared_err);
     });
     undeclared_err
 }
 
 /// Recursively walk a step's inputs to find any external dataset not declared
 /// in the parent pipeline's inputs.
-fn check_undeclared_inputs<const N: usize>(
+fn check_undeclared_inputs<'a, C: IdCollector>(
     item: &dyn StepMeta,
-    inner_produced: &IdSet<N>,
-    declared_inputs: &IdSet<N>,
-    pipeline_name: &'static str,
-    err: &mut Result<(), CheckError>,
+    inner_produced: &C,
+    declared_inputs: &C,
+    pipeline_name: &'a str,
+    err: &mut Result<(), CheckError<'a>>,
 ) {
     if err.is_err() {
         return;

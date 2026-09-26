@@ -15,7 +15,7 @@ All built-in dataset types, their feature flags, and typical use cases.
 |------|---------|----------------|-------------|
 | `MemoryDataset<T>` | `std` | `T` / `T` | Thread-safe in-memory storage via `Arc<Mutex<_>>`. |
 | `TextDataset` | `std` | `String` / `String` | Reads/writes plain text files. |
-| `LazyDataset<D>` | `std` | `Lazy<D::LoadItem>` / `Lazy<D::SaveItem>` | Deferred wrapper. See [Lazy Dataset](./lazy.md). |
+| `LazyDataset<D>` | `std` | `Loader<D::LoadItem>` / `Lazy<D::SaveItem>` | Deferred wrapper. See [Lazy Dataset](./lazy.md). |
 | `CacheDataset<D>` | `std` | `D::LoadItem` / `D::SaveItem` | Caching wrapper for any dataset. |
 
 ## File format datasets
@@ -34,8 +34,8 @@ All built-in dataset types, their feature flags, and typical use cases.
 
 | Type | Feature | Load/Save types | Description |
 |------|---------|----------------|-------------|
-| `PartitionedDataset<D>` | `std` | `HashMap<String, D::LoadItem>` / `HashMap<String, D::SaveItem>` | Directory of files, eagerly loaded. |
-| `LazyPartitionedDataset<D>` | `std` | `HashMap<String, Lazy<D::LoadItem>>` / `HashMap<String, Lazy<D::SaveItem>>` | Directory of files, lazily loaded on demand. |
+| `PartitionedDataset<D>` | `std` | `BTreeMap<String, D::LoadItem>` / `BTreeMap<String, D::SaveItem>` | Directory of files, eagerly loaded. |
+| `LazyPartitionedDataset<D>` | `std` | `BTreeMap<String, Loader<D::LoadItem>>` / `BTreeMap<String, Lazy<D::SaveItem>>` | Directory of files, lazily loaded on demand. |
 
 ## Hardware datasets (no_std)
 

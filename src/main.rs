@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use polars::frame::DataFrame;
 use pondrs::datasets::{
-    Lazy, LazyDataset, LazyPartitionedDataset, MemoryDataset, Param, PartitionedDataset,
+    LazyDataset, LazyPartitionedDataset, Loader, MemoryDataset, Param, PartitionedDataset,
     PolarsCsvDataset, PolarsParquetDataset,
 };
 use pondrs::error::PondError;
@@ -105,8 +105,8 @@ struct IrisCatalog {
     output_csv: PartitionedDataset<PolarsCsvDataset>,
 }
 
-fn copy_iris(input: HashMap<String, Lazy<DataFrame, PondError>>) -> Result<(HashMap<String, DataFrame>,), PondError> {
-    let mut output = HashMap::<String, DataFrame>::new();
+fn copy_iris(input: BTreeMap<String, Loader<DataFrame, PondError>>) -> Result<(BTreeMap<String, DataFrame>,), PondError> {
+    let mut output = BTreeMap::<String, DataFrame>::new();
     for (name, df) in input {
         println!("Read {name}!");
         output.insert(name, df()?);
@@ -114,8 +114,8 @@ fn copy_iris(input: HashMap<String, Lazy<DataFrame, PondError>>) -> Result<(Hash
     Ok((output,))
 }
 
-fn copy_iris_to_csv(input: HashMap<String, DataFrame>) -> (HashMap<String, DataFrame>,) {
-    let mut output = HashMap::<String, DataFrame>::new();
+fn copy_iris_to_csv(input: BTreeMap<String, DataFrame>) -> (BTreeMap<String, DataFrame>,) {
+    let mut output = BTreeMap::<String, DataFrame>::new();
     for (name, df) in input {
         println!("Read {name}!");
         output.insert(name, df);

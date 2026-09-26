@@ -7,6 +7,7 @@
 ## `LazyDataset`
 
 ```rust,ignore
+pub type Loader<T, E> = Arc<dyn Fn() -> Result<T, E> + Send + Sync>;
 pub type Lazy<T, E> = Box<dyn FnOnce() -> Result<T, E> + Send>;
 
 pub struct LazyDataset<D> {
@@ -18,10 +19,12 @@ pub struct LazyDataset<D> {
 
 | | Eager (`D`) | Lazy (`LazyDataset<D>`) |
 |---|---|---|
-| `LoadItem` | `T` | `Lazy<T, E>` — a closure that calls `D::load()` when invoked |
+| `LoadItem` | `T` | `Loader<T, E>` — a repeatable closure that calls `D::load()` each time it is invoked |
 | `SaveItem` | `T` | `Lazy<T, E>` — a closure that produces the value, then saves it |
 
-Loading returns immediately with a thunk. The actual I/O happens only when the thunk is called.
+Loading returns immediately with a loader. The actual I/O happens only when the loader is called.
+
+A `Loader` may be called any number of times, and each call re-reads its file — nothing is cached. That makes it suitable for per-epoch data loading over datasets too large to hold in memory. It is an `Arc`, so it is cheap to clone and can be shared across threads. The save side stays a one-shot `Lazy`: it produces the value that is then saved, once.
 
 ## `LazyPartitionedDataset`
 
@@ -29,7 +32,7 @@ Loading returns immediately with a thunk. The actual I/O happens only when the t
 pub type LazyPartitionedDataset<D> = PartitionedDataset<LazyDataset<D>>;
 ```
 
-A `PartitionedDataset` whose inner dataset is lazy. Loading produces a `HashMap<String, Lazy<T, E>>` — each partition is a thunk that reads its file on demand. Saving accepts a `HashMap` of thunks; each thunk is evaluated and written to its file, in parallel when possible.
+A `PartitionedDataset` whose inner dataset is lazy. Loading produces a `BTreeMap<String, Loader<T, E>>` — each partition is a loader that reads its file on demand, and entries iterate in name order, so a seeded shuffle over them is reproducible. Saving accepts a `BTreeMap` of `Lazy` thunks; each thunk is evaluated and written to its file, in parallel when possible.
 
 ### Parallel save
 
@@ -37,17 +40,17 @@ A `PartitionedDataset` whose inner dataset is lazy. Loading produces a `HashMap<
 
 ## Using `LazyPartitionedDataset` with `Node`
 
-With a regular `Node`, the function receives the full `HashMap` of thunks at once. You can chain transformations onto each thunk without triggering any I/O — the entire chain executes lazily at save time:
+With a regular `Node`, the function receives the full `BTreeMap` of loaders at once. You can chain transformations onto each loader without triggering any I/O — the entire chain executes lazily at save time:
 
 ```rust,ignore
 fn process(
-    input: HashMap<String, Lazy<String, PondError>>,
-) -> (HashMap<String, Lazy<String, PondError>>,) {
+    input: BTreeMap<String, Loader<String, PondError>>,
+) -> (BTreeMap<String, Lazy<String, PondError>>,) {
     let output = input
         .into_iter()
-        .map(|(name, load_thunk)| {
+        .map(|(name, loader)| {
             let save_thunk: Lazy<String, PondError> = Box::new(move || {
-                let text = load_thunk()?;       // I/O happens here, at save time
+                let text = loader()?;           // I/O happens here, at save time
                 Ok(text.to_uppercase())
             });
             (name, save_thunk)
@@ -73,7 +76,7 @@ pub struct PartitionedNode<'a, F, D1, D2, T1, T2> {
 }
 ```
 
-The function signature is just `fn(T1) -> (T2,)` — no `HashMap`, no thunks:
+The function signature is just `fn(T1) -> (T2,)` — no `BTreeMap`, no thunks:
 
 ```rust,ignore
 fn uppercase(text: String) -> (String,) {
@@ -99,9 +102,9 @@ PartitionedNode::new("uppercase", uppercase, &catalog.input, &catalog.output)
 
 `PartitionedNode` uses the `IntoLazy` and `FromLazy` traits to bridge eager and lazy datasets transparently:
 
-1. **Load** — loads the partitioned input as a `HashMap<String, D1::LoadItem>`
+1. **Load** — loads the partitioned input as a `BTreeMap<String, D1::LoadItem>`
 2. **Map** — for each entry, wraps the loaded item as an input `Lazy<T1, E>` via `IntoLazy`, applies the function inside a new output `Lazy<T2, E>`, then converts back via `FromLazy`
-3. **Save** — saves the output `HashMap`
+3. **Save** — saves the output `BTreeMap`
 
 In these positions `Lazy` carries the pipeline error type `E` rather than a dataset error, so a partitioned node's function may return a custom error just as a plain `Node`'s may:
 
@@ -121,17 +124,17 @@ When both input and output are lazy, the per-partition function is captured insi
 |---|---|---|
 | Eager | Eager | Each partition is loaded, processed, and saved sequentially |
 | Lazy | Lazy | Processing is deferred into the output thunk; parallel save |
-| Lazy | Eager | Each thunk is called immediately at save time |
+| Lazy | Eager | Each loader is called immediately at save time |
 | Eager | Lazy | Values are wrapped in thunks; parallel save still applies |
 
 ## Full example
 
 ```rust,ignore
-use pondrs::datasets::{Lazy, LazyDataset, LazyPartitionedDataset, TextDataset};
+use pondrs::datasets::{Lazy, LazyDataset, LazyPartitionedDataset, Loader, TextDataset};
 use pondrs::error::PondError;
 use pondrs::{Node, PartitionedNode, ParallelRunner, Runner};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Serialize)]
 struct Catalog {
@@ -141,11 +144,11 @@ struct Catalog {
 }
 
 fn uppercase_map(
-    input: HashMap<String, Lazy<String, PondError>>,
-) -> (HashMap<String, Lazy<String, PondError>>,) {
-    let output = input.into_iter().map(|(name, thunk)| {
+    input: BTreeMap<String, Loader<String, PondError>>,
+) -> (BTreeMap<String, Lazy<String, PondError>>,) {
+    let output = input.into_iter().map(|(name, loader)| {
         let out: Lazy<String, PondError> = Box::new(move || {
-            Ok(thunk()?.to_uppercase())
+            Ok(loader()?.to_uppercase())
         });
         (name, out)
     }).collect();
@@ -185,5 +188,5 @@ Both nodes produce the same result. `PartitionedNode` is more concise; `Node` wi
 
 - **`PartitionedDataset<D>`** (eager) — when all partitions fit in memory and you want them loaded upfront
 - **`LazyPartitionedDataset<D>`** — when partitions are large or numerous and you want deferred, parallel I/O
-- **`Node` with `HashMap<String, Lazy<T, E>>`** — when you need full control: filtering, combining, or skipping partitions
+- **`Node` with `BTreeMap<String, Loader<T, E>>`** — when you need full control: filtering, combining, or skipping partitions
 - **`PartitionedNode`** — when you apply the same function to every partition and want minimal boilerplate

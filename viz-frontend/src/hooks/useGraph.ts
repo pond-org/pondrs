@@ -5,7 +5,8 @@ import type { VizGraph, VizNode, NodeStatus, DatasetActivity } from '../api/type
 import { layoutNodes } from '../layout/dagre';
 import type { LeafNodeData } from '../components/nodes/LeafNode';
 import type { DatasetNodeData } from '../components/nodes/DatasetNode';
-import type { PipelineNodeData } from '../components/nodes/PipelineNode';
+import type { PipelineNodeData, GroupProgress } from '../components/nodes/PipelineNode';
+import type { StatusKind } from '../api/types';
 
 /** Check whether all ancestor pipelines of a node are expanded. */
 function ancestorsExpanded(node: VizNode, nodesById: Map<number, VizNode>, expanded: Set<number>): boolean {
@@ -15,6 +16,39 @@ function ancestorsExpanded(node: VizNode, nodesById: Map<number, VizNode>, expan
     cur = nodesById.get(cur)?.parent_pipe ?? null;
   }
   return true;
+}
+
+/** Tally the execution status of every leaf beneath a group, recursively. */
+function groupProgress(
+  node: VizNode,
+  nodesById: Map<number, VizNode>,
+  nodeStatuses: Record<string, NodeStatus>,
+): GroupProgress {
+  const p: GroupProgress = { total: 0, completed: 0, running: 0, error: 0 };
+  const stack = [...node.pipe_children];
+  while (stack.length > 0) {
+    const child = nodesById.get(stack.pop()!);
+    if (!child) continue;
+    if (child.is_pipe) {
+      stack.push(...child.pipe_children);
+      continue;
+    }
+    p.total += 1;
+    const s = nodeStatuses[child.name]?.status;
+    if (s === 'completed') p.completed += 1;
+    else if (s === 'running') p.running += 1;
+    else if (s === 'error') p.error += 1;
+  }
+  return p;
+}
+
+/** A group's status as reported by its own pipeline hooks, else derived from its leaves. */
+function groupStatus(own: StatusKind | undefined, p: GroupProgress): StatusKind {
+  if (p.error > 0 || own === 'error') return 'error';
+  if (own && own !== 'pending') return own;
+  if (p.total > 0 && p.completed === p.total) return 'completed';
+  if (p.running > 0 || p.completed > 0) return 'running';
+  return 'pending';
 }
 
 export function useGraph(
@@ -89,10 +123,12 @@ export function useGraph(
       if (node.is_pipe) {
         // Collapsed pipeline node.
         const pipeStatus = nodeStatuses[node.name];
+        const progress = groupProgress(node, nodesById, nodeStatuses);
         const data: PipelineNodeData = {
           label: node.name,
           childCount: node.pipe_children.length,
-          status: pipeStatus?.status ?? 'pending',
+          progress,
+          status: groupStatus(pipeStatus?.status, progress),
           duration_ms: pipeStatus?.duration_ms ?? null,
           onToggle: () => onTogglePipeline(node.id),
         };

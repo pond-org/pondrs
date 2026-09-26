@@ -9,6 +9,10 @@
 //! first-field address collisions (`ptr_to_id(&s) == ptr_to_id(&s.first_field)`).
 //! Detection uses the serde struct name: types ending with `"Dataset"` or
 //! named `"Param"` are treated as leaves.
+//!
+//! Map entries are named by their key and sequence elements (a `Vec<S>` field)
+//! by their index, so `epochs: Vec<EpochSlot>` yields `epochs.0.weights`,
+//! `epochs.1.weights`, … Tuples are not indexed.
 
 use std::prelude::v1::*;
 use std::collections::HashMap;
@@ -77,6 +81,7 @@ pub fn index_catalog(catalog: &impl Serialize) -> CatalogIndex {
         pending_map_key: None,
         capturing_map_key: false,
         pending_ptr: None,
+        seq_index: 0,
     };
     catalog.serialize(&mut indexer).ok();
 
@@ -101,6 +106,10 @@ struct CatalogIndexer {
     /// freshly recorded entry, and taken by `serialize_struct` /
     /// `serialize_newtype_struct` on the way in.
     pending_ptr: Option<usize>,
+    /// Index of the next element in the sequence currently being walked. Reset
+    /// by `serialize_seq`, and saved/restored around each element's recursion
+    /// so a nested sequence counts from zero without disturbing its parent.
+    seq_index: usize,
 }
 
 impl CatalogIndexer {
@@ -157,17 +166,17 @@ impl ser::Error for IndexerError {
 /// that reach logs, hooks and viz.
 #[non_exhaustive]
 #[derive(Debug)]
-pub enum CatalogWarning {
+pub enum CatalogWarning<'a> {
     /// The catalog walk never reached this dataset, so it has no name at all.
     UnnamedDataset {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
         type_name: &'static str,
     },
     /// The walk reached the dataset but a *deeper* entry at the same address
     /// won, so the dataset resolves to an interior field name.
     MisresolvedName {
-        node_name: &'static str,
+        node_name: &'a str,
         dataset_id: usize,
         type_name: &'static str,
         /// The name the index currently resolves to (the wrong one).
@@ -186,7 +195,7 @@ pub enum CatalogWarning {
     UnusedCatalogEntry { name: String },
 }
 
-impl fmt::Display for CatalogWarning {
+impl fmt::Display for CatalogWarning<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnnamedDataset { node_name, dataset_id, type_name } => {
@@ -194,8 +203,8 @@ impl fmt::Display for CatalogWarning {
                     f,
                     "dataset {dataset_id:#x} of type `{type_name}` used by node '{node_name}' \
                      was not found in the catalog, so it has no name in logs or viz; \
-                     usual causes: a `#[serde(skip)]` field, a dataset inside a `Vec` or tuple \
-                     (the indexer does not descend into sequences), a hand-written `Serialize` \
+                     usual causes: a `#[serde(skip)]` field, a dataset inside a tuple \
+                     (the indexer does not descend into tuples), a hand-written `Serialize` \
                      that does not pass `&self.field` through, or a dataset constructed outside \
                      the catalog"
                 )
@@ -293,11 +302,11 @@ fn report_unused_entries(
     }
 }
 
-fn check_step(
-    item: &dyn StepMeta,
+fn check_step<'a>(
+    item: &'a dyn StepMeta,
     index: &CatalogIndex,
     seen: &mut std::collections::HashSet<usize>,
-    report: &mut dyn FnMut(&CatalogWarning),
+    report: &mut dyn FnMut(&CatalogWarning<'a>),
 ) {
     if !item.is_leaf() {
         item.for_each_child(&mut |child| check_step(child, index, seen, report));
@@ -404,7 +413,10 @@ impl<'a> ser::Serializer for &'a mut CatalogIndexer {
         value.serialize(self)
     }
     fn serialize_newtype_variant<T: ?Sized + Serialize>(self, _name: &'static str, _idx: u32, _variant: &'static str, _value: &T) -> Result<(), Self::Error> { Ok(()) }
-    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> { Ok(self) }
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        self.seq_index = 0;
+        Ok(self)
+    }
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> { Ok(self) }
     fn serialize_tuple_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeTupleStruct, Self::Error> { Ok(self) }
     fn serialize_tuple_variant(self, _name: &'static str, _idx: u32, _variant: &'static str, _len: usize) -> Result<Self::SerializeTupleVariant, Self::Error> { Ok(self) }
@@ -443,13 +455,53 @@ impl ser::SerializeStruct for StructSerializer<'_> {
     }
 }
 
-// No-op implementations for the other SerializeX traits.
+/// Address of a sequence element as it sits in its container.
+///
+/// Serde's `collect_seq` — behind `Serialize` for `Vec`, slices, `VecDeque`
+/// and friends — iterates `&T` and passes `&item`, so `value` is a `&&T` to a
+/// stack temporary, not the element. When `T` is a thin reference, the
+/// element's real address is the pointer it holds; read that instead. Anything
+/// else is used as-is, which is right for a hand-written `serialize_element`
+/// that passes `&self.item` directly.
+fn element_ptr_id<T: ?Sized>(value: &T) -> usize {
+    let is_thin_ref = core::any::type_name::<T>().starts_with('&')
+        && core::mem::size_of_val(value) == core::mem::size_of::<usize>();
+    if is_thin_ref {
+        // SAFETY: `T` is a thin reference (`&U` / `&mut U` with `U: Sized`):
+        // `value` points at `size_of::<usize>()` initialized, pointer-aligned
+        // bytes holding an address. Reading them as `usize` only discards
+        // provenance, and the result is used as an opaque id, never
+        // dereferenced.
+        unsafe { core::ptr::from_ref(value).cast::<usize>().read() }
+    } else {
+        ptr_to_id(value)
+    }
+}
+
+// SerializeSeq — names each element by its index, like a map entry by its key.
 impl ser::SerializeSeq for &mut CatalogIndexer {
     type Ok = ();
     type Error = IndexerError;
-    fn serialize_element<T: ?Sized + Serialize>(&mut self, _value: &T) -> Result<(), Self::Error> { Ok(()) }
+
+    fn serialize_element<T: ?Sized + Serialize>(&mut self, value: &T) -> Result<(), Self::Error> {
+        let idx = std::mem::replace(&mut self.seq_index, 0);
+        let ptr_id = element_ptr_id(value);
+        let name = self.full_name(&idx.to_string());
+        self.push_entry(ptr_id, name.clone());
+
+        let prev_prefix = std::mem::replace(&mut self.prefix, name);
+        value.serialize(&mut **self).ok();
+        self.prefix = prev_prefix;
+        self.pending_ptr = None;
+        self.seq_index = idx + 1;
+        Ok(())
+    }
+
     fn end(self) -> Result<(), Self::Error> { Ok(()) }
 }
+
+// No-op implementations for the other SerializeX traits: a tuple in a catalog
+// is not an indexed container.
 
 impl ser::SerializeTuple for &mut CatalogIndexer {
     type Ok = ();
@@ -812,9 +864,7 @@ mod tests {
     }
 
     #[test]
-    fn check_catalog_flags_dataset_inside_a_vec() {
-        // The indexer's `SerializeSeq` element methods are no-ops, so nothing
-        // inside a `Vec` is ever named.
+    fn check_catalog_names_dataset_inside_a_vec() {
         let catalog = VecCatalog {
             items: vec![MemoryDataset::new()],
             out: MemoryDataset::new(),
@@ -825,9 +875,71 @@ mod tests {
             input: (&catalog.items[0],),
             output: (&catalog.out,),
         },);
-        let warnings = collect(&pipe, &catalog);
-        assert_eq!(warnings.len(), 1, "got {warnings:?}");
-        assert_eq!(warnings[0].0, "unnamed");
+        assert_eq!(collect(&pipe, &catalog), Vec::new());
+    }
+
+    // --- Sequences ---------------------------------------------------------
+
+    #[test]
+    fn vec_elements_are_named_by_index() {
+        use crate::datasets::TextDataset;
+        #[derive(Serialize)]
+        struct Catalog {
+            items: Vec<TextDataset>,
+            after: TextDataset,
+        }
+        let catalog = Catalog {
+            items: vec![TextDataset::new("a.txt"), TextDataset::new("b.txt")],
+            after: TextDataset::new("c.txt"),
+        };
+        let index = index_catalog(&catalog);
+        assert_eq!(index.get(ptr_to_id(&catalog.items[0])), Some("items.0"));
+        assert_eq!(index.get(ptr_to_id(&catalog.items[1])), Some("items.1"));
+        assert_eq!(index.get(ptr_to_id(&catalog.after)), Some("after"));
+    }
+
+    #[test]
+    fn nested_and_sibling_vecs_each_count_from_zero() {
+        #[derive(Serialize)]
+        struct Catalog {
+            grid: Vec<Vec<MemoryDataset<i32>>>,
+            other: Vec<MemoryDataset<i32>>,
+        }
+        let catalog = Catalog {
+            grid: vec![
+                vec![MemoryDataset::new(), MemoryDataset::new()],
+                vec![MemoryDataset::new()],
+            ],
+            other: vec![MemoryDataset::new()],
+        };
+        let index = index_catalog(&catalog);
+        assert_eq!(index.get(ptr_to_id(&catalog.grid[0][1])), Some("grid.0.1"));
+        assert_eq!(index.get(ptr_to_id(&catalog.grid[1][0])), Some("grid.1.0"));
+        // The sibling field starts over, not at the outer vector's length.
+        assert_eq!(index.get(ptr_to_id(&catalog.other[0])), Some("other.0"));
+    }
+
+    #[test]
+    fn vec_of_sub_catalogs_names_their_fields() {
+        #[derive(Serialize)]
+        struct Slot {
+            weights: MemoryDataset<i32>,
+            lr: Param<f64>,
+        }
+        #[derive(Serialize)]
+        struct Catalog {
+            epochs: Vec<Slot>,
+        }
+        let catalog = Catalog {
+            epochs: vec![
+                Slot { weights: MemoryDataset::new(), lr: Param(0.1) },
+                Slot { weights: MemoryDataset::new(), lr: Param(0.01) },
+            ],
+        };
+        let index = index_catalog(&catalog);
+        // `epochs.1` and `epochs.1.weights` share an address; the deeper wins.
+        assert_eq!(index.get(ptr_to_id(&catalog.epochs[1].weights)), Some("epochs.1.weights"));
+        assert_eq!(index.get(ptr_to_id(&catalog.epochs[1].lr)), Some("epochs.1.lr"));
     }
 
     // --- UnusedCatalogEntry ------------------------------------------------

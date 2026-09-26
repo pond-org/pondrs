@@ -1,4 +1,5 @@
-//! Fixed-capacity set of `usize` values, stack-allocated.
+//! Dataset-id collections used by `check`: fixed-capacity (stack) and, under
+//! `std`, heap-backed.
 
 /// A simple set backed by a flat array. No allocator needed.
 ///
@@ -100,5 +101,72 @@ impl<const N: usize> IdTypeMap<N> {
         self.entries[self.len] = (id, ty);
         self.len += 1;
         TypeInsert::Inserted
+    }
+}
+
+/// The dataset-id set operations `check` needs, abstracted over storage so
+/// the same passes run on the fixed-capacity [`IdSet`] (`no_std`) and the
+/// unbounded [`HeapIdSet`] (`std`).
+pub(crate) trait IdCollector {
+    fn empty() -> Self;
+    fn contains(&self, id: usize) -> bool;
+    /// Returns `false` only if capacity is exceeded.
+    fn insert(&mut self, id: usize) -> bool;
+    /// Returns `false` only if capacity is exceeded.
+    fn copy_from(&mut self, other: &Self) -> bool;
+}
+
+impl<const N: usize> IdCollector for IdSet<N> {
+    fn empty() -> Self { Self::new() }
+    fn contains(&self, id: usize) -> bool { self.contains(id) }
+    fn insert(&mut self, id: usize) -> bool { self.insert(id) }
+    fn copy_from(&mut self, other: &Self) -> bool { self.copy_from(other) }
+}
+
+/// The `(id, type)` table operation the identity pass needs; see [`IdCollector`].
+pub(crate) trait TypeCollector {
+    fn empty() -> Self;
+    fn insert(&mut self, id: usize, ty: &'static str) -> TypeInsert;
+}
+
+impl<const N: usize> TypeCollector for IdTypeMap<N> {
+    fn empty() -> Self { Self::new() }
+    fn insert(&mut self, id: usize, ty: &'static str) -> TypeInsert { self.insert(id, ty) }
+}
+
+/// Heap-backed [`IdCollector`]: never runs out of capacity.
+#[cfg(feature = "std")]
+pub(crate) struct HeapIdSet(std::collections::HashSet<usize>);
+
+#[cfg(feature = "std")]
+impl IdCollector for HeapIdSet {
+    fn empty() -> Self { Self(std::collections::HashSet::new()) }
+    fn contains(&self, id: usize) -> bool { self.0.contains(&id) }
+    fn insert(&mut self, id: usize) -> bool {
+        self.0.insert(id);
+        true
+    }
+    fn copy_from(&mut self, other: &Self) -> bool {
+        self.0.extend(other.0.iter().copied());
+        true
+    }
+}
+
+/// Heap-backed [`TypeCollector`]: never returns [`TypeInsert::Full`].
+#[cfg(feature = "std")]
+pub(crate) struct HeapIdTypeMap(std::collections::HashMap<usize, &'static str>);
+
+#[cfg(feature = "std")]
+impl TypeCollector for HeapIdTypeMap {
+    fn empty() -> Self { Self(std::collections::HashMap::new()) }
+    fn insert(&mut self, id: usize, ty: &'static str) -> TypeInsert {
+        match self.0.entry(id) {
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(ty);
+                TypeInsert::Inserted
+            }
+            std::collections::hash_map::Entry::Occupied(e) if *e.get() == ty => TypeInsert::Match,
+            std::collections::hash_map::Entry::Occupied(e) => TypeInsert::Conflict(e.get()),
+        }
     }
 }

@@ -60,10 +60,10 @@ where
 }
 
 /// Resolve a `NodeFilter` into the set of leaf node names to keep.
-fn resolve_keep_set(
-    graph: &crate::graph::PipelineGraph<'_>,
+fn resolve_keep_set<'a>(
+    graph: &crate::graph::PipelineGraph<'a>,
     filter: &NodeFilter,
-) -> Result<HashSet<&'static str>, PondError> {
+) -> Result<HashSet<&'a str>, PondError> {
     let leaf_names: HashSet<&str> = graph
         .nodes
         .iter()
@@ -100,11 +100,11 @@ fn resolve_keep_set(
 ///
 /// Every name in `from` and `to` must name a leaf of `graph`; `resolve_keep_set`
 /// checks that first, which is what makes the lookups below infallible.
-fn resolve_from_to(
-    graph: &crate::graph::PipelineGraph<'_>,
+fn resolve_from_to<'a>(
+    graph: &crate::graph::PipelineGraph<'a>,
     from: &HashSet<String>,
     to: &HashSet<String>,
-) -> HashSet<&'static str> {
+) -> HashSet<&'a str> {
     let leaves = &graph.node_indices;
 
     // Map node names to graph indices (leaves only)
@@ -213,7 +213,7 @@ fn collect_filtered<'a, E>(
 /// Mirrors `Pipeline` but stores inputs/outputs as `Vec<DatasetRef>` and
 /// children as a `DynSteps`, allowing construction from filtered tree walks.
 struct DynPipeline<'a, E> {
-    name: &'static str,
+    name: &'a str,
     inputs: Vec<DatasetRef<'a>>,
     outputs: Vec<DatasetRef<'a>>,
     steps: DynSteps<'a, E>,
@@ -223,7 +223,7 @@ impl<E> StepMeta for DynPipeline<'_, E>
 where
     E: Send + Sync + 'static,
 {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         self.name
     }
 
@@ -289,7 +289,7 @@ mod tests {
     }
 
     /// Helper: collect leaf node names from a Steps.
-    fn leaf_names<E>(steps: &impl Steps<E>) -> Vec<&'static str> {
+    fn leaf_names<'a, E: 'a>(steps: &'a impl Steps<E>) -> Vec<&'a str> {
         let mut names = Vec::new();
         steps.for_each_step(&mut |item| {
             collect_leaf_names(item, &mut names);
@@ -297,7 +297,7 @@ mod tests {
         names
     }
 
-    fn collect_leaf_names<E>(item: &dyn Step<E>, names: &mut Vec<&'static str>) {
+    fn collect_leaf_names<'a, E>(item: &'a dyn Step<E>, names: &mut Vec<&'a str>) {
         match item.kind() {
             StepKind::Leaf(_) => {
                 names.push(item.name());

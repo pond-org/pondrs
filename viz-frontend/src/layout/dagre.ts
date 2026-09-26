@@ -3,6 +3,7 @@ import type { Node, Edge } from '@xyflow/react';
 
 const NODE_W = 200;
 const NODE_H = 70;
+const PIPE_H = 84; // collapsed groups carry a progress bar
 const DS_W = 160;
 const DS_H = 56;
 
@@ -13,7 +14,7 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
 
   for (const node of nodes) {
     const w = node.type === 'dataset' ? DS_W : NODE_W;
-    const h = node.type === 'dataset' ? DS_H : NODE_H;
+    const h = node.type === 'dataset' ? DS_H : node.type === 'pipeline' ? PIPE_H : NODE_H;
     g.setNode(node.id, { width: w, height: h });
   }
 
@@ -27,7 +28,7 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
     const pos = g.node(node.id);
     if (!pos) return node;
     const w = node.type === 'dataset' ? DS_W : NODE_W;
-    const h = node.type === 'dataset' ? DS_H : NODE_H;
+    const h = node.type === 'dataset' ? DS_H : node.type === 'pipeline' ? PIPE_H : NODE_H;
     return {
       ...node,
       position: { x: pos.x - w / 2, y: pos.y - h / 2 },
