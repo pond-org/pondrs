@@ -13,6 +13,11 @@ mod cache;
 #[cfg(feature = "std")]
 pub use cache::CacheHook;
 
+#[cfg(feature = "std")]
+mod retention;
+#[cfg(feature = "std")]
+pub use retention::RetentionHook;
+
 mod typed;
 pub use typed::{TypedHook, TypedHookAdapter, IntoTypedHook};
 

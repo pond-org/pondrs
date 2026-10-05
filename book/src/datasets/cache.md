@@ -9,6 +9,8 @@
 ```rust,ignore
 pub struct CacheDataset<D: Dataset> {
     pub dataset: D,
+    #[serde(default)]
+    pub take: bool,
     cache: Arc<Mutex<Option<D::LoadItem>>>,
 }
 ```
@@ -37,6 +39,20 @@ readings:
 - **Subsequent `load()` calls** — returns the cached value without re-reading the file
 - **`save()`** — writes to the inner dataset **and** updates the cache
 - **`html()`** — delegates to the inner dataset
+- **`remover()`** — clears the cache and removes the inner dataset's value (used by [`RetentionHook`](../hooks/builtin.md#retentionhook))
+
+## Taking the value
+
+With `take: true` (or `CacheDataset::new(ds).with_take(true)`), the first `load()` after a `save()` moves the value out of memory instead of cloning it, and later loads read the inner dataset again:
+
+```yaml
+checkpoint:
+  dataset:
+    path: ckpt/epoch_3.mpk
+  take: true
+```
+
+This suits a value with a single consumer, such as one checkpoint in an epoch chain: the next epoch reads the weights straight from memory, skipping deserialization, and memory never holds more than the checkpoints not yet consumed. Without `take`, every epoch's `CacheDataset` would keep its weights for the rest of the run. A second reader still works — it loads from disk.
 
 ## When to use
 
@@ -56,6 +72,6 @@ Without caching, `readings` would be loaded from disk three times. With `CacheDa
 
 The inner dataset must satisfy:
 
-- `D::LoadItem: Clone` — so the cached value can be cloned on each load
+- `D::LoadItem: Clone + Send` — so the cached value can be cloned on each load
 - `D::SaveItem: Clone + Into<D::LoadItem>` — so saves can update the cache
 - `PondError: From<D::Error>` — for error conversion

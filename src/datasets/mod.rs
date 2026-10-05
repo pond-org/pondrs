@@ -107,6 +107,16 @@ pub trait Dataset: serde::Serialize {
     fn content_hash(&self) -> Option<u64> { None }
     fn is_persistent(&self) -> bool { false }
 
+    /// Returns a handle that deletes this dataset's stored value, or `None` if
+    /// the dataset has nothing it can remove (the default).
+    ///
+    /// The handle is owned rather than a `&self` method so a hook can queue it
+    /// at save time and call it later — see
+    /// [`RetentionHook`](crate::hooks::RetentionHook). Removing a value that
+    /// does not exist is not an error.
+    #[cfg(feature = "std")]
+    fn remover(&self) -> Option<Remover> { None }
+
     /// Returns the dataset's HTML representation, if available.
     /// Override in datasets that can produce HTML (e.g. `PlotlyDataset`).
     #[cfg(feature = "std")]
@@ -130,6 +140,9 @@ pub trait DatasetMeta: Send + Sync {
     fn is_zero_sized(&self) -> bool;
 
     #[cfg(feature = "std")]
+    fn remover(&self) -> Option<Remover>;
+
+    #[cfg(feature = "std")]
     fn html(&self) -> Option<String>;
 
     #[cfg(feature = "std")]
@@ -144,10 +157,28 @@ impl<T: Dataset + Send + Sync> DatasetMeta for T {
     fn is_zero_sized(&self) -> bool { core::mem::size_of::<T>() == 0 }
 
     #[cfg(feature = "std")]
+    fn remover(&self) -> Option<Remover> { <T as Dataset>::remover(self) }
+
+    #[cfg(feature = "std")]
     fn html(&self) -> Option<String> { <T as Dataset>::html(self) }
 
     #[cfg(feature = "std")]
     fn yaml(&self) -> Option<String> { serde_yaml::to_string(self).ok() }
+}
+
+/// An owned handle that deletes a dataset's stored value when called.
+///
+/// Returned by [`Dataset::remover`].
+#[cfg(feature = "std")]
+pub type Remover = Box<dyn FnOnce() -> std::io::Result<()> + Send>;
+
+/// Removes a file, treating an already-missing file as success.
+#[cfg(feature = "std")]
+pub(crate) fn remove_file_if_exists(path: &str) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
 }
 
 /// A dataset backed by a file on disk.
@@ -165,6 +196,8 @@ pub trait FileDataset: Dataset + Clone {
     /// Default: `false`. `LazyDataset` overrides to `true`.
     fn prefer_parallel(&self) -> bool { false }
 
+    /// Metadata hash of the file: canonical path, size and mtime. The
+    /// contents are not read.
     fn file_content_hash(&self) -> Option<u64> {
         use core::hash::{Hash, Hasher};
 
@@ -175,8 +208,15 @@ pub trait FileDataset: Dataset + Clone {
         let mut hasher = std::hash::DefaultHasher::new();
         let canonical = std::fs::canonicalize(self.path()).ok()?;
         canonical.hash(&mut hasher);
+        meta.len().hash(&mut hasher);
         mtime.hash(&mut hasher);
         Some(hasher.finish())
+    }
+
+    /// A [`Remover`] that deletes the file at `self.path()`.
+    fn file_remover(&self) -> Option<Remover> {
+        let path = self.path().to_owned();
+        Some(Box::new(move || remove_file_if_exists(&path)))
     }
 
     /// Creates parent directories for `self.path()` if they don't exist.

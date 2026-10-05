@@ -137,6 +137,7 @@ impl Dataset for PolarsCsvDataset {
 
     fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
     fn is_persistent(&self) -> bool { true }
+    fn remover(&self) -> Option<super::Remover> { self.file_remover() }
 
     fn html(&self) -> Option<String> {
         self.load().ok().map(|df| dataframe_to_html(&df))
@@ -184,6 +185,7 @@ impl Dataset for PolarsParquetDataset {
 
     fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
     fn is_persistent(&self) -> bool { true }
+    fn remover(&self) -> Option<super::Remover> { self.file_remover() }
 
     fn html(&self) -> Option<String> {
         self.load().ok().map(|df| dataframe_to_html(&df))

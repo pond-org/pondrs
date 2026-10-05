@@ -51,6 +51,14 @@ impl Dataset for PlotlyDataset {
     fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
     fn is_persistent(&self) -> bool { true }
 
+    fn remover(&self) -> Option<super::Remover> {
+        let (json, html) = (self.path.clone(), self.html_path());
+        Some(Box::new(move || {
+            super::remove_file_if_exists(&json)?;
+            super::remove_file_if_exists(&html)
+        }))
+    }
+
     fn html(&self) -> Option<String> {
         std::fs::read_to_string(self.html_path()).ok()
     }

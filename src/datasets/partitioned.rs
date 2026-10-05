@@ -62,6 +62,29 @@ where
 
     fn is_persistent(&self) -> bool { true }
 
+    /// Removes every entry through the inner dataset's own remover, then the
+    /// directory if that left it empty. Files that are not entries are kept.
+    fn remover(&self) -> Option<super::Remover> {
+        let (path, ext, template) = (self.path.clone(), self.ext.clone(), self.dataset.clone());
+        Some(Box::new(move || {
+            let entries = match template.list_entries(&path, &ext) {
+                Ok(entries) => entries,
+                Err(PondError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+                Err(e) => return Err(std::io::Error::other(e.to_string())),
+            };
+            for name in entries {
+                let mut ds = template.clone();
+                ds.set_path(&format!("{path}/{name}.{ext}"));
+                if let Some(remove) = ds.remover() {
+                    remove()?;
+                }
+            }
+            // Fails when other files remain, which is the intent.
+            let _ = std::fs::remove_dir(&path);
+            Ok(())
+        }))
+    }
+
     fn content_hash(&self) -> Option<u64> {
         use core::hash::{Hash, Hasher};
         let mut hasher = std::hash::DefaultHasher::new();
@@ -87,5 +110,39 @@ where
             "<ul style=\"font-family:monospace;font-size:13px;padding:8px 8px 8px 28px;margin:0\">{}</ul>",
             items.join("")
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datasets::{LazyDataset, TextDataset};
+    use tempfile::tempdir;
+
+    #[test]
+    fn remover_deletes_entries_and_keeps_other_files() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("parts");
+        let ds = PartitionedDataset {
+            path: path.to_str().unwrap().into(),
+            ext: "txt".into(),
+            dataset: LazyDataset { dataset: TextDataset::new("") },
+        };
+        let entries: BTreeMap<String, crate::datasets::Lazy<String, PondError>> = ["a", "b"]
+            .into_iter()
+            .map(|k| (k.to_string(), Box::new(move || Ok(k.to_string())) as _))
+            .collect();
+        ds.save(entries).unwrap();
+        std::fs::write(path.join("notes.md"), "keep me").unwrap();
+
+        ds.remover().unwrap()().unwrap();
+        assert!(!path.join("a.txt").exists() && !path.join("b.txt").exists());
+        assert!(path.join("notes.md").exists());
+
+        std::fs::remove_file(path.join("notes.md")).unwrap();
+        ds.remover().unwrap()().unwrap();
+        assert!(!path.exists());
+        // Nothing left to remove is not an error.
+        ds.remover().unwrap()().unwrap();
     }
 }

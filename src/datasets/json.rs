@@ -37,6 +37,7 @@ impl Dataset for JsonDataset {
 
     fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
     fn is_persistent(&self) -> bool { true }
+    fn remover(&self) -> Option<super::Remover> { self.file_remover() }
 
     fn html(&self) -> Option<String> {
         let content = std::fs::read_to_string(&self.path).ok()?;

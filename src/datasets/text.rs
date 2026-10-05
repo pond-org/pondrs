@@ -35,6 +35,7 @@ impl Dataset for TextDataset {
 
     fn content_hash(&self) -> Option<u64> { self.file_content_hash() }
     fn is_persistent(&self) -> bool { true }
+    fn remover(&self) -> Option<super::Remover> { self.file_remover() }
 
     fn html(&self) -> Option<String> {
         let contents = std::fs::read_to_string(&self.path).ok()?;
@@ -85,5 +86,29 @@ mod tests {
         let html = meta.html().unwrap();
         assert!(html.contains("<pre"));
         assert!(html.contains("hello &lt;world&gt;"));
+    }
+
+    #[test]
+    fn hash_changes_with_size_at_equal_mtime() {
+        let dir = tempdir().unwrap();
+        let ds = TextDataset::new(dir.path().join("out.txt").to_str().unwrap());
+        ds.save("1.0".to_string()).unwrap();
+        let mtime = std::fs::metadata(&ds.path).unwrap().modified().unwrap();
+        let before = Dataset::content_hash(&ds).unwrap();
+
+        // A copy tool that preserves mtimes (`rsync -t`, `cp -p`).
+        ds.save("1.25".to_string()).unwrap();
+        std::fs::File::options().write(true).open(&ds.path).unwrap().set_modified(mtime).unwrap();
+        assert_ne!(Dataset::content_hash(&ds).unwrap(), before);
+    }
+
+    #[test]
+    fn remover_deletes_the_file_and_tolerates_a_missing_one() {
+        let dir = tempdir().unwrap();
+        let ds = TextDataset::new(dir.path().join("out.txt").to_str().unwrap());
+        ds.save("x".to_string()).unwrap();
+        Dataset::remover(&ds).unwrap()().unwrap();
+        assert!(!std::path::Path::new(&ds.path).exists());
+        Dataset::remover(&ds).unwrap()().unwrap();
     }
 }

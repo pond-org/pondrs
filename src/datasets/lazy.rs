@@ -65,6 +65,7 @@ where
 
     fn content_hash(&self) -> Option<u64> { self.dataset.content_hash() }
     fn is_persistent(&self) -> bool { self.dataset.is_persistent() }
+    fn remover(&self) -> Option<super::Remover> { self.dataset.remover() }
 
     fn html(&self) -> Option<String> {
         self.dataset.html()

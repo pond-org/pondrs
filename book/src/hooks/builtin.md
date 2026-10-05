@@ -68,11 +68,40 @@ App::new(catalog, params)
 ### Requirements
 
 - All output datasets must be **persistent** (`is_persistent() == true`) for caching to apply. Nodes with `MemoryDataset` outputs always re-run because their outputs don't survive across runs.
-- All input datasets must provide a **content hash** (`content_hash()` returns `Some`). File-backed datasets compute this from file metadata; `Param` datasets use their serialized value.
+- All input datasets must provide a **content hash** (`content_hash()` returns `Some`). File-backed datasets compute this from file metadata (canonical path, size and modification time — the contents are not read); `Param` datasets use their serialized value. A file rewritten with the same size and a preserved mtime (`rsync -t`, `cp -p`) is therefore not seen as changed.
 
 ### Cache directory
 
 Cache keys are stored as text files in the cache directory (default `.pondcache`). Each node gets one file named after a sanitized version of the node name. Delete the directory to force a full re-run.
+
+## `RetentionHook`
+
+*Requires the `std` feature.*
+
+Keeps only the most recent saves among datasets whose names match a pattern, deleting older ones as new ones are saved. It is built for checkpoints in an unrolled epoch chain (see [`RecurrentNode`](../pipelines/recurrent.md)), where every epoch writes its weights and N full checkpoints would fill a disk:
+
+```rust,ignore
+use pondrs::hooks::RetentionHook;
+
+App::new(catalog, params)
+    .with_hooks((
+        CacheHook::new(".pondcache"),
+        RetentionHook::new("catalog.epochs.*.weights", 3).keep_every(10),
+    ))
+    .execute(pipeline)?;
+```
+
+- The pattern is a full dataset name as hooks see it, rooted at `catalog.`; `*` matches exactly one dotted segment.
+- `keep_last` (here 3) keeps the most recent matching saves, in save order.
+- `keep_every(n)` additionally never removes a save whose first numeric `*` segment is a multiple of `n`, leaving resume points further back.
+
+Datasets are removed through `Dataset::remover()`, an owned handle the hook takes at save time. File datasets delete their file (`PlotlyDataset` both of its files), `PartitionedDataset` deletes its entries, and `LazyDataset` / `CacheDataset` delegate to the dataset they wrap — `CacheDataset` also dropping its in-memory copy. A matching dataset without a remover is skipped with a warning, logged once per dataset. Removal failures are logged, not raised.
+
+Size `keep_last` against:
+
+- **Consumers.** A removed value is gone for every later reader. Under `ParallelRunner`, a per-epoch eval node can still be pending when the next epoch saves, so `keep_last` must cover it.
+- **`CacheHook`.** It skips a node on its cache key without checking that the outputs still exist. Resuming after a crash works, because the newest checkpoints are the ones kept. A change that re-runs an epoch whose input was removed fails with that input's load error.
+- **Earlier runs.** Only saves of the current run are queued, so up to `keep_last` checkpoints left by an earlier run are not removed by a later one.
 
 ## `VizHook`
 

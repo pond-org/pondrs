@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use pondrs::app::App;
 use pondrs::datasets::{JsonDataset, Param, TextDataset};
 use pondrs::error::PondError;
+use pondrs::hooks::RetentionHook;
 use pondrs::{CacheHook, Hook, HookAbort, StepMeta};
 use recurrent::{pipeline, write_fixtures, Catalog, Params};
 
@@ -151,4 +152,63 @@ fn cache_hook_keys_each_iteration_separately() {
         .unwrap();
     assert_eq!(*ran.0.lock().unwrap(), ["train/0", "train/1", "train/2", "report"]);
     assert!((read(dir.path(), 0) - 7.0).abs() < 1e-12);
+}
+
+fn ckpt_exists(dir: &Path, k: usize) -> bool {
+    dir.join(format!("ckpt/epoch_{k}.txt")).exists()
+}
+
+#[test]
+fn retention_keeps_the_last_checkpoints() {
+    let dir = tempfile::tempdir().unwrap();
+    write_fixtures(dir.path());
+    App::from_args(args(dir.path(), &["run"]))
+        .unwrap()
+        .with_hooks((RetentionHook::new("catalog.checkpoints.*", 2),))
+        .dispatch(pipeline)
+        .unwrap();
+
+    let kept: Vec<_> = (0..5).filter(|&k| ckpt_exists(dir.path(), k)).collect();
+    assert_eq!(kept, [3, 4]);
+    // `report` read the last checkpoint after the others were removed.
+    let report = std::fs::read_to_string(dir.path().join("report.json")).unwrap();
+    assert!(report.contains("9.6875"), "{report}");
+}
+
+#[test]
+fn retention_keep_every_leaves_resume_points() {
+    let dir = tempfile::tempdir().unwrap();
+    write_fixtures(dir.path());
+    App::from_args(args(dir.path(), &["run", "--runner", "parallel"]))
+        .unwrap()
+        .with_hooks((RetentionHook::new("catalog.checkpoints.*", 1).keep_every(2),))
+        .dispatch(pipeline)
+        .unwrap();
+
+    let kept: Vec<_> = (0..5).filter(|&k| ckpt_exists(dir.path(), k)).collect();
+    assert_eq!(kept, [0, 2, 4]);
+}
+
+#[test]
+fn retention_with_cache_hook_resumes_from_the_kept_checkpoints() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache_dir = dir.path().join(".pondcache");
+    let params = || Params { target: Param(10.0), learning_rate: Param(0.25) };
+
+    App::new(catalog(dir.path(), 4), params())
+        .with_hooks((CacheHook::new(&cache_dir), RetentionHook::new("catalog.checkpoints.*", 1)))
+        .execute::<PondError, _>(pipeline)
+        .unwrap();
+    assert!(!ckpt_exists(dir.path(), 2) && ckpt_exists(dir.path(), 3));
+
+    // Extending the chain re-runs only the new iteration, which reads the one
+    // checkpoint retention kept.
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let ran = RanNodes::default();
+    App::new(catalog(dir.path(), 5), params())
+        .with_hooks((CacheHook::new(&cache_dir), RetentionHook::new("catalog.checkpoints.*", 1), ran.clone()))
+        .execute::<PondError, _>(pipeline)
+        .unwrap();
+    assert_eq!(*ran.0.lock().unwrap(), ["train/4", "report"]);
+    assert!((read(dir.path(), 4) - 9.6875).abs() < 1e-12);
 }
