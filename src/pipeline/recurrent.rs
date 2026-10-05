@@ -348,7 +348,7 @@ mod tests {
             func: |x: i32| (x,),
         }
         .build();
-        assert!(names(&unrolled).is_empty());
+        assert_eq!(names(&unrolled), Vec::<String>::new());
         (unrolled,).check().unwrap();
     }
 
