@@ -9,26 +9,12 @@ error[E0277]: `u32` is not a hook
    = help: the trait `Hook` is not implemented for `u32`
    = note: implement `Hook` for `u32`, or wrap a `TypedHook` with `.typed()`
    = note: built-in hooks include `LoggingHook`, `CacheHook`, and `VizHook`
-help: the following other types implement trait `Hook`
-  --> src/hooks/typed.rs
-   |
-   | impl<T: 'static, H: TypedHook<T> + Sync> Hook for TypedHookAdapter<T, H> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `TypedHookAdapter<T, H>`
-   |
-  ::: src/hooks/logging.rs
-   |
-   | impl Hook for LoggingHook {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^ `LoggingHook`
-   |
-  ::: src/hooks/cache.rs
-   |
-   | impl Hook for CacheHook {
-   | ^^^^^^^^^^^^^^^^^^^^^^^ `CacheHook`
-   |
-  ::: src/viz/hook.rs
-   |
-   | impl Hook for VizHook {
-   | ^^^^^^^^^^^^^^^^^^^^^ `VizHook`
+   = help: the following other types implement trait `Hook`:
+             CacheHook
+             LoggingHook
+             RetentionHook
+             TypedHookAdapter<T, H>
+             VizHook
    = note: required for `(u32,)` to implement `Hooks`
 note: required by a bound in `run`
   --> src/runners/mod.rs

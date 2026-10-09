@@ -6,14 +6,16 @@ error[E0277]: node function returns `Result<(i32,), MyErr>`, which cannot produc
    |
    = help: the trait `IntoNodeResult<(i32,), PondError>` is not implemented for `Result<(i32,), MyErr>`
    = note: return `(i32,)`, or `Result<(i32,), E2>` where `PondError` implements `From<E2>`
-help: the trait `pondrs::Step<E>` is implemented for `Node<F, Input, Output, N>`
+help: the trait `pondrs::Step<E>` is conditionally implemented for `Node<F, Input, Output, N>`
   --> src/pipeline/node.rs
    |
    | / impl<F, Input, Output, E, R, N> Step<E> for Node<F, Input, Output, N>
    | | where
    | |     Input: NodeInput<E> + Send + Sync,
    | |     Output: NodeOutput<E> + Send + Sync,
-...  |
+   | |     F: StableFn<Input::Args, Output = R> + Send + Sync,
+   | |     R: IntoNodeResult<Output::Output, E>,
+   | |        --------------------------------- unsatisfied requirement introduced here: `_: IntoNodeResult<<(&CellDataset<i32>,) as NodeOutputMeta>::Output, PondError>`
    | |     E: From<PondError>,
    | |     N: AsRef<str> + Send + Sync,
    | |________________________________^
