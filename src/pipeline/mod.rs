@@ -11,6 +11,8 @@ mod into_result;
 mod node;
 #[cfg(feature = "std")]
 mod partitioned_node;
+#[cfg(feature = "std")]
+pub(crate) mod path;
 // `pipeline::pipeline` holds the `Pipeline` struct, which is re-exported below;
 // the doubled path is never written by hand.
 #[allow(clippy::module_inception, reason = "private module, re-exported below")]

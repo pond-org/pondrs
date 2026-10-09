@@ -1,6 +1,6 @@
 //! Steps trait and tuple implementations.
 
-use super::check::{CheckError, check_dataset_identity, check_item, collect_all_outputs, collect_warnings};
+use super::check::{CheckError, check_dataset_identity, check_names, check_item, collect_all_outputs, collect_warnings};
 #[cfg(feature = "std")]
 use super::id_set::{HeapIdSet, HeapIdTypeMap};
 use super::id_set::{IdCollector, IdSet, IdTypeMap, TypeCollector};
@@ -93,6 +93,10 @@ pub trait StepsMeta {
 fn run_check<C: IdCollector, T: TypeCollector, S: StepsMeta + ?Sized>(
     steps: &S,
 ) -> Result<(), CheckError<'_>> {
+    // Names first: a step path must identify one step, which the remaining
+    // passes do not depend on but hooks, the cache and CLI filters do.
+    check_names(None, &|f| steps.for_each_meta(f))?;
+
     // Pass 0: dataset identity. Aliased datasets make two distinct datasets
     // look like one, which shows up as spurious `DuplicateOutput` /
     // `InputNotProduced` further down — so report it before those run.

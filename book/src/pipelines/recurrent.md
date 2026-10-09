@@ -10,7 +10,8 @@ iteration**, each writing its own dataset.
 ```
 
 `build()` turns the `RecurrentNode` into an `Unrolled` group of plain `Node`s
-named `train/0`, `train/1`, … Because each iteration is an ordinary node,
+named `0`, `1`, … inside a group named `train`, so their [paths](./paths.md) are
+`train/0`, `train/1`, … Because each iteration is an ordinary node,
 everything that works on nodes works on each iteration individually:
 
 - **Resume mid-chain:** `run --from-nodes train/47` runs iterations 47 onward,

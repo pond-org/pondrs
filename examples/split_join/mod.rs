@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use pondrs::datasets::{MemoryDataset, Param, PolarsCsvDataset, JsonDataset};
-use pondrs::{EachField, Node, Step, DynSteps, TemplatedCatalog};
+use pondrs::{EachField, Node, Pipeline, Step, DynSteps, TemplatedCatalog};
 
 // ANCHOR: types
 // ---------------------------------------------------------------------------
@@ -152,11 +152,18 @@ pub fn pipeline<'a>(cat: &'a Catalog, params: &'a Params) -> DynSteps<'a> {
     );
 
     // Step 3: per-store processing — dynamically build a node for each store.
-    for (_, store) in cat.stores.iter() {
+    // Each sits in a pipeline named after its store, so the nodes share a name
+    // but not a path: `north/compute_store_value`, `south/compute_store_value`.
+    for (key, store) in cat.stores.iter() {
         steps.push(
-            Node {
-                name: "compute_store_value",
-                func: compute_store_value,
+            Pipeline {
+                name: key,
+                steps: (Node {
+                    name: "compute_store_value",
+                    func: compute_store_value,
+                    input: (&store.inventory, &params.low_stock_threshold),
+                    output: (&store.total_value,),
+                },),
                 input: (&store.inventory, &params.low_stock_threshold),
                 output: (&store.total_value,),
             }

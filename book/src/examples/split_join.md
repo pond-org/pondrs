@@ -49,7 +49,7 @@ dynamically from the `TemplatedCatalog` entries. The flow is:
 
 1. **group_by_store** — reads the combined CSV and groups rows into a `HashMap<String, DataFrame>`
 2. **split_stores** — distributes each store's DataFrame to its per-store CSV file via `EachField` output
-3. **compute_store_value** (one per store) — computes total stock value from each store's CSV
+3. **compute_store_value** (one per store) — computes total stock value from each store's CSV. Each node sits in a pipeline named after its store, so the paths `north/compute_store_value`, `south/compute_store_value`, … tell them apart — sibling steps may not share a name (see [Step paths](../pipelines/paths.md)), and `run --nodes north/compute_store_value` selects one store while `--nodes compute_store_value` selects all three
 4. **join_values** — collects per-store totals back into a `HashMap<String, f64>` via `EachField` input
 5. **build_report** — produces a JSON comparison report
 

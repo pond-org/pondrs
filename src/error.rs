@@ -138,6 +138,17 @@ pub enum CheckError<'a> {
         type_name: &'static str,
         conflicting_type_name: &'static str,
     },
+    /// Two steps in one group (or at the top level, `group: None`) share a
+    /// name, so their paths would coincide and hooks, the cache, CLI node
+    /// filters and viz could not tell them apart.
+    DuplicateStepName {
+        group: Option<&'a str>,
+        name: &'a str,
+    },
+    /// A step name contains `/`, the step path separator.
+    InvalidStepName {
+        name: &'a str,
+    },
     /// The fixed-capacity dataset buffer overflowed.
     CapacityExceeded,
 }
@@ -165,6 +176,15 @@ impl core::fmt::Display for CheckError<'_> {
             }
             Self::AliasedDatasets { node_name, dataset_id, type_name, conflicting_type_name } => {
                 write!(f, "Node '{node_name}' uses dataset {dataset_id:#x} of type `{type_name}`, but `{conflicting_type_name}` was already seen at that same address; the two datasets would be merged into one graph node (a zero-sized dataset type is the usual cause)")
+            }
+            Self::DuplicateStepName { group: Some(group), name } => {
+                write!(f, "Pipeline '{group}' has more than one step named '{name}'; sibling steps need distinct names")
+            }
+            Self::DuplicateStepName { group: None, name } => {
+                write!(f, "More than one top-level step is named '{name}'; sibling steps need distinct names")
+            }
+            Self::InvalidStepName { name } => {
+                write!(f, "Step name '{name}' contains '/', which separates the segments of a step path")
             }
             Self::CapacityExceeded => {
                 write!(f, "Dataset capacity exceeded; use check_with_capacity::<N>() with a larger N")

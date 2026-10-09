@@ -27,13 +27,15 @@ $ my_app run --from-nodes clean --to-nodes report  # run the subgraph between th
 
 `--nodes` and `--from-nodes`/`--to-nodes` are mutually exclusive. All flags accept comma-separated node names.
 
+A name matches a node's [path](../pipelines/paths.md) or any suffix of it starting at a `/`, and selects every node it matches: with nodes `north/compute` and `south/compute`, `--nodes compute` selects both and `--nodes north/compute` selects one.
+
 **`--nodes`** runs exactly the listed nodes, skipping everything else.
 
 **`--from-nodes`** / **`--to-nodes`** computes the subgraph between the specified start and end nodes by following data dependencies. If only `--from-nodes` is given, all downstream nodes are included. If only `--to-nodes` is given, all upstream nodes are included.
 
 Pipeline structure is preserved during filtering: if a sub-pipeline contains some matching nodes, it appears in the filtered run with only those nodes. Sub-pipelines with no matching nodes are dropped entirely.
 
-If a specified node name doesn't exist in the pipeline, `PondError::NodeNotFound` is returned.
+If a specified name matches no node, `PondError::NodeNotFound` is returned.
 
 ## How it works
 

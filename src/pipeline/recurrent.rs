@@ -13,10 +13,10 @@ use super::traits::{DatasetRef, Group, NodeInput, NodeInputMeta, NodeOutput, Nod
 /// A computation repeated once per element of a state vector, each iteration
 /// reading the previous iteration's state and writing its own.
 ///
-/// [`build`](Self::build) unrolls it into an [`Unrolled`] group holding one
-/// plain [`Node`] per iteration, named `"{name}/{k}"`. Because the children are
-/// real nodes, everything that works on nodes works on each iteration
-/// individually: `--from-nodes train/47` resumes mid-chain, `CacheHook` keys
+/// [`build`](Self::build) unrolls it into an [`Unrolled`] group named `name`,
+/// holding one plain [`Node`] per iteration named `k` — so iteration `k`'s path
+/// is `"{name}/{k}"`. Because the children are real nodes, everything that
+/// works on nodes works on each iteration individually: `--from-nodes train/47` resumes mid-chain, `CacheHook` keys
 /// each iteration separately, and hooks report per-iteration progress.
 ///
 /// # The state vector is the chain
@@ -75,7 +75,7 @@ where
     FO: Fn(&'a S) -> Out,
     N: AsRef<str> + Send + Sync,
 {
-    /// Base name; iteration `k` is named `"{name}/{k}"`.
+    /// The group's name; iteration `k` is named `k`, so its path is `"{name}/{k}"`.
     pub name: N,
     /// One element per iteration.
     pub state: &'a [S],
@@ -100,12 +100,11 @@ where
 {
     /// Unroll into one [`Node`] per element of `state`.
     pub fn build(self) -> Unrolled<F, In, Out, N> {
-        let base = self.name.as_ref();
         let mut nodes = Vec::with_capacity(self.state.len());
         let mut prev: &'a S = self.init;
         for (k, cur) in self.state.iter().enumerate() {
             nodes.push(Node {
-                name: format!("{base}/{k}"),
+                name: k.to_string(),
                 input: (self.input)(prev, cur),
                 output: (self.output)(cur),
                 func: self.func.clone(),
@@ -284,7 +283,7 @@ mod tests {
         }
         .build();
 
-        assert_eq!(names(&unrolled), ["acc/0", "acc/1", "acc/2"]);
+        assert_eq!(names(&unrolled), ["0", "1", "2"]);
         // External surface: `init` and the loop-invariant param in; the last
         // slot out. The two intermediate slots stay internal.
         assert_eq!(ids(&unrolled, false), [id(&init), id(&step)]);
@@ -321,7 +320,7 @@ mod tests {
         }
         .build();
 
-        assert_eq!(names(&unrolled), ["acc/0", "acc/1", "acc/2"]);
+        assert_eq!(names(&unrolled), ["0", "1", "2"]);
         assert_eq!(
             ids(&unrolled, false),
             [id(&init.value), id(&state[0].step), id(&state[1].step), id(&state[2].step)],

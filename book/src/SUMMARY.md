@@ -17,6 +17,7 @@
   - [Dynamic Pipelines](./pipelines/dynamic.md)
   - [Fan-out & Fan-in](./pipelines/split_join.md)
   - [Recurrent Nodes](./pipelines/recurrent.md)
+  - [Step Paths](./pipelines/paths.md)
   - [Check](./pipelines/check.md)
   - [Compile Errors](./pipelines/errors.md)
 - [Error handling](./error_handling/README.md)

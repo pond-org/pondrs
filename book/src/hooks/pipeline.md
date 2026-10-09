@@ -14,7 +14,7 @@ fn on_pipeline_error(&self, p: &dyn StepMeta, error: &str) {}
 
 ## Arguments
 
-- **`p`** — the pipeline being executed. `p.name()` returns the pipeline's name, `p.is_leaf()` returns `false`.
+- **`p`** — the pipeline being executed. `p.name()` returns the pipeline's full [path](../pipelines/paths.md) (its local name on `no_std`), `p.is_leaf()` returns `false`.
 - **`error`** — the stringified error message from the failing node within the pipeline.
 
 ## Sequential runner behavior

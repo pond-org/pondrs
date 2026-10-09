@@ -20,7 +20,7 @@ fn after_dataset_saved(&self, n: &dyn StepMeta, ds: &DatasetRef)
 
 ## Arguments
 
-- **`n`** — the node that is loading/saving the dataset. Use `n.name()` to get the node name.
+- **`n`** — the node that is loading/saving the dataset. Use `n.name()` to get the node's full [path](../pipelines/paths.md) (its local name on `no_std`).
 - **`ds`** — the dataset reference:
   - `ds.id` — unique pointer-based identifier
   - `ds.name` — resolved name from the catalog (e.g. `Some("readings")`), or `None` in `no_std`

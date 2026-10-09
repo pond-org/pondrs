@@ -21,6 +21,8 @@ pub struct VizGraph {
 pub struct VizNode {
     /// Index into `VizGraph::nodes`.
     pub id: usize,
+    /// The step's full path (`group/sub/name`), matching the `node_name` that
+    /// `VizHook` events carry. The frontend labels nodes with its last segment.
     pub name: String,
     pub type_string: String,
     pub is_pipe: bool,
@@ -89,7 +91,7 @@ pub fn viz_graph_from(graph: &PipelineGraph<'_>) -> VizGraph {
         .enumerate()
         .map(|(i, n)| VizNode {
             id: i,
-            name: n.name.to_string(),
+            name: n.path.clone(),
             type_string: n.item.type_string().to_string(),
             is_pipe: n.is_pipe,
             parent_pipe: n.parent_pipe,

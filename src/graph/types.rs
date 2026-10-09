@@ -18,7 +18,10 @@ pub struct PipelineGraph<'a> {
 /// A node or pipeline in the graph, with its resolved dataset references.
 pub struct GraphNode<'a> {
     pub id: usize,
+    /// The step's local name.
     pub name: &'a str,
+    /// The step's full path (`group/sub/name`), unique within a checked pipeline.
+    pub path: String,
     pub is_pipe: bool,
     pub inputs: Vec<DatasetRef<'a>>,
     pub outputs: Vec<DatasetRef<'a>>,
