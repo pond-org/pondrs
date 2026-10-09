@@ -7,7 +7,7 @@ use pondrs::error::PondError;
 use pondrs::hooks::{Hook, HookAbort, HookControl};
 use pondrs::pipeline::{DatasetRef, StepMeta};
 use pondrs::runners::{ParallelRunner, Runner, SequentialRunner};
-use pondrs::{Node, Pipeline, Steps, StepsMeta};
+use pondrs::{Node, Pipeline, RecurrentPipeline, Steps, StepsMeta};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -110,4 +110,51 @@ fn sequential_runner_reports_paths() {
 #[test]
 fn parallel_runner_reports_paths() {
     assert_paths(&run_with(&ParallelRunner::default()));
+}
+
+/// One `RecurrentPipeline` iteration's state: an intermediate and a value.
+struct Stage {
+    acts: MemoryDataset<i32>,
+    value: MemoryDataset<i32>,
+}
+
+fn run_recurrent_with(runner: &impl Runner) -> Recorder {
+    let new_stage = || Stage { acts: MemoryDataset::new(), value: MemoryDataset::new() };
+    let init = new_stage();
+    let state: Vec<Stage> = (0..2).map(|_| new_stage()).collect();
+    init.value.save(1).unwrap();
+
+    let pipe = (RecurrentPipeline {
+        name: "train",
+        state: &state,
+        init: &init,
+        input: |prev, _cur| (&prev.value,),
+        output: |cur| (&cur.value,),
+        pipe: |prev, cur| (
+            Node { name: "fwd", input: (&prev.value,), output: (&cur.acts,), func: |x: i32| (x * 2,) },
+            Node { name: "bwd", input: (&cur.acts,), output: (&cur.value,), func: |x: i32| (x + 1,) },
+        ),
+    }
+    .build(),);
+    pipe.check().unwrap();
+
+    let rec = Recorder::default();
+    runner.run::<PondError>(&pipe, &(), &(), &(rec.clone(),)).unwrap();
+    assert_eq!(state[1].value.load().unwrap(), 7);
+    rec
+}
+
+fn assert_recurrent_paths(rec: &Recorder) {
+    assert_eq!(rec.names("node"), ["train/0/bwd", "train/0/fwd", "train/1/bwd", "train/1/fwd"]);
+    assert_eq!(rec.names("pipeline"), ["train", "train/0", "train/1"]);
+}
+
+#[test]
+fn recurrent_pipeline_paths_sequential() {
+    assert_recurrent_paths(&run_recurrent_with(&SequentialRunner));
+}
+
+#[test]
+fn recurrent_pipeline_paths_parallel() {
+    assert_recurrent_paths(&run_recurrent_with(&ParallelRunner::default()));
 }

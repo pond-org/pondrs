@@ -93,7 +93,7 @@ pub enum StepKind<'a, E> {
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a pipeline step",
     label = "not a step",
-    note = "steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, the `Unrolled` from `RecurrentNode::build()`, or a boxed step in a `DynSteps`",
+    note = "steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, the `Unrolled` from `RecurrentNode::build()` / `RecurrentPipeline::build()`, or a boxed step in a `DynSteps`",
     note = "if `{Self}` is a step, check that the pipeline error type `{E}` implements `From<PondError>`"
 )]
 pub trait Step<E>: StepMeta {
