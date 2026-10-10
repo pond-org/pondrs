@@ -52,7 +52,7 @@ pub struct Params {
 fn group_by_store(df: DataFrame) -> Result<(HashMap<String, DataFrame>,), PolarsError> {
     let store_col = df.column("store")?.str()?;
     let unique: Vec<String> = store_col
-        .into_no_null_iter()
+        .no_null_iter()
         .map(ToString::to_string)
         .collect::<std::collections::HashSet<_>>()
         .into_iter()

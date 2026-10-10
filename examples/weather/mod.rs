@@ -175,7 +175,7 @@ fn compute_summary(
         .unwrap()
         .str()
         .unwrap()
-        .into_no_null_iter()
+        .no_null_iter()
         .map(ToString::to_string)
         .collect();
     let unique_stations: std::collections::HashSet<&str> =

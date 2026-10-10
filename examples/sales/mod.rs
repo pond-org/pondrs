@@ -41,7 +41,7 @@ fn build_chart(df: DataFrame, total: i64) -> (Plot,) {
     let months: Vec<String> = df
         .column("month").unwrap()
         .str().unwrap()
-        .into_no_null_iter()
+        .no_null_iter()
         .map(ToString::to_string)
         .collect();
     let sales: Vec<i64> = df

@@ -222,12 +222,11 @@ impl Runner for ParallelRunner {
                 if pipe_started[pi].load(Ordering::Acquire)
                     && !pipe_completed[pi].load(Ordering::Acquire)
                     && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
+                    && let Err(e) = super::fire_after_pipeline::<E>(hooks, &qualified[pipe_idx])
                 {
-                    if let Err(e) = super::fire_after_pipeline::<E>(hooks, &qualified[pipe_idx]) {
-                        let mut guard = first_error.lock().unwrap();
-                        if guard.is_none() {
-                            *guard = Some(e);
-                        }
+                    let mut guard = first_error.lock().unwrap();
+                    if guard.is_none() {
+                        *guard = Some(e);
                     }
                 }
             }

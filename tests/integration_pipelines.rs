@@ -53,7 +53,7 @@ fn test_csv_pipeline_with_params() {
             func: |df: DataFrame, scale: f64| -> Result<(DataFrame,), PolarsError> {
                 let scores = df.column("score")?.i64()?;
                 let scaled: Float64Chunked = scores
-                    .into_iter()
+                    .iter()
                     .map(|v| v.map(|x| x as f64 * scale))
                     .collect_ca("score".into());
                 let mut result = df.clone();
@@ -278,7 +278,7 @@ fn test_mixed_csv_yaml_pipeline() {
         .unwrap()
         .str()
         .unwrap()
-        .into_no_null_iter()
+        .no_null_iter()
         .collect();
     assert!(names.contains(&"alice"));
     assert!(names.contains(&"charlie"));
