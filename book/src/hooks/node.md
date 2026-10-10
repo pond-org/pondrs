@@ -12,7 +12,7 @@ fn on_node_error(&self, n: &dyn StepMeta, error: &str) {}
 
 ## Arguments
 
-- **`n`** — the node being executed. Use `n.name()` for the node name, `n.type_string()` for the function's type name.
+- **`n`** — the node being executed. Use `n.name()` for the node's full [path](../pipelines/paths.md) (`group/node`; the local name on `no_std`), `n.type_string()` for the function's type name.
 - **`skipped`** (on `after_node_run`) — `true` if the node was skipped because a `before_node_run` hook returned `HookControl::Skip`. When skipped, no datasets are loaded, the node function does not execute, and no datasets are saved.
 - **`error`** (on `on_node_error`) — the stringified error message. In `std` builds this is `e.to_string()`; in `no_std` it's the fixed string `"node error"`.
 

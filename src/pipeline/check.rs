@@ -6,6 +6,47 @@ use crate::error::CheckWarning;
 use crate::naming::{is_leaf_type, type_ident};
 pub use crate::CheckError;
 
+/// Visits a set of sibling steps: a group's children, or the top-level steps.
+type ForEachSibling<'s, 'a> = &'s dyn Fn(&mut dyn FnMut(&'a dyn StepMeta));
+
+/// Reject step names that would make two step paths coincide: a name
+/// containing `/`, or two siblings sharing a name. Recurses into groups.
+///
+/// `for_each` iterates the siblings and `group` names their parent (`None` at the top level). Siblings
+/// are compared pairwise rather than collected, so this needs no allocator.
+pub(crate) fn check_names<'a>(
+    group: Option<&'a str>,
+    for_each: ForEachSibling<'_, 'a>,
+) -> Result<(), CheckError<'a>> {
+    let mut err: Result<(), CheckError<'a>> = Ok(());
+    let mut index = 0;
+    for_each(&mut |step| {
+        if err.is_err() {
+            return;
+        }
+        let name = step.name();
+        if name.contains('/') {
+            err = Err(CheckError::InvalidStepName { name });
+            return;
+        }
+        let mut earlier = 0;
+        let mut duplicate = false;
+        for_each(&mut |other| {
+            duplicate |= earlier < index && other.name() == name;
+            earlier += 1;
+        });
+        if duplicate {
+            err = Err(CheckError::DuplicateStepName { group, name });
+            return;
+        }
+        index += 1;
+        if !step.is_leaf() {
+            err = check_names(Some(name), &|f| step.for_each_child(f));
+        }
+    });
+    err
+}
+
 /// Detect two datasets of different types sharing one pointer id.
 ///
 /// Runs before the ordering checks: an alias makes two distinct datasets look
@@ -705,5 +746,67 @@ mod tests {
         );
         let err = pipe.check_with_capacity::<1>().unwrap_err();
         assert!(matches!(err, CheckError::CapacityExceeded));
+    }
+
+    #[test]
+    fn duplicate_top_level_names_are_rejected() {
+        let p = Param(1i32);
+        let a = CellDataset::<i32>::new();
+        let b = CellDataset::<i32>::new();
+        let pipe = (
+            Node { name: "n", func: |v| (v,), input: (&p,), output: (&a,) },
+            Node { name: "n", func: |v| (v,), input: (&p,), output: (&b,) },
+        );
+        let err = pipe.check().unwrap_err();
+        assert!(matches!(err, CheckError::DuplicateStepName { group: None, name: "n" }), "got {err:?}");
+    }
+
+    #[test]
+    fn duplicate_names_within_a_group_are_rejected() {
+        let p = Param(1i32);
+        let a = CellDataset::<i32>::new();
+        let b = CellDataset::<i32>::new();
+        let pipe = (Pipeline {
+            name: "g",
+            steps: (
+                Node { name: "n", func: |v| (v,), input: (&p,), output: (&a,) },
+                Node { name: "n", func: |v| (v,), input: (&p,), output: (&b,) },
+            ),
+            input: (&p,),
+            output: (&a, &b),
+        },);
+        let err = pipe.check().unwrap_err();
+        assert!(matches!(err, CheckError::DuplicateStepName { group: Some("g"), name: "n" }), "got {err:?}");
+    }
+
+    #[test]
+    fn same_name_in_different_groups_is_allowed() {
+        let p = Param(1i32);
+        let a = CellDataset::<i32>::new();
+        let b = CellDataset::<i32>::new();
+        let pipe = (
+            Pipeline {
+                name: "g1",
+                steps: (Node { name: "n", func: |v| (v,), input: (&p,), output: (&a,) },),
+                input: (&p,),
+                output: (&a,),
+            },
+            Pipeline {
+                name: "g2",
+                steps: (Node { name: "n", func: |v| (v,), input: (&p,), output: (&b,) },),
+                input: (&p,),
+                output: (&b,),
+            },
+        );
+        pipe.check().unwrap();
+    }
+
+    #[test]
+    fn slash_in_a_step_name_is_rejected() {
+        let p = Param(1i32);
+        let a = CellDataset::<i32>::new();
+        let pipe = (Node { name: "a/b", func: |v| (v,), input: (&p,), output: (&a,) },);
+        let err = pipe.check().unwrap_err();
+        assert!(matches!(err, CheckError::InvalidStepName { name: "a/b" }), "got {err:?}");
     }
 }

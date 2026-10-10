@@ -11,6 +11,8 @@ mod into_result;
 mod node;
 #[cfg(feature = "std")]
 mod partitioned_node;
+#[cfg(feature = "std")]
+pub(crate) mod path;
 // `pipeline::pipeline` holds the `Pipeline` struct, which is re-exported below;
 // the doubled path is never written by hand.
 #[allow(clippy::module_inception, reason = "private module, re-exported below")]
@@ -40,7 +42,7 @@ pub use partitioned_node::PartitionedNode;
 #[cfg(feature = "std")]
 pub use each_field::EachField;
 #[cfg(feature = "std")]
-pub use recurrent::{RecurrentNode, Unrolled};
+pub use recurrent::{RecurrentNode, RecurrentPipeline, Unrolled};
 #[cfg(feature = "std")]
 pub(crate) use traits::ptr_to_id;
 pub use traits::{DatasetEvent, DatasetRef, DatasetInput, DatasetOutput, NodeInput, NodeInputMeta, NodeOutput, NodeOutputMeta, StepMeta, Leaf, Group, StepKind, Step};

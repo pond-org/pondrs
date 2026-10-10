@@ -358,9 +358,9 @@ names: [alpha, beta]
                 output: (EachField { catalog: &catalog, field: |s: &ItemCatalog| &s.raw },),
             }.boxed(),
         ];
-        for (_, item) in catalog.iter() {
+        for (key, item) in catalog.iter() {
             pipeline.push(Node {
-                name: "process",
+                name: format!("process_{key}"),
                 func: |x: i32| (x,),
                 input: (&item.raw,),
                 output: (&item.processed,),

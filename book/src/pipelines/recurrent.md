@@ -1,16 +1,21 @@
-# Recurrent Nodes
+# Recurrent Nodes & Pipelines
 
 Some computations are loops: a training run repeats an epoch, a simulation
 repeats a time step, and each iteration reads what the previous one wrote.
 `RecurrentNode` expresses that by **unrolling the loop into one real node per
 iteration**, each writing its own dataset.
 
+When an iteration is a whole sub-pipeline rather than one node,
+[`RecurrentPipeline`](#recurrent-pipelines) does the same with one `Pipeline`
+per iteration.
+
 ```rust,ignore
 {{#include ../../../examples/recurrent/mod.rs:pipeline}}
 ```
 
 `build()` turns the `RecurrentNode` into an `Unrolled` group of plain `Node`s
-named `train/0`, `train/1`, … Because each iteration is an ordinary node,
+named `0`, `1`, … inside a group named `train`, so their [paths](./paths.md) are
+`train/0`, `train/1`, … Because each iteration is an ordinary node,
 everything that works on nodes works on each iteration individually:
 
 - **Resume mid-chain:** `run --from-nodes train/47` runs iterations 47 onward,
@@ -99,3 +104,51 @@ writes (`init` and any loop-invariant inputs), and its outputs are the datasets
 some iteration writes and no iteration reads (the final state). So `check`
 validates it like any `Pipeline`, and the parallel runner fires
 `after_pipeline_run` once the last iteration is done.
+
+## Recurrent pipelines
+
+When one iteration is several nodes rather than one — a forward and a backward
+pass, a simulation step followed by a measurement — use `RecurrentPipeline`.
+It has the same `state`, `init`, `input` and `output` fields, and a `pipe`
+closure in place of `func` that builds the iteration's steps from
+`(prev, cur)`:
+
+```rust,ignore
+#[derive(Serialize, Deserialize)]
+struct EpochSlot {
+    acts: MemoryDataset<Vec<f64>>,   // intermediate, internal to the iteration
+    weights: JsonDataset,
+}
+
+RecurrentPipeline {
+    name: "train",
+    state: &cat.epochs,       // Vec<EpochSlot>
+    init: &cat.init_epoch,
+    input: |prev, _cur| (&prev.weights, &cat.features),
+    output: |cur| (&cur.weights,),
+    pipe: |prev, cur| (
+        Node { name: "fwd", input: (&prev.weights, &cat.features), output: (&cur.acts,), func: forward },
+        Node { name: "bwd", input: (&prev.weights, &cur.acts), output: (&cur.weights,), func: backward },
+    ),
+}
+.build()
+```
+
+`build()` unrolls it into an `Unrolled` group of one `Pipeline` per iteration,
+named `0`, `1`, … So the nodes keep their plain names, and their
+[paths](./paths.md) tell the iterations apart: `train/0/fwd`, `train/0/bwd`,
+`train/1/fwd`, … — `run --from-nodes train/47/fwd` resumes mid-chain, and
+`run --nodes fwd` selects every iteration's forward pass.
+
+Here `input` and `output` are each iteration's **declared contract**, the same
+`input`/`output` a hand-written [`Pipeline`](./pipeline.md) has, and `check`
+holds every iteration to it: a declared output its nodes do not produce, a
+declared input they do not read, or an external dataset they read without
+declaring it is an error. `pipe` builds the steps from `(prev, cur)` rather
+than from that contract because of intermediates like `cur.acts`: each
+iteration needs its own, so they live in the state element, but they are not
+part of what the iteration consumes or produces.
+
+The `Unrolled` group derives its own contract from the iterations' declared
+ones, as described above, so `acts` never shows up as an input or output of
+the group.

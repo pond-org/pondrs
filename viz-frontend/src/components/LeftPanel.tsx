@@ -188,7 +188,7 @@ function PipelineItem({
           transform: expanded ? 'rotate(90deg)' : 'none',
           flexShrink: 0,
         }}>▶</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.name}</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{localName(node.name)}</span>
         <span style={{
           fontSize: 11,
           color: 'var(--text-dimmer)',
@@ -264,7 +264,7 @@ function NodeTree({
         return (
           <Item
             key={node.id}
-            label={node.name}
+            label={localName(node.name)}
             active={isNodeActive(node.name)}
             indent={indent}
             onClick={() => onSelect(`node-${node.id}`, {
@@ -283,6 +283,9 @@ function NodeTree({
 }
 
 const shortName = (name: string) => name.replace(/^(catalog|params)\./, '');
+
+/** A step's own name: the last segment of its path. The tree's indentation shows the rest. */
+const localName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 type DatasetEntry =
   | { kind: 'single'; ds: VizDataset }

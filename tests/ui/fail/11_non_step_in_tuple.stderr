@@ -7,7 +7,7 @@ error[E0277]: `u8` is not a pipeline step
    |                                                     required by a bound introduced by this call
    |
    = help: the trait `pondrs::Step<_>` is not implemented for `u8`
-   = note: steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, the `Unrolled` from `RecurrentNode::build()`, or a boxed step in a `DynSteps`
+   = note: steps are `Node`, `Pipeline`, `Alias`, `PartitionedNode`, the `Unrolled` from `RecurrentNode::build()` / `RecurrentPipeline::build()`, or a boxed step in a `DynSteps`
    = note: if `u8` is a step, check that the pipeline error type `_` implements `From<PondError>`
    = help: the following other types implement trait `pondrs::Step<E>`:
              &T
@@ -15,7 +15,7 @@ error[E0277]: `u8` is not a pipeline step
              Node<F, Input, Output, N>
              PartitionedNode<'_, F, D1, D2, T1, T2, N>
              Pipeline<S, Input, Output, N>
-             Unrolled<F, In, Out, N>
+             Unrolled<C, N>
    = note: required for `(Node<{closure@$DIR/tests/ui/fail/11_non_step_in_tuple.rs:14:19: 14:27}, (&Param<i32>,), (&CellDataset<i32>,), &str>, u8)` to implement `Steps<_>`
 note: required by a bound in `run`
   --> src/runners/mod.rs

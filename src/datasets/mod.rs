@@ -221,10 +221,10 @@ pub trait FileDataset: Dataset + Clone {
 
     /// Creates parent directories for `self.path()` if they don't exist.
     fn ensure_parent_dir(&self) -> Result<(), std::io::Error> {
-        if let Some(parent) = std::path::Path::new(self.path()).parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = std::path::Path::new(self.path()).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
         }
         Ok(())
     }

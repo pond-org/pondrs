@@ -7,7 +7,8 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, Step, StepKind, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, Step, StepKind, StepMeta, Steps};
+use crate::pipeline::path::Qualified;
 use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 use crate::hooks::{HookControl, Hooks};
@@ -76,6 +77,11 @@ impl Runner for ParallelRunner {
             collect_items(&mut callable_items, item);
         });
 
+        // What hooks see: each graph node under its full path.
+        let qualified: Vec<Qualified<'_>> = graph.nodes.iter()
+            .map(|n| Qualified::new(n.item, n.path.clone()))
+            .collect();
+
         // Track whether each leaf node has been started
         let started: Vec<AtomicBool> = graph.node_indices.iter().map(|_| AtomicBool::new(false)).collect();
 
@@ -112,7 +118,7 @@ impl Runner for ParallelRunner {
                         && pipe_node.inputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_started[pi].store(true, Ordering::Release);
-                        if let Err(e) = super::fire_before_pipeline::<E>(hooks, pipe_node.item) {
+                        if let Err(e) = super::fire_before_pipeline::<E>(hooks, &qualified[pipe_idx]) {
                             store_error(&first_error, &has_error, e);
                         }
                     }
@@ -123,7 +129,7 @@ impl Runner for ParallelRunner {
                         && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
                     {
                         pipe_completed[pi].store(true, Ordering::Release);
-                        if let Err(e) = super::fire_after_pipeline::<E>(hooks, pipe_node.item) {
+                        if let Err(e) = super::fire_after_pipeline::<E>(hooks, &qualified[pipe_idx]) {
                             store_error(&first_error, &has_error, e);
                         }
                     }
@@ -145,13 +151,15 @@ impl Runner for ParallelRunner {
                         let produced = &produced;
                         let output_ids: Vec<usize> = node.outputs.iter().map(|d| d.id).collect();
                         let item = callable_items[node_idx];
+                        let meta: &dyn StepMeta = &qualified[node_idx];
+                        let qualified = &qualified;
                         let first_error = &first_error;
                         let has_error = &has_error;
                         let graph_nodes = &graph.nodes;
 
                         let names = &graph.dataset_names;
                         s.spawn(move |_| {
-                            let control = match super::fire_before_node::<E>(hooks, item) {
+                            let control = match super::fire_before_node::<E>(hooks, meta) {
                                 Ok(c) => c,
                                 Err(e) => {
                                     store_error(first_error, has_error, e);
@@ -159,14 +167,14 @@ impl Runner for ParallelRunner {
                                 }
                             };
                             if control == HookControl::Skip {
-                                if let Err(e) = super::fire_after_node::<E>(hooks, item, true) {
+                                if let Err(e) = super::fire_after_node::<E>(hooks, meta, true) {
                                     store_error(first_error, has_error, e);
                                 }
                                 produced.lock().unwrap().extend(output_ids);
                                 return;
                             }
                             let mut on_event = |ds: &DatasetRef<'_>, event: DatasetEvent<'_>| {
-                                super::dispatch_dataset_event(item, ds, event, names, hooks)
+                                super::dispatch_dataset_event(meta, ds, event, names, hooks)
                             };
                             let leaf = match item.kind() {
                                 StepKind::Leaf(l) => l,
@@ -174,19 +182,18 @@ impl Runner for ParallelRunner {
                             };
                             match leaf.call(&mut on_event) {
                                 Ok(()) => {
-                                    if let Err(e) = super::fire_after_node::<E>(hooks, item, false) {
+                                    if let Err(e) = super::fire_after_node::<E>(hooks, meta, false) {
                                         store_error(first_error, has_error, e);
                                     }
                                     produced.lock().unwrap().extend(output_ids);
                                 }
                                 Err(e) => {
                                     let msg = e.to_string();
-                                    super::fire_node_error(hooks, item, &msg);
+                                    super::fire_node_error(hooks, meta, &msg);
                                     let mut parent = graph_nodes[node_idx].parent_pipe;
                                     while let Some(pipe_idx) = parent {
-                                        let pipe = &graph_nodes[pipe_idx];
-                                        super::fire_pipeline_error(hooks, pipe.item, &msg);
-                                        parent = pipe.parent_pipe;
+                                        super::fire_pipeline_error(hooks, &qualified[pipe_idx], &msg);
+                                        parent = graph_nodes[pipe_idx].parent_pipe;
                                     }
                                     store_error(first_error, has_error, e);
                                 }
@@ -215,12 +222,11 @@ impl Runner for ParallelRunner {
                 if pipe_started[pi].load(Ordering::Acquire)
                     && !pipe_completed[pi].load(Ordering::Acquire)
                     && pipe_node.outputs.iter().all(|d| produced_snapshot.contains(&d.id))
+                    && let Err(e) = super::fire_after_pipeline::<E>(hooks, &qualified[pipe_idx])
                 {
-                    if let Err(e) = super::fire_after_pipeline::<E>(hooks, pipe_node.item) {
-                        let mut guard = first_error.lock().unwrap();
-                        if guard.is_none() {
-                            *guard = Some(e);
-                        }
+                    let mut guard = first_error.lock().unwrap();
+                    if guard.is_none() {
+                        *guard = Some(e);
                     }
                 }
             }

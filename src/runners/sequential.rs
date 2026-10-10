@@ -5,7 +5,9 @@ use std::prelude::v1::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use crate::pipeline::{DatasetEvent, DatasetRef, Step, StepKind, Steps};
+use crate::pipeline::{DatasetEvent, DatasetRef, Step, StepKind, StepMeta, Steps};
+#[cfg(feature = "std")]
+use crate::pipeline::path::{self, Qualified};
 use crate::error::PondError;
 use crate::hooks::{HookAbort, HookControl, Hooks};
 
@@ -18,8 +20,8 @@ use super::Runner;
 pub struct SequentialRunner;
 
 impl SequentialRunner {
-    fn make_dataset_callback<'a, E>(
-        item: &'a dyn Step<E>,
+    fn make_dataset_callback<'a>(
+        item: &'a dyn StepMeta,
         #[cfg(feature = "std")]
         names: &'a HashMap<usize, String>,
         hooks: &'a impl Hooks,
@@ -32,8 +34,13 @@ impl SequentialRunner {
         }
     }
 
+    /// Run one step. Under `std`, `parent` is the enclosing group's path, and
+    /// hooks see the step under its own full path; without an allocator there
+    /// is no path to build, and hooks see the local name.
     fn run_item<E>(
         item: &dyn Step<E>,
+        #[cfg(feature = "std")]
+        parent: Option<&str>,
         #[cfg(feature = "std")]
         names: &HashMap<usize, String>,
         hooks: &impl Hooks,
@@ -41,55 +48,62 @@ impl SequentialRunner {
     where
         E: From<PondError> + core::fmt::Display + core::fmt::Debug,
     {
+        #[cfg(feature = "std")]
+        let qualified = Qualified::new(item, path::join(parent, item.name()));
+        #[cfg(feature = "std")]
+        let meta: &dyn StepMeta = &qualified;
+        #[cfg(not(feature = "std"))]
+        let meta: &dyn StepMeta = item;
+
         match item.kind() {
             StepKind::Leaf(leaf) => {
-                let control = super::fire_before_node(hooks, item)?;
+                let control = super::fire_before_node(hooks, meta)?;
                 if control == HookControl::Skip {
-                    super::fire_after_node(hooks, item, true)?;
+                    super::fire_after_node(hooks, meta, true)?;
                     return Ok(());
                 }
                 #[cfg(feature = "std")]
-                let mut on_event = Self::make_dataset_callback(item, names, hooks);
+                let mut on_event = Self::make_dataset_callback(meta, names, hooks);
                 #[cfg(not(feature = "std"))]
-                let mut on_event = Self::make_dataset_callback(item, hooks);
+                let mut on_event = Self::make_dataset_callback(meta, hooks);
                 match leaf.call(&mut on_event) {
                     Ok(()) => {
-                        super::fire_after_node(hooks, item, false)?;
+                        super::fire_after_node(hooks, meta, false)?;
                         Ok(())
                     }
                     Err(e) => {
                         #[cfg(feature = "std")]
-                        super::fire_node_error(hooks, item, &e.to_string());
+                        super::fire_node_error(hooks, meta, &e.to_string());
                         // Without an allocator there is nothing to render `e` into.
                         #[cfg(not(feature = "std"))]
-                        super::fire_node_error(hooks, item, "node error");
+                        super::fire_node_error(hooks, meta, "node error");
                         Err(e)
                     }
                 }
             }
             StepKind::Group(group) => {
-                super::fire_before_pipeline(hooks, item)?;
+                super::fire_before_pipeline(hooks, meta)?;
                 let mut result = Ok(());
                 group.for_each_child_step(&mut |child| {
                     if result.is_ok() {
                         #[cfg(feature = "std")]
-                        { result = Self::run_item(child, names, hooks); }
+                        { result = Self::run_item(child, Some(meta.name()), names, hooks); }
                         #[cfg(not(feature = "std"))]
                         { result = Self::run_item(child, hooks); }
                     }
                 });
                 match &result {
                     Ok(()) => {
-                        super::fire_after_pipeline(hooks, item)?;
+                        super::fire_after_pipeline(hooks, meta)?;
                     }
                     Err(e) => {
                         #[cfg(feature = "std")]
-                        super::fire_pipeline_error(hooks, item, &e.to_string());
+                        super::fire_pipeline_error(hooks, meta, &e.to_string());
                         // Without an allocator there is nothing to render `e` into.
                         #[cfg(not(feature = "std"))]
                         {
                             let _ = e;
-                            super::fire_pipeline_error(hooks, item, "pipeline error");
+                            super::fire_pipeline_error(hooks, meta, "pipeline error");
                         }
                     }
                 }
@@ -117,7 +131,7 @@ impl Runner for SequentialRunner {
         pipe.for_each_step(&mut |item| {
             if result.is_ok() {
                 #[cfg(feature = "std")]
-                { result = Self::run_item(item, &names, hooks); }
+                { result = Self::run_item(item, None, &names, hooks); }
                 #[cfg(not(feature = "std"))]
                 { result = Self::run_item(item, hooks); }
             }

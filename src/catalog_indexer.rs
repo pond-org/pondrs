@@ -133,10 +133,10 @@ impl CatalogIndexer {
     /// Stamp the serde struct name of the value now being serialized onto the
     /// entry that was armed for it.
     fn stamp_serde_ident(&mut self, name: &'static str) {
-        if let Some(ptr_id) = self.pending_ptr.take() {
-            if let Some(entry) = self.entries.get_mut(&ptr_id).and_then(|v| v.last_mut()) {
-                entry.serde_ident = Some(name);
-            }
+        if let Some(ptr_id) = self.pending_ptr.take()
+            && let Some(entry) = self.entries.get_mut(&ptr_id).and_then(|v| v.last_mut())
+        {
+            entry.serde_ident = Some(name);
         }
     }
 }
@@ -334,16 +334,16 @@ fn check_step<'a>(
         // a dataset with a hand-written `Serialize` that emits no struct name,
         // say — is left alone rather than guessed at.
         let ident = type_ident(type_name);
-        if let Some(i) = entries.iter().rposition(|e| e.serde_ident == Some(ident)) {
-            if i + 1 != entries.len() {
-                report(&CatalogWarning::MisresolvedName {
-                    node_name,
-                    dataset_id: d.id,
-                    type_name,
-                    resolved: entries[entries.len() - 1].name.clone(),
-                    expected: entries[i].name.clone(),
-                });
-            }
+        if let Some(i) = entries.iter().rposition(|e| e.serde_ident == Some(ident))
+            && i + 1 != entries.len()
+        {
+            report(&CatalogWarning::MisresolvedName {
+                node_name,
+                dataset_id: d.id,
+                type_name,
+                resolved: entries[entries.len() - 1].name.clone(),
+                expected: entries[i].name.clone(),
+            });
         }
     };
     item.for_each_input(&mut check_ref);

@@ -7,6 +7,7 @@ use serde::Serialize;
 
 use crate::catalog_indexer::index_catalog_with_params;
 use crate::pipeline::{StepMeta, StepsMeta, ptr_to_id};
+use crate::pipeline::path;
 
 use super::types::{Edge, GraphNode, PipelineGraph};
 
@@ -70,6 +71,7 @@ fn collect_node<'a>(
     let index = nodes.len();
 
     let is_pipe = !item.is_leaf();
+    let path = path::join(parent.map(|p| nodes[p].path.as_str()), item.name());
 
     let mut inputs = Vec::new();
     item.for_each_input(&mut |d| inputs.push(*d));
@@ -79,6 +81,7 @@ fn collect_node<'a>(
     nodes.push(GraphNode {
         id: ptr_to_id(item),
         name: item.name(),
+        path,
         is_pipe,
         inputs,
         outputs,

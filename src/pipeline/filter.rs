@@ -9,6 +9,7 @@ use crate::error::PondError;
 use crate::graph::build_pipeline_graph;
 
 use super::dyn_steps::DynSteps;
+use super::path;
 use super::traits::{ptr_to_id, DatasetRef, StepMeta, Group, Step, StepKind};
 use super::steps::{StepsMeta, Steps};
 
@@ -39,15 +40,11 @@ where
 {
     let graph = build_pipeline_graph(pipe, catalog, params);
 
-    // Resolve filter to a set of node names to keep
-    let keep_names = resolve_keep_set(&graph, filter)?;
-
-    // Build a set of graph node IDs (ptr-based) for fast lookup during tree walk
-    let keep_ids: HashSet<usize> = graph
-        .nodes
-        .iter()
-        .filter(|n| !n.is_pipe && keep_names.contains(n.name))
-        .map(|n| n.id)
+    // Resolve filter to the graph indices of the leaves to keep, then to
+    // their ptr-based ids for fast lookup during the tree walk.
+    let keep_ids: HashSet<usize> = resolve_keep_set(&graph, filter)?
+        .into_iter()
+        .map(|i| graph.nodes[i].id)
         .collect();
 
     // Walk the Steps tree and collect matching items
@@ -59,59 +56,63 @@ where
     Ok(result)
 }
 
-/// Resolve a `NodeFilter` into the set of leaf node names to keep.
-fn resolve_keep_set<'a>(
-    graph: &crate::graph::PipelineGraph<'a>,
+/// Resolve a `NodeFilter` into the graph indices of the leaves to keep.
+///
+/// A name selects every leaf whose path it matches (see [`path::matches`]):
+/// the full path, or any suffix starting at a segment boundary. So
+/// `compute` selects `north/compute` and `south/compute` alike, while
+/// `north/compute` selects one. A name matching no leaf is an error.
+fn resolve_keep_set(
+    graph: &crate::graph::PipelineGraph<'_>,
     filter: &NodeFilter,
-) -> Result<HashSet<&'a str>, PondError> {
-    let leaf_names: HashSet<&str> = graph
-        .nodes
-        .iter()
-        .filter(|n| !n.is_pipe)
-        .map(|n| n.name)
-        .collect();
-
+) -> Result<HashSet<usize>, PondError> {
     match filter {
         NodeFilter::Nodes(names) => {
+            let mut keep = HashSet::new();
             for name in names {
-                if !leaf_names.contains(name.as_str()) {
-                    return Err(PondError::NodeNotFound(name.clone()));
-                }
+                keep.extend(matching_leaves(graph, name)?);
             }
-            Ok(graph
-                .nodes
-                .iter()
-                .filter(|n| !n.is_pipe && names.contains(n.name))
-                .map(|n| n.name)
-                .collect())
+            Ok(keep)
         }
         NodeFilter::FromTo { from, to } => {
-            for name in from.iter().chain(to.iter()) {
-                if !leaf_names.contains(name.as_str()) {
-                    return Err(PondError::NodeNotFound(name.clone()));
-                }
+            let mut from_seeds = Vec::new();
+            for name in from {
+                from_seeds.extend(matching_leaves(graph, name)?);
             }
-            Ok(resolve_from_to(graph, from, to))
+            let mut to_seeds = Vec::new();
+            for name in to {
+                to_seeds.extend(matching_leaves(graph, name)?);
+            }
+            Ok(resolve_from_to(graph, &from_seeds, &to_seeds))
         }
     }
 }
 
-/// Compute the subgraph between from-nodes and to-nodes using edge traversal.
-///
-/// Every name in `from` and `to` must name a leaf of `graph`; `resolve_keep_set`
-/// checks that first, which is what makes the lookups below infallible.
-fn resolve_from_to<'a>(
-    graph: &crate::graph::PipelineGraph<'a>,
-    from: &HashSet<String>,
-    to: &HashSet<String>,
-) -> HashSet<&'a str> {
-    let leaves = &graph.node_indices;
-
-    // Map node names to graph indices (leaves only)
-    let name_to_idx: std::collections::HashMap<&str, usize> = leaves
+/// Graph indices of the leaves whose path `name` matches.
+fn matching_leaves(
+    graph: &crate::graph::PipelineGraph<'_>,
+    name: &str,
+) -> Result<Vec<usize>, PondError> {
+    let found: Vec<usize> = graph
+        .node_indices
         .iter()
-        .map(|&i| (graph.nodes[i].name, i))
+        .copied()
+        .filter(|&i| path::matches(&graph.nodes[i].path, name))
         .collect();
+    if found.is_empty() {
+        return Err(PondError::NodeNotFound(name.to_string()));
+    }
+    Ok(found)
+}
+
+/// Compute the subgraph between the `from` and `to` seed leaves using edge
+/// traversal. An empty seed list leaves that side unconstrained.
+fn resolve_from_to(
+    graph: &crate::graph::PipelineGraph<'_>,
+    from: &[usize],
+    to: &[usize],
+) -> HashSet<usize> {
+    let leaves = &graph.node_indices;
 
     // Build adjacency lists from edges
     let mut forward: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
@@ -123,29 +124,19 @@ fn resolve_from_to<'a>(
 
     // Forward reachable from `from` nodes (descendants)
     let forward_set = if from.is_empty() {
-        // No from constraint — all nodes are forward-reachable
         leaves.iter().copied().collect::<HashSet<usize>>()
     } else {
-        let seeds: Vec<usize> = from.iter().map(|n| name_to_idx[n.as_str()]).collect();
-        reachable(&seeds, &forward)
+        reachable(from, &forward)
     };
 
     // Backward reachable from `to` nodes (ancestors)
     let backward_set = if to.is_empty() {
-        // No to constraint — all nodes are backward-reachable
         leaves.iter().copied().collect::<HashSet<usize>>()
     } else {
-        let seeds: Vec<usize> = to.iter().map(|n| name_to_idx[n.as_str()]).collect();
-        reachable(&seeds, &backward)
+        reachable(to, &backward)
     };
 
-    // Intersect
-    let keep_indices: HashSet<usize> = forward_set.intersection(&backward_set).copied().collect();
-
-    keep_indices
-        .iter()
-        .map(|&i| graph.nodes[i].name)
-        .collect()
+    forward_set.intersection(&backward_set).copied().collect()
 }
 
 /// BFS from seed nodes along the given adjacency.
@@ -456,6 +447,72 @@ mod tests {
         let result = filter_steps::<PondError>(&pipe, &cat, &params, &filter);
 
         assert!(matches!(result, Err(PondError::NodeNotFound(ref s)) if s == "nonexistent"));
+    }
+
+    /// Two groups each holding a node named `n2`, fed from `n1`.
+    fn twin_groups<'a>(cat: &'a Cat, params: &'a Params) -> impl Steps<PondError> + 'a {
+        (
+            Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
+            Pipeline {
+                name: "left",
+                steps: (Node { name: "n2", func: |v| (v,), input: (&cat.a,), output: (&cat.b,) },),
+                input: (&cat.a,),
+                output: (&cat.b,),
+            },
+            Pipeline {
+                name: "right",
+                steps: (Node { name: "n2", func: |v| (v,), input: (&cat.a,), output: (&cat.c,) },),
+                input: (&cat.a,),
+                output: (&cat.c,),
+            },
+        )
+    }
+
+    fn top_level_names<E>(steps: &DynSteps<'_, E>) -> Vec<String> {
+        let mut names = Vec::new();
+        steps.for_each_step(&mut |item| names.push(item.name().to_string()));
+        names
+    }
+
+    #[test]
+    fn filter_by_local_name_selects_every_match() {
+        let cat = Cat { a: MemoryDataset::new(), b: MemoryDataset::new(), c: MemoryDataset::new(), d: MemoryDataset::new() };
+        let params = Params { x: Param(1) };
+        let pipe = twin_groups(&cat, &params);
+
+        let filter = NodeFilter::Nodes(["n2"].iter().map(|s| (*s).to_string()).collect());
+        let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
+        assert_eq!(top_level_names(&filtered), ["left", "right"]);
+    }
+
+    #[test]
+    fn filter_by_path_selects_one() {
+        let cat = Cat { a: MemoryDataset::new(), b: MemoryDataset::new(), c: MemoryDataset::new(), d: MemoryDataset::new() };
+        let params = Params { x: Param(1) };
+        let pipe = twin_groups(&cat, &params);
+
+        let filter = NodeFilter::Nodes(["right/n2"].iter().map(|s| (*s).to_string()).collect());
+        let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
+        assert_eq!(top_level_names(&filtered), ["right"]);
+
+        // A suffix that does not start at a segment boundary matches nothing.
+        let filter = NodeFilter::Nodes(["ight/n2"].iter().map(|s| (*s).to_string()).collect());
+        let result = filter_steps::<PondError>(&pipe, &cat, &params, &filter);
+        assert!(matches!(result, Err(PondError::NodeNotFound(_))));
+    }
+
+    #[test]
+    fn filter_from_path() {
+        let cat = Cat { a: MemoryDataset::new(), b: MemoryDataset::new(), c: MemoryDataset::new(), d: MemoryDataset::new() };
+        let params = Params { x: Param(1) };
+        let pipe = twin_groups(&cat, &params);
+
+        let filter = NodeFilter::FromTo {
+            from: ["left/n2"].iter().map(|s| (*s).to_string()).collect(),
+            to: HashSet::new(),
+        };
+        let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
+        assert_eq!(top_level_names(&filtered), ["left"]);
     }
 
     #[test]

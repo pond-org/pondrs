@@ -103,6 +103,8 @@ For `Pipeline` structs, the declared inputs and outputs must match what the chil
 | `UnproducedPipelineOutput` | Pipeline declares an output its children don't produce |
 | `UndeclaredPipelineInput` | A child consumes an external dataset the pipeline doesn't declare |
 | `AliasedDatasets` | Two datasets of different types share one address |
+| `DuplicateStepName` | Two sibling steps share a name, so their [paths](./paths.md) would coincide |
+| `InvalidStepName` | A step name contains `/`, the path separator |
 | `CapacityExceeded` | Internal dataset buffer overflow (see below) |
 
 ## Warnings

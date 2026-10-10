@@ -155,7 +155,7 @@ fn insert_separators(s: &str, group: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut result = String::with_capacity(s.len() + s.len() / group);
     for (i, ch) in chars.iter().enumerate() {
-        if i > 0 && (chars.len() - i) % group == 0 {
+        if i > 0 && (chars.len() - i).is_multiple_of(group) {
             result.push('_');
         }
         result.push(*ch);
