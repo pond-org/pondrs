@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { VizGraph, VizNode, VizDataset, NodeStatus, DatasetActivity } from '../api/types';
 import type { PanelSelection } from './DatasetPanel';
+import { shortName, localName, sequenceKey, compareNatural } from '../util/sequences';
 
 interface Props {
   graph: VizGraph | null;
@@ -282,11 +283,6 @@ function NodeTree({
   );
 }
 
-const shortName = (name: string) => name.replace(/^(catalog|params)\./, '');
-
-/** A step's own name: the last segment of its path. The tree's indentation shows the rest. */
-const localName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
-
 type DatasetEntry =
   | { kind: 'single'; ds: VizDataset }
   | { kind: 'group'; key: string; members: VizDataset[] };
@@ -298,11 +294,7 @@ type DatasetEntry =
  * "sequence" of one is left as a plain item.
  */
 function groupSequences(datasets: VizDataset[]): DatasetEntry[] {
-  const keyOf = (ds: VizDataset): string | null => {
-    const parts = shortName(ds.name).split('.');
-    const i = parts.findIndex(p => /^\d+$/.test(p));
-    return i > 0 ? parts.slice(0, i).join('.') : null;
-  };
+  const keyOf = (ds: VizDataset) => sequenceKey(ds.name);
   const members = new Map<string, VizDataset[]>();
   for (const ds of datasets) {
     const key = keyOf(ds);
@@ -317,9 +309,7 @@ function groupSequences(datasets: VizDataset[]): DatasetEntry[] {
       entries.push({ kind: 'single', ds });
     } else if (!emitted.has(key)) {
       emitted.add(key);
-      // Natural order, so `checkpoints.10` follows `checkpoints.9`.
-      const members = [...group].sort((x, y) =>
-        shortName(x.name).localeCompare(shortName(y.name), undefined, { numeric: true }));
+      const members = [...group].sort((x, y) => compareNatural(x.name, y.name));
       entries.push({ kind: 'group', key, members });
     }
   }
