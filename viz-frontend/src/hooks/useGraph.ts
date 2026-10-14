@@ -48,11 +48,10 @@ function boundary(nodes: VizNode[]): { inputs: number[]; outputs: number[] } {
   };
 }
 
-/** `checkpoints.*` over members 0‥99 → `checkpoints[0‥99]`. */
-function bundleLabel(pattern: string, members: VizDataset[]): string {
+/** The index range a sequence bundle spans: `0‥99`. */
+function indexRange(members: VizDataset[]): string | null {
   const idx = members.map(m => sequenceIndex(m.name)).filter((i): i is number => i != null);
-  const range = `[${Math.min(...idx)}‥${Math.max(...idx)}]`;
-  return pattern.replace(/\.\*(?=\.|$)/, range);
+  return idx.length > 0 ? `${Math.min(...idx)}‥${Math.max(...idx)}` : null;
 }
 
 export function useGraph(
@@ -198,7 +197,7 @@ export function useGraph(
     const shownAs = new Map<number, string>();
     const singles: VizDataset[] = [];
 
-    const emitBundle = (label: string, members: VizDataset[]) => {
+    const emitBundle = (label: string, range: string | null, members: VizDataset[]) => {
       members.sort((a, b) => compareNatural(a.name, b.name));
       const rfId = `bundle-${members[0].id}`;
       for (const m of members) shownAs.set(m.id, rfId);
@@ -207,6 +206,7 @@ export function useGraph(
       const latest = [...members].reverse().find(m => datasetActivity[m.name]) ?? members[0];
       const data: BundleNodeData = {
         label,
+        range,
         count: members.length,
         saved: activity.filter(a => a?.save_ms != null).length,
         loaded: activity.filter(a => a?.load_ms != null).length,
@@ -217,11 +217,11 @@ export function useGraph(
     };
 
     for (const [key, members] of bySequence) {
-      if (members.length >= 2) emitBundle(bundleLabel(key.slice(0, key.indexOf('|')), members), members);
+      if (members.length >= 2) emitBundle(key.slice(0, key.indexOf('|')), indexRange(members), members);
       else singles.push(...members);
     }
     for (const members of loose.values()) {
-      if (members.length > OVERFLOW_THRESHOLD) emitBundle(`${members.length} datasets`, members);
+      if (members.length > OVERFLOW_THRESHOLD) emitBundle(`${members.length} datasets`, null, members);
       else singles.push(...members);
     }
 

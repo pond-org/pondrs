@@ -5,17 +5,6 @@ export const shortName = (name: string) => name.replace(/^(catalog|params)\./, '
 export const localName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 /**
- * The sequence a dataset belongs to: the path before its first numeric
- * segment, so `checkpoints.7` and `epochs.7.weights` give `checkpoints` and
- * `epochs`. `null` when the name has no numeric segment.
- */
-export function sequenceKey(name: string): string | null {
-  const parts = shortName(name).split('.');
-  const i = parts.findIndex(p => /^\d+$/.test(p));
-  return i > 0 ? parts.slice(0, i).join('.') : null;
-}
-
-/**
  * A dataset's name with its first numeric segment replaced by `*`
  * (`epochs.7.weights` → `epochs.*.weights`), so only members holding the same
  * field match. `null` when the name has no numeric segment.

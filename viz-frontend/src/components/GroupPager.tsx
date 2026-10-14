@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import type { PagerInfo } from '../hooks/useGraph';
 import { PAGE_SIZES, type PageState } from '../util/paging';
 import { localName } from '../util/sequences';
@@ -26,6 +26,47 @@ const active: CSSProperties = {
   color: 'var(--color-running)',
 };
 
+/**
+ * Jump to an exact index. A plain text field (no spinner — ◀ ▶ step) that
+ * commits on Enter or blur, so typing `120` doesn't visit 1 and 12 first.
+ */
+function IndexInput({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  // `null` while not editing, so the field tracks the window (e.g. when following).
+  const [draft, setDraft] = useState<string | null>(null);
+  // Escape blurs too, and blur runs before the draft reset lands, so flag it.
+  const cancelled = useRef(false);
+  const commit = () => {
+    if (!cancelled.current && draft != null && draft !== '') onCommit(Number(draft));
+    cancelled.current = false;
+    setDraft(null);
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={draft ?? String(value)}
+      onFocus={e => { setDraft(String(value)); e.target.select(); }}
+      onChange={e => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        else if (e.key === 'Escape') { cancelled.current = true; e.currentTarget.blur(); }
+      }}
+      title="Jump to index (Enter)"
+      style={{
+        width: 56,
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-tag)',
+        borderRadius: 6,
+        color: 'var(--text)',
+        fontSize: 14,
+        padding: '3px 6px',
+        textAlign: 'center',
+      }}
+    />
+  );
+}
+
 function Pager({ p, onPageChange }: { p: PagerInfo; onPageChange: Props['onPageChange'] }) {
   const total = p.children.length;
   const last = total - p.size;
@@ -48,23 +89,7 @@ function Pager({ p, onPageChange }: { p: PagerInfo; onPageChange: Props['onPageC
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <button style={button} onClick={() => go(p.start - p.size)} disabled={p.start === 0} title="Previous page">◀</button>
-        <input
-          type="number"
-          min={0}
-          max={total - 1}
-          value={p.start}
-          onChange={e => { const v = Number(e.target.value); if (Number.isFinite(v)) go(v); }}
-          title="First child shown"
-          style={{
-            width: 56,
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border-tag)',
-            borderRadius: 6,
-            color: 'var(--text)',
-            fontSize: 14,
-            padding: '3px 6px',
-          }}
-        />
+        <IndexInput value={p.start} onCommit={go} />
         <button style={button} onClick={() => go(p.start + p.size)} disabled={p.start >= last} title="Next page">▶</button>
         <input
           type="range"

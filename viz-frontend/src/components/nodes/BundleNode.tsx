@@ -3,7 +3,10 @@ import type { NodeProps, Node } from '@xyflow/react';
 
 /** Several datasets with identical connections, drawn as one stacked node. */
 export type BundleNodeData = {
+  /** The members' shared name pattern (`metrics.*`), or a plain description. */
   label: string;
+  /** Index range of a sequence's members (`0‥99`). */
+  range: string | null;
   count: number;
   /** Members saved during the current run. */
   saved: number;
@@ -23,7 +26,7 @@ export function BundleNode({ data }: NodeProps<BundleNodeType>) {
   return (
     <div
       onClick={e => { e.stopPropagation(); data.onSelect(); }}
-      title={`${data.count} datasets — click to preview the latest`}
+      title={`${data.label}${data.range ? ` [${data.range}]` : ''} — ${data.count} datasets, click to preview the latest`}
       style={{
         background: isParam ? 'var(--bg-param)' : 'var(--bg-dataset)',
         border: `1.5px ${style} ${color}`,
@@ -47,6 +50,7 @@ export function BundleNode({ data }: NodeProps<BundleNodeType>) {
       </div>
 
       <div style={{ fontSize: 15, color: 'var(--text-dim)', marginTop: 2 }}>
+        {data.range != null && `[${data.range}] `}
         {data.saved > 0
           ? `↑ ${data.saved}/${data.count} saved`
           : data.loaded > 0
