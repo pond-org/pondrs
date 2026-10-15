@@ -1,6 +1,8 @@
 //! `VizHook`: fires HTTP events to a running viz server during pipeline execution.
 
+use std::collections::VecDeque;
 use std::prelude::v1::*;
+use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
@@ -41,13 +43,20 @@ pub struct VizEvent {
     pub dataset_name: Option<String>,
 }
 
+/// Most events [`VizHook`] holds while the viz server is unreachable; past
+/// this the oldest are dropped.
+const MAX_UNSENT: usize = 10_000;
+
 /// Hook that POSTs execution events to a viz server.
 ///
-/// Fire-and-forget: HTTP errors are silently ignored so a down viz server
-/// never crashes the pipeline.
+/// Never fails the pipeline: events the server cannot be reached for are
+/// held (up to [`MAX_UNSENT`]) and replayed in order once it answers, so a
+/// viz server started mid-run still learns what ran before it. An event the
+/// server rejects is dropped.
 pub struct VizHook {
     base_url: String,
     timings: TimingTracker<String>,
+    unsent: Mutex<VecDeque<VizEvent>>,
 }
 
 impl VizHook {
@@ -55,12 +64,30 @@ impl VizHook {
         Self {
             base_url,
             timings: TimingTracker::new(),
+            unsent: Mutex::new(VecDeque::new()),
         }
     }
 
+    /// Queue `event` behind any unsent ones and send as many as the server
+    /// takes. The lock is held while posting so events arrive in order even
+    /// when nodes run in parallel.
     fn send(&self, event: &VizEvent) {
         let url = format!("{}/api/status", self.base_url);
-        let _ = ureq::post(&url).send_json(event);
+        let mut unsent = self.unsent.lock().unwrap_or_else(PoisonError::into_inner);
+        if unsent.len() == MAX_UNSENT {
+            unsent.pop_front();
+        }
+        unsent.push_back(event.clone());
+        while let Some(next) = unsent.front() {
+            match ureq::post(&url).send_json(next) {
+                // Delivered, or refused for good: either way it is done.
+                Ok(_) | Err(ureq::Error::StatusCode(_)) => {
+                    unsent.pop_front();
+                }
+                // Server unreachable: keep everything for the next attempt.
+                Err(_) => break,
+            }
+        }
     }
 
     fn ds_timing_key(ds: &DatasetRef<'_>) -> String {

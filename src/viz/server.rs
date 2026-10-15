@@ -95,7 +95,15 @@ async fn post_status(
     use crate::viz::VizEventKind;
     match event.kind {
         VizEventKind::BeforeNodeRun | VizEventKind::BeforePipelineRun => {
-            state.node_statuses.lock().unwrap().insert(
+            let mut statuses = state.node_statuses.lock().unwrap();
+            // A node starting again means a new run: drop the previous run's
+            // state so the `/api/status` snapshot describes this run only (the
+            // frontend applies the same rule to its live events).
+            if event.kind == VizEventKind::BeforeNodeRun && statuses.contains_key(&event.node_name) {
+                statuses.clear();
+                state.dataset_activity.lock().unwrap().clear();
+            }
+            statuses.insert(
                 event.node_name.clone(),
                 NodeStatus { status: "running".to_string(), duration_ms: None, error: None },
             );

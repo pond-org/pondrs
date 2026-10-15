@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { VizEvent, NodeStatus, DatasetActivity } from '../api/types';
-import { isStaticMode } from '../api/client';
+import { fetchStatus, isStaticMode } from '../api/client';
 
 export interface LiveStatus {
   nodes: Record<string, NodeStatus>;
@@ -32,8 +32,21 @@ export function useWebSocket(): LiveStatus {
     const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
     wsRef.current = ws;
 
-    ws.onopen = () =>
-      setStatus(prev => ({ ...prev, connected: true, reconnectCount: prev.reconnectCount + 1 }));
+    ws.onopen = () => {
+      // Events sent while we were away are lost, so start from the server's
+      // snapshot of the current run. Live events received before the snapshot
+      // arrives are at least as new, so they take precedence over it.
+      setStatus(prev => ({
+        ...prev, nodes: {}, datasets: {}, connected: true, reconnectCount: prev.reconnectCount + 1,
+      }));
+      fetchStatus()
+        .then(snap => setStatus(prev => ({
+          ...prev,
+          nodes: { ...snap.nodes, ...prev.nodes },
+          datasets: { ...snap.datasets, ...prev.datasets },
+        })))
+        .catch(() => {});
+    };
 
     ws.onclose = () => {
       setStatus(prev => ({ ...prev, connected: false }));

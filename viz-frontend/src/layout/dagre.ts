@@ -44,6 +44,10 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
       position: { x: pos.x - w / 2, y: pos.y - h / 2 },
       width: w,
       height: h,
+      // Without `measured`, ReactFlow drops a node's handle bounds whenever the
+      // node object is replaced (every status event) and only re-measures on a
+      // resize, so edges to nodes that kept their DOM element vanish.
+      measured: { width: w, height: h },
     };
   });
 }
