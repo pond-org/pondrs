@@ -44,7 +44,7 @@ const SHADOW_COLOR: Record<StatusKind, string> = {
 };
 
 /** Segmented bar: completed, errored and running leaves, over the pending rest. */
-function ProgressBar({ progress }: { progress: GroupProgress }) {
+export function ProgressBar({ progress }: { progress: GroupProgress }) {
   const { total, completed, running, error } = progress;
   if (total === 0) return null;
   const pct = (n: number) => `${(n / total) * 100}%`;

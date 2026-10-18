@@ -5,6 +5,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -17,11 +18,17 @@ import { useGraph } from '../hooks/useGraph';
 import { LeafNode } from './nodes/LeafNode';
 import { DatasetNode } from './nodes/DatasetNode';
 import { PipelineNode } from './nodes/PipelineNode';
+import { BundleNode } from './nodes/BundleNode';
+import { StubNode } from './nodes/StubNode';
+import { GroupPager } from './GroupPager';
+import type { PageState } from '../util/paging';
 
 const nodeTypes: NodeTypes = {
   leaf: LeafNode as never,
   dataset: DatasetNode as never,
   pipeline: PipelineNode as never,
+  bundle: BundleNode as never,
+  stub: StubNode as never,
 };
 
 export type CenterRequest = { id: string; tick: number };
@@ -34,6 +41,8 @@ interface Props {
   onNodeSelect: (name: string) => void;
   onTogglePipeline: (id: number) => void;
   expandedPipelines: Set<number>;
+  pages: Map<number, PageState>;
+  onPageChange: (groupId: number, patch: Partial<PageState>) => void;
   isDark: boolean;
   centerRequest: CenterRequest | null;
   onPaneClick: () => void;
@@ -62,17 +71,17 @@ function CenterController({ centerRequest }: { centerRequest: CenterRequest | nu
 export function GraphView({
   graph, nodeStatuses, datasetActivity,
   onDatasetSelect, onNodeSelect, onTogglePipeline, expandedPipelines,
-  isDark, centerRequest, onPaneClick,
+  pages, onPageChange, isDark, centerRequest, onPaneClick,
 }: Props) {
   const stableOnDatasetSelect = useCallback(onDatasetSelect, [onDatasetSelect]);
   const stableOnNodeSelect = useCallback(onNodeSelect, [onNodeSelect]);
   const stableOnTogglePipeline = useCallback(onTogglePipeline, [onTogglePipeline]);
 
-  const { nodes: layoutedNodes, edges: layoutedEdges } = useGraph(
+  const { nodes: layoutedNodes, edges: layoutedEdges, pagers } = useGraph(
     graph, nodeStatuses, datasetActivity,
     stableOnDatasetSelect, stableOnNodeSelect,
     stableOnTogglePipeline, expandedPipelines,
-    isDark,
+    pages, onPageChange, isDark,
   );
 
   const [, , onNodesChange] = useNodesState(layoutedNodes);
@@ -82,13 +91,13 @@ export function GraphView({
   const syncedEdges = useMemo(() => layoutedEdges, [layoutedEdges]);
 
   const minimapNodeColor = useCallback((node: { type?: string; data?: Record<string, unknown> }) => {
-    if (node.type === 'dataset') {
+    if (node.type === 'dataset' || node.type === 'bundle') {
       return node.data?.is_param
         ? (isDark ? '#6366f1' : '#4f46e5')
         : (isDark ? '#4ade80' : '#16a34a');
     }
     if (node.type === 'leaf') return isDark ? '#6a6a6a' : '#888888';
-    if (node.type === 'pipeline') return isDark ? '#8b5cf6' : '#7c3aed';
+    if (node.type === 'pipeline' || node.type === 'stub') return isDark ? '#8b5cf6' : '#7c3aed';
     return 'transparent';
   }, [isDark]);
 
@@ -120,6 +129,9 @@ export function GraphView({
           maskColor={isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.5)'}
           style={minimapStyle}
         />
+        <Panel position="top-left">
+          <GroupPager pagers={pagers} onPageChange={onPageChange} />
+        </Panel>
         <CenterController centerRequest={centerRequest} />
       </ReactFlow>
     </div>

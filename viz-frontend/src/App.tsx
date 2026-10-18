@@ -6,6 +6,7 @@ import { GraphView, type CenterRequest } from './components/GraphView';
 import { DatasetPanel, type PanelSelection } from './components/DatasetPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { StatusBar } from './components/StatusBar';
+import { DEFAULT_PAGE, type PageState } from './util/paging';
 
 const LEFT_W = 240;
 
@@ -23,6 +24,17 @@ export function App() {
       const next = new Set(prev);
       if (next.has(nodeId)) next.delete(nodeId);
       else next.add(nodeId);
+      return next;
+    });
+  }, []);
+
+  // Window over the children of each paged group, keyed by group id.
+  const [pages, setPages] = useState<Map<number, PageState>>(new Map());
+
+  const changePage = useCallback((groupId: number, patch: Partial<PageState>) => {
+    setPages(prev => {
+      const next = new Map(prev);
+      next.set(groupId, { ...DEFAULT_PAGE, ...prev.get(groupId), ...patch });
       return next;
     });
   }, []);
@@ -217,6 +229,8 @@ export function App() {
             onNodeSelect={handleNodeSelect}
             onTogglePipeline={togglePipeline}
             expandedPipelines={expandedPipelines}
+            pages={pages}
+            onPageChange={changePage}
             isDark={isDark}
             centerRequest={centerRequest}
             onPaneClick={handlePaneClick}

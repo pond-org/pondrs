@@ -122,7 +122,7 @@ The typical workflow is:
 1. Start the viz server: `my_app viz --port 8080`
 2. In another terminal, run the pipeline with `VizHook` attached
 
-`VizHook` is **fire-and-forget** — it silently ignores HTTP errors, so a missing viz server won't crash your pipeline. It tracks:
+`VizHook` never fails your pipeline: while the viz server is unreachable it holds its events, and replays them in order once the server answers, so a viz server started mid-run still shows the nodes that ran before it. It tracks:
 
 - Node start/end/error events
 - Dataset load/save durations

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { VizGraph, VizNode, VizDataset, NodeStatus, DatasetActivity } from '../api/types';
 import type { PanelSelection } from './DatasetPanel';
+import { shortName, localName, compareNatural } from '../util/sequences';
 
 interface Props {
   graph: VizGraph | null;
@@ -282,48 +283,80 @@ function NodeTree({
   );
 }
 
-const shortName = (name: string) => name.replace(/^(catalog|params)\./, '');
-
-/** A step's own name: the last segment of its path. The tree's indentation shows the rest. */
-const localName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
-
 type DatasetEntry =
-  | { kind: 'single'; ds: VizDataset }
-  | { kind: 'group'; key: string; members: VizDataset[] };
+  | { kind: 'leaf'; ds: VizDataset; label: string }
+  | { kind: 'folder'; path: string; label: string; ids: number[]; children: DatasetEntry[] };
+
+interface PathNode {
+  path: string;
+  ds: VizDataset | null;
+  children: Map<string, PathNode>;
+  /** Ids of every dataset at or below this node. */
+  ids: number[];
+}
 
 /**
- * Fold datasets that live in one sequence (`checkpoints.0`, `checkpoints.1`, …
- * or `epochs.0.weights`, `epochs.1.weights`, …) under the path before their
- * first numeric segment. Groups appear where their first member did; a
- * "sequence" of one is left as a plain item.
+ * Arrange datasets as a tree over their dotted names, so every prefix shared
+ * by several datasets becomes a folder: `epochs` › `0` › `metrics`, `weights`,
+ * or `stores` › `north` › `inventory`. A prefix holding a single dataset is
+ * not worth a level — it stays one item labelled with the remaining path —
+ * and a folder whose only child is a folder merges with it (`model.layers`).
+ * Top-level entries keep first-appearance order; folder contents sort
+ * naturally, so `10` follows `9`.
  */
-function groupSequences(datasets: VizDataset[]): DatasetEntry[] {
-  const keyOf = (ds: VizDataset): string | null => {
-    const parts = shortName(ds.name).split('.');
-    const i = parts.findIndex(p => /^\d+$/.test(p));
-    return i > 0 ? parts.slice(0, i).join('.') : null;
-  };
-  const members = new Map<string, VizDataset[]>();
+function datasetTree(datasets: VizDataset[]): DatasetEntry[] {
+  const root: PathNode = { path: '', ds: null, children: new Map(), ids: [] };
   for (const ds of datasets) {
-    const key = keyOf(ds);
-    if (key != null) members.set(key, [...(members.get(key) ?? []), ds]);
-  }
-  const entries: DatasetEntry[] = [];
-  const emitted = new Set<string>();
-  for (const ds of datasets) {
-    const key = keyOf(ds);
-    const group = key != null ? members.get(key)! : null;
-    if (key == null || group == null || group.length < 2) {
-      entries.push({ kind: 'single', ds });
-    } else if (!emitted.has(key)) {
-      emitted.add(key);
-      // Natural order, so `checkpoints.10` follows `checkpoints.9`.
-      const members = [...group].sort((x, y) =>
-        shortName(x.name).localeCompare(shortName(y.name), undefined, { numeric: true }));
-      entries.push({ kind: 'group', key, members });
+    let node = root;
+    node.ids.push(ds.id);
+    for (const seg of shortName(ds.name).split('.')) {
+      let child = node.children.get(seg);
+      if (!child) {
+        child = { path: node.path ? `${node.path}.${seg}` : seg, ds: null, children: new Map(), ids: [] };
+        node.children.set(seg, child);
+      }
+      child.ids.push(ds.id);
+      node = child;
     }
+    node.ds = ds;
   }
-  return entries;
+
+  const entriesOf = (node: PathNode, sort: boolean): DatasetEntry[] => {
+    const kids = [...node.children.entries()];
+    if (sort) kids.sort(([a], [b]) => compareNatural(a, b));
+    return kids.flatMap(([seg, child]) => compact(child, seg));
+  };
+
+  const compact = (node: PathNode, label: string): DatasetEntry[] => {
+    // A name that is both a dataset and a prefix of others shows as both.
+    const own: DatasetEntry[] = node.ds && node.children.size > 0
+      ? [{ kind: 'leaf', ds: node.ds, label }]
+      : [];
+    const below = node.ids.length - own.length;
+    if (below === 1) {
+      let leaf = node;
+      let path = label;
+      while (!leaf.ds || leaf.children.size > 0) {
+        const [[seg, next]] = [...leaf.children.entries()].filter(([, c]) => c.ids.length > 0);
+        path = `${path}.${seg}`;
+        leaf = next;
+      }
+      return [...own, { kind: 'leaf', ds: leaf.ds!, label: path }];
+    }
+    if (!node.ds && node.children.size === 1) {
+      const [[seg, only]] = [...node.children.entries()];
+      return compact(only, `${label}.${seg}`);
+    }
+    return [...own, {
+      kind: 'folder',
+      path: node.path,
+      label,
+      ids: own.length > 0 ? node.ids.filter(id => id !== node.ds!.id) : node.ids,
+      children: entriesOf(node, true),
+    }];
+  };
+
+  return entriesOf(root, false);
 }
 
 interface DatasetListProps {
@@ -335,16 +368,16 @@ interface DatasetListProps {
 }
 
 function DatasetList({ datasets, datasetActivity, selection, onSelect, dimmed }: DatasetListProps) {
-  // Groups start collapsed; toggling records an explicit choice per group.
+  // Folders start collapsed; toggling records an explicit choice per folder.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+  const [hoveredFolder, setHoveredFolder] = useState<string | null>(null);
 
   const isActive = (id: number) => selection?.kind === 'dataset' && selection.id === id;
 
-  const item = (ds: VizDataset, indent = 0) => (
+  const item = (ds: VizDataset, label: string, indent: number) => (
     <Item
       key={ds.id}
-      label={shortName(ds.name)}
+      label={label}
       active={isActive(ds.id)}
       dimmed={dimmed}
       indent={indent}
@@ -359,76 +392,74 @@ function DatasetList({ datasets, datasetActivity, selection, onSelect, dimmed }:
     />
   );
 
+  const render = (entry: DatasetEntry, indent: number): React.ReactNode => {
+    if (entry.kind === 'leaf') return item(entry.ds, entry.label, indent);
+
+    const { path, label, ids, children } = entry;
+    // Selecting a member (e.g. by clicking it in the graph) reveals it,
+    // unless the user has explicitly collapsed the folder.
+    const containsActive = ids.some(isActive);
+    const open = toggled[path] ?? containsActive;
+    return (
+      <div key={`folder-${path}`}>
+        <button
+          onClick={() => setToggled(t => ({ ...t, [path]: !open }))}
+          onMouseEnter={() => setHoveredFolder(path)}
+          onMouseLeave={() => setHoveredFolder(null)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: containsActive && !open
+              ? 'var(--bg-node-done)'
+              : hoveredFolder === path ? 'var(--bg-tag)' : 'none',
+            border: 'none',
+            borderBottom: '1px solid var(--border)',
+            padding: `7px 14px 7px ${16 + indent * 16}px`,
+            cursor: 'pointer',
+            color: containsActive && !open ? 'var(--color-done)' : dimmed ? 'var(--text-dim)' : 'var(--text-sub)',
+            fontSize: 15,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            textAlign: 'left',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            transition: 'background 0.1s, color 0.1s',
+          }}
+          title={`${path} — ${ids.length} datasets`}
+        >
+          <span style={{
+            fontSize: 11,
+            opacity: 0.7,
+            transition: 'transform 0.15s',
+            display: 'inline-block',
+            transform: open ? 'rotate(90deg)' : 'none',
+            flexShrink: 0,
+          }}>▶</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+          <span style={{
+            fontSize: 11,
+            color: 'var(--text-dimmer)',
+            background: 'var(--bg-tag)',
+            border: '1px solid var(--border-tag)',
+            borderRadius: 8,
+            padding: '0 5px',
+            flexShrink: 0,
+            marginLeft: 'auto',
+          }}>
+            {ids.length}
+          </span>
+        </button>
+        {open && children.map(c => render(c, indent + 1))}
+      </div>
+    );
+  };
+
   if (datasets.length === 0) {
     return <div style={{ padding: '8px 14px', fontSize: 14, color: 'var(--text-dim)' }}>—</div>;
   }
 
-  return (
-    <>
-      {groupSequences(datasets).map(entry => {
-        if (entry.kind === 'single') return item(entry.ds);
-
-        const { key, members } = entry;
-        // Selecting a member (e.g. by clicking it in the graph) reveals it,
-        // unless the user has explicitly collapsed the group.
-        const containsActive = members.some(m => isActive(m.id));
-        const open = toggled[key] ?? containsActive;
-        return (
-          <div key={`group-${key}`}>
-            <button
-              onClick={() => setToggled(t => ({ ...t, [key]: !open }))}
-              onMouseEnter={() => setHoveredGroup(key)}
-              onMouseLeave={() => setHoveredGroup(null)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                background: containsActive && !open
-                  ? 'var(--bg-node-done)'
-                  : hoveredGroup === key ? 'var(--bg-tag)' : 'none',
-                border: 'none',
-                borderBottom: '1px solid var(--border)',
-                padding: '7px 14px 7px 16px',
-                cursor: 'pointer',
-                color: containsActive && !open ? 'var(--color-done)' : dimmed ? 'var(--text-dim)' : 'var(--text-sub)',
-                fontSize: 15,
-                fontFamily: 'Inter, system-ui, sans-serif',
-                textAlign: 'left',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                transition: 'background 0.1s, color 0.1s',
-              }}
-              title={`${key} — ${members.length} datasets`}
-            >
-              <span style={{
-                fontSize: 11,
-                opacity: 0.7,
-                transition: 'transform 0.15s',
-                display: 'inline-block',
-                transform: open ? 'rotate(90deg)' : 'none',
-                flexShrink: 0,
-              }}>▶</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{key}</span>
-              <span style={{
-                fontSize: 11,
-                color: 'var(--text-dimmer)',
-                background: 'var(--bg-tag)',
-                border: '1px solid var(--border-tag)',
-                borderRadius: 8,
-                padding: '0 5px',
-                flexShrink: 0,
-                marginLeft: 'auto',
-              }}>
-                {members.length}
-              </span>
-            </button>
-            {open && members.map(m => item(m, 1))}
-          </div>
-        );
-      })}
-    </>
-  );
+  return <>{datasetTree(datasets).map(e => render(e, 0))}</>;
 }
 
 export function LeftPanel({

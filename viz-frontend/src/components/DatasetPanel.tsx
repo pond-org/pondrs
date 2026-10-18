@@ -341,7 +341,7 @@ export function DatasetPanel({ selection, onClose, isDark, reconnectCount }: Pro
               {!loading && html && (
                 <iframe
                   srcDoc={themedHtml}
-                  sandbox="allow-scripts allow-same-origin"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                   style={{ flex: 1, width: '100%', border: 'none', margin: '8px 0 18px', background: isDark ? '#141414' : '#ffffff' }}
                   title="dataset preview"
                 />
