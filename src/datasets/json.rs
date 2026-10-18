@@ -40,13 +40,7 @@ impl Dataset for JsonDataset {
     fn remover(&self) -> Option<super::Remover> { self.file_remover() }
 
     fn html(&self) -> Option<String> {
-        let content = std::fs::read_to_string(&self.path).ok()?;
-        let value: Value = serde_json::from_str(&content).ok()?;
-        let pretty = serde_json::to_string_pretty(&value).ok()?;
-        Some(format!(
-            "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">{}</pre>",
-            super::html_escape(&pretty)
-        ))
+        json_html(&self.path, HTML_PREVIEW_LIMIT)
     }
 }
 
@@ -57,6 +51,28 @@ impl FileDataset for JsonDataset {
     fn set_path(&mut self, path: &str) {
         self.path = path.to_string();
     }
+}
+
+/// Files larger than this many bytes get a size notice instead of a
+/// pretty-printed preview from `html()`, so viz doesn't stall reading them.
+pub(crate) const HTML_PREVIEW_LIMIT: u64 = 1024 * 1024;
+
+/// Pretty-printed `<pre>` preview of the JSON file at `path`, or a short size
+/// notice if the file is larger than `limit` bytes. `None` if the file is
+/// missing or not valid JSON.
+pub(crate) fn json_html(path: &str, limit: u64) -> Option<String> {
+    const PRE: &str = "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">";
+    let size = std::fs::metadata(path).ok()?.len();
+    if size > limit {
+        return Some(format!(
+            "{PRE}{}: {size} bytes, too large to preview (limit {limit} bytes)</pre>",
+            super::html_escape(path)
+        ));
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let value: Value = serde_json::from_slice(&bytes).ok()?;
+    let pretty = serde_json::to_string_pretty(&value).ok()?;
+    Some(format!("{PRE}{}</pre>", super::html_escape(&pretty)))
 }
 
 #[cfg(test)]

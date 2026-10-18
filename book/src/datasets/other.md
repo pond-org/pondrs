@@ -26,9 +26,29 @@ All built-in dataset types, their feature flags, and typical use cases.
 | `PolarsParquetDataset` | `polars` | `DataFrame` / `DataFrame` | Parquet files via Polars. |
 | `PolarsExcelDataset` | `polars` | `DataFrame` / — | Excel files via fastexcel. Read-only. |
 | `JsonDataset` | `json` | `serde_json::Value` / `serde_json::Value` | JSON files. |
+| `TypedJsonDataset<T>` | `json` | `T` / `T` | JSON files parsed straight into a serde type. See [below](#typed-json). |
 | `YamlDataset` | `yaml` | `Vec<Yaml>` / `Vec<Yaml>` | YAML files using `yaml_rust2`. |
 | `PlotlyDataset` | `plotly` | `serde_json::Value` / `serde_json::Value` | Plotly charts. Saves `.json` + `.html`. Custom `html()` for viz. |
 | `ImageDataset` | `image` | `DynamicImage` / `DynamicImage` | Image files via the `image` crate. |
+
+### Typed JSON
+
+`JsonDataset` loads a `serde_json::Value`, which suits small or schemaless files. For large files, or ones with a known shape, use `TypedJsonDataset<T>`: the file is parsed directly into `T`, and fields `T` doesn't declare are skipped while parsing, so they never take up memory. A `Value` tree costs many times the file size (COCO's 448 MB `instances_train2017.json` takes about 4 GB), while a struct declaring only the fields a pipeline needs stays small. Peak memory during a load is the file size plus `T`. Nodes also get a typed value, with no `serde_json::from_value` step.
+
+```rust,ignore
+#[derive(Serialize, Deserialize)]
+struct Catalog {
+    annotations: TypedJsonDataset<CocoAnnotations>,
+}
+```
+
+```yaml
+annotations: { path: "data/coco/annotations/instances_train2017.json" }
+```
+
+`T` must be `Serialize + DeserializeOwned` for the dataset to load and save, but the catalog entry itself only holds a path. The dataset is `Send + Sync + Clone` whatever `T` is, and it implements `FileDataset`, so it works inside `PartitionedDataset`.
+
+For both JSON datasets, viz shows only the path and size of files over 1 MiB, rather than reading and pretty-printing them.
 
 ## Partitioned datasets
 
@@ -55,4 +75,4 @@ pub trait FileDataset: Dataset + Clone {
 }
 ```
 
-Implementors: `PolarsCsvDataset`, `PolarsParquetDataset`, `PolarsExcelDataset`, `TextDataset`, `JsonDataset`, `ImageDataset`, `LazyDataset<D>`.
+Implementors: `PolarsCsvDataset`, `PolarsParquetDataset`, `PolarsExcelDataset`, `TextDataset`, `JsonDataset`, `TypedJsonDataset<T>`, `ImageDataset`, `LazyDataset<D>`.
