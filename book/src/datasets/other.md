@@ -48,7 +48,7 @@ annotations: { path: "data/coco/annotations/instances_train2017.json" }
 
 `T` must be `Serialize + DeserializeOwned` for the dataset to load and save, but the catalog entry itself only holds a path. The dataset is `Send + Sync + Clone` whatever `T` is, and it implements `FileDataset`, so it works inside `PartitionedDataset`.
 
-For both JSON datasets, viz shows only the path and size of files over 1 MiB, rather than reading and pretty-printing them.
+In viz, both JSON datasets preview the file pretty-printed, with every array (at any depth) cut to its first 50 items and a `"… N more items"` marker, so a long list stays readable. Files over 16 MiB aren't read at all; the preview shows only their path and size.
 
 ## Partitioned datasets
 
