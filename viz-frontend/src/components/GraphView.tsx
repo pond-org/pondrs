@@ -20,6 +20,7 @@ import { DatasetNode } from './nodes/DatasetNode';
 import { PipelineNode } from './nodes/PipelineNode';
 import { BundleNode } from './nodes/BundleNode';
 import { StubNode } from './nodes/StubNode';
+import { GroupNode } from './nodes/GroupNode';
 import { GroupPager } from './GroupPager';
 import type { PageState } from '../util/paging';
 
@@ -29,6 +30,7 @@ const nodeTypes: NodeTypes = {
   pipeline: PipelineNode as never,
   bundle: BundleNode as never,
   stub: StubNode as never,
+  box: GroupNode as never,
 };
 
 export type CenterRequest = { id: string; tick: number };
@@ -44,26 +46,25 @@ interface Props {
   pages: Map<number, PageState>;
   onPageChange: (groupId: number, patch: Partial<PageState>) => void;
   isDark: boolean;
+  boxes: boolean;
   centerRequest: CenterRequest | null;
   onPaneClick: () => void;
 }
 
 // Rendered inside ReactFlow so it has access to useReactFlow().
 function CenterController({ centerRequest }: { centerRequest: CenterRequest | null }) {
-  const { setCenter, getNode } = useReactFlow();
+  const { setCenter, getInternalNode } = useReactFlow();
 
   useEffect(() => {
     if (!centerRequest) return;
-    const node = getNode(centerRequest.id);
+    const node = getInternalNode(centerRequest.id);
     if (!node) return;
     const w = node.measured?.width ?? node.width ?? 180;
     const h = node.measured?.height ?? node.height ?? 50;
-    setCenter(
-      node.position.x + w / 2,
-      node.position.y + h / 2,
-      { zoom: 1.2, duration: 600 },
-    );
-  }, [centerRequest, getNode, setCenter]);
+    // `position` is relative to the enclosing box, if any.
+    const { x, y } = node.internals.positionAbsolute;
+    setCenter(x + w / 2, y + h / 2, { zoom: 1.2, duration: 600 });
+  }, [centerRequest, getInternalNode, setCenter]);
 
   return null;
 }
@@ -71,7 +72,7 @@ function CenterController({ centerRequest }: { centerRequest: CenterRequest | nu
 export function GraphView({
   graph, nodeStatuses, datasetActivity,
   onDatasetSelect, onNodeSelect, onTogglePipeline, expandedPipelines,
-  pages, onPageChange, isDark, centerRequest, onPaneClick,
+  pages, onPageChange, isDark, boxes, centerRequest, onPaneClick,
 }: Props) {
   const stableOnDatasetSelect = useCallback(onDatasetSelect, [onDatasetSelect]);
   const stableOnNodeSelect = useCallback(onNodeSelect, [onNodeSelect]);
@@ -81,7 +82,7 @@ export function GraphView({
     graph, nodeStatuses, datasetActivity,
     stableOnDatasetSelect, stableOnNodeSelect,
     stableOnTogglePipeline, expandedPipelines,
-    pages, onPageChange, isDark,
+    pages, onPageChange, isDark, boxes,
   );
 
   const [, , onNodesChange] = useNodesState(layoutedNodes);
@@ -98,6 +99,7 @@ export function GraphView({
     }
     if (node.type === 'leaf') return isDark ? '#6a6a6a' : '#888888';
     if (node.type === 'pipeline' || node.type === 'stub') return isDark ? '#8b5cf6' : '#7c3aed';
+    if (node.type === 'box') return isDark ? 'rgba(139, 92, 246, 0.12)' : 'rgba(124, 58, 237, 0.08)';
     return 'transparent';
   }, [isDark]);
 
