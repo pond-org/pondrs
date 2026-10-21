@@ -9,12 +9,14 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  type Edge,
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import type { VizGraph, NodeStatus, DatasetActivity } from '../api/types';
 import { useGraph } from '../hooks/useGraph';
+import type { ViewOptions } from '../util/view';
 import { LeafNode } from './nodes/LeafNode';
 import { DatasetNode } from './nodes/DatasetNode';
 import { PipelineNode } from './nodes/PipelineNode';
@@ -45,8 +47,7 @@ interface Props {
   expandedPipelines: Set<number>;
   pages: Map<number, PageState>;
   onPageChange: (groupId: number, patch: Partial<PageState>) => void;
-  isDark: boolean;
-  boxes: boolean;
+  view: ViewOptions;
   centerRequest: CenterRequest | null;
   onPaneClick: () => void;
 }
@@ -72,8 +73,9 @@ function CenterController({ centerRequest }: { centerRequest: CenterRequest | nu
 export function GraphView({
   graph, nodeStatuses, datasetActivity,
   onDatasetSelect, onNodeSelect, onTogglePipeline, expandedPipelines,
-  pages, onPageChange, isDark, boxes, centerRequest, onPaneClick,
+  pages, onPageChange, view, centerRequest, onPaneClick,
 }: Props) {
+  const isDark = view.theme === 'dark';
   const stableOnDatasetSelect = useCallback(onDatasetSelect, [onDatasetSelect]);
   const stableOnNodeSelect = useCallback(onNodeSelect, [onNodeSelect]);
   const stableOnTogglePipeline = useCallback(onTogglePipeline, [onTogglePipeline]);
@@ -82,7 +84,7 @@ export function GraphView({
     graph, nodeStatuses, datasetActivity,
     stableOnDatasetSelect, stableOnNodeSelect,
     stableOnTogglePipeline, expandedPipelines,
-    pages, onPageChange, isDark, boxes,
+    pages, onPageChange, view,
   );
 
   const [, , onNodesChange] = useNodesState(layoutedNodes);
@@ -90,6 +92,12 @@ export function GraphView({
 
   const syncedNodes = useMemo(() => layoutedNodes, [layoutedNodes]);
   const syncedEdges = useMemo(() => layoutedEdges, [layoutedEdges]);
+
+  // An edge standing in for one hidden dataset selects that dataset.
+  const onEdgeClick = useCallback((_: unknown, edge: Edge) => {
+    const id = edge.data?.datasetId;
+    if (typeof id === 'number') stableOnDatasetSelect(id);
+  }, [stableOnDatasetSelect]);
 
   const minimapNodeColor = useCallback((node: { type?: string; data?: Record<string, unknown> }) => {
     if (node.type === 'dataset' || node.type === 'bundle') {
@@ -122,6 +130,7 @@ export function GraphView({
         minZoom={0.2}
         colorMode={isDark ? 'dark' : 'light'}
         onPaneClick={onPaneClick}
+        onEdgeClick={onEdgeClick}
       >
         <Background variant={BackgroundVariant.Dots} color="var(--grid-color)" gap={24} size={3} />
         <Controls />

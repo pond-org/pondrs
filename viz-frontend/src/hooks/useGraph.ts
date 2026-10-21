@@ -12,6 +12,7 @@ import type { GroupNodeData } from '../components/nodes/GroupNode';
 import { leafProgress, groupStatus } from '../util/status';
 import { DEFAULT_PAGE, isPaged, pageWindow, type PageState } from '../util/paging';
 import { chain, commonBox } from '../util/grouping';
+import type { ViewOptions } from '../util/view';
 import { compareNatural, localName, sequenceIndex, sequencePattern, shortName } from '../util/sequences';
 
 /**
@@ -68,13 +69,14 @@ export function useGraph(
   expandedPipelines: Set<number>,
   pages: Map<number, PageState>,
   onPageChange: (groupId: number, patch: Partial<PageState>) => void,
-  isDark: boolean,
-  boxes: boolean,
+  view: ViewOptions,
 ): { nodes: Node[]; edges: Edge[]; pagers: PagerInfo[] } {
+  // Only the fields used, so the memo does not depend on the whole object.
+  const { theme, boxes, datasets: showDatasets, params: showParams } = view;
   return useMemo(() => {
     if (!graph) return { nodes: [], edges: [], pagers: [] };
 
-    const markerColor = isDark ? '#777' : '#999';
+    const markerColor = theme === 'dark' ? '#777' : '#999';
 
     const nodesById = new Map<number, VizNode>();
     for (const n of graph.nodes) nodesById.set(n.id, n);
@@ -214,7 +216,19 @@ export function useGraph(
       for (const id of step.outputs) producers.set(id, [...(producers.get(id) ?? []), step.rfId]);
       for (const id of step.inputs) consumers.set(id, [...(consumers.get(id) ?? []), step.rfId]);
     }
-    const visibleIds = [...new Set([...producers.keys(), ...consumers.keys()])];
+
+    // Hidden datasets. Params go entirely (nothing produces them, so nothing
+    // needs reconnecting). A dataset passed between visible steps becomes an
+    // edge from each producer to each consumer; sources and sinks stay, so the
+    // pipeline's ends remain visible.
+    const passed = (id: number) => producers.has(id) && consumers.has(id);
+    const hidden = (id: number) => {
+      const ds = datasetsById.get(id);
+      if (!ds) return false;
+      return ds.is_param ? !showParams : !showDatasets && passed(id);
+    };
+    const touchedIds = [...new Set([...producers.keys(), ...consumers.keys()])];
+    const visibleIds = touchedIds.filter(id => !hidden(id));
     const signature = (id: number) =>
       `${[...(producers.get(id) ?? [])].sort().join(',')}>${[...(consumers.get(id) ?? [])].sort().join(',')}`;
 
@@ -298,7 +312,7 @@ export function useGraph(
 
     // Edges, deduplicated: a bundle is joined to each step once.
     const edgeIds = new Set<string>();
-    const pushEdge = (source: string, target: string) => {
+    const pushEdge = (source: string, target: string, extra: Partial<Edge> = {}) => {
       const id = `e-${source}-${target}`;
       if (edgeIds.has(id)) return;
       edgeIds.add(id);
@@ -309,6 +323,7 @@ export function useGraph(
         type: 'smoothstep',
         style: { stroke: 'var(--edge-color)', strokeWidth: 2 },
         markerEnd: { type: MarkerType.ArrowClosed, color: markerColor, width: 10, height: 10 },
+        ...extra,
       });
     };
     for (const step of steps) {
@@ -322,10 +337,42 @@ export function useGraph(
       }
     }
 
+
+    // Step-to-step edges standing in for hidden datasets: one per
+    // (producer, consumer), labelled with what it carries. One carrying a
+    // single dataset selects it when clicked.
+    const carried = new Map<string, { source: string; target: string; carries: VizDataset[] }>();
+    for (const id of touchedIds) {
+      const ds = datasetsById.get(id);
+      if (!ds || ds.is_param || !hidden(id)) continue;
+      for (const source of producers.get(id) ?? []) {
+        for (const target of consumers.get(id) ?? []) {
+          if (source === target) continue;
+          const key = `${source}>${target}`;
+          const entry = carried.get(key) ?? { source, target, carries: [] };
+          entry.carries.push(ds);
+          carried.set(key, entry);
+        }
+      }
+    }
+    for (const { source, target, carries } of carried.values()) {
+      const single = carries.length === 1 ? carries[0] : null;
+      pushEdge(source, target, {
+        label: single ? shortName(single.name) : `${carries.length} datasets`,
+        labelStyle: single
+          ? { fill: 'var(--color-dataset)', fontSize: 12, cursor: 'pointer' }
+          : { fill: 'var(--text-muted)', fontSize: 12 },
+        labelBgStyle: { fill: 'var(--bg-canvas)' },
+        labelBgPadding: [4, 2],
+        data: single ? { datasetId: single.id } : undefined,
+        ...(single ? { style: { stroke: 'var(--edge-color)', strokeWidth: 2, cursor: 'pointer' } } : {}),
+      });
+    }
+
     const laid = layoutNodes(rfNodes, rfEdges);
     return { nodes: laid, edges: rfEdges, pagers };
   }, [
     graph, nodeStatuses, datasetActivity, onDatasetSelect, onNodeSelect, onTogglePipeline,
-    expandedPipelines, pages, onPageChange, isDark, boxes,
+    expandedPipelines, pages, onPageChange, theme, boxes, showDatasets, showParams,
   ]);
 }

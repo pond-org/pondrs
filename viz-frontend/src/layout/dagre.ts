@@ -9,6 +9,10 @@ const DS_H = 56;
 const BUNDLE_W = 210; // sequence labels carry an index range
 const BUNDLE_H = 64;
 
+/** Room dagre reserves for an edge label, per character and in height. */
+const EDGE_LABEL_CHAR_W = 7;
+const EDGE_LABEL_H = 18;
+
 /** Room above a group box's children for its header. */
 export const GROUP_HEADER_H = 64;
 /** Gap between a group box's border and its children. */
@@ -78,7 +82,7 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
       const { w, h } = size.get(kid.id)!;
       g.setNode(kid.id, { width: w, height: h });
     }
-    for (const { source, target } of edges) {
+    for (const { source, target, label } of edges) {
       const s = childIn(source, container);
       const t = childIn(target, container);
       if (s === undefined && t === undefined) continue;
@@ -87,7 +91,12 @@ export function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
       const to = t ?? OUT;
       if (!g.hasNode(from)) g.setNode(from, { width: 0, height: 0 });
       if (!g.hasNode(to)) g.setNode(to, { width: 0, height: 0 });
-      g.setEdge(from, to);
+      // A labelled edge (one standing in for hidden datasets) gets room
+      // between its ranks for the label.
+      const room = typeof label === 'string'
+        ? { width: label.length * EDGE_LABEL_CHAR_W + 16, height: EDGE_LABEL_H, labelpos: 'c' }
+        : {};
+      g.setEdge(from, to, { ...g.edge(from, to), ...room });
     }
     Dagre.layout(g);
 

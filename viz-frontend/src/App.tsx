@@ -7,25 +7,16 @@ import { DatasetPanel, type PanelSelection } from './components/DatasetPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { StatusBar } from './components/StatusBar';
 import { DEFAULT_PAGE, type PageState } from './util/paging';
+import { useViewOptions } from './util/view';
+import { ViewMenu } from './components/ViewMenu';
 
 const LEFT_W = 240;
-const BOXES_KEY = 'pondrs-viz.boxes';
-
-/** Whether expanded groups are drawn as boxes; remembered per browser. */
-function initialBoxes(): boolean {
-  try {
-    return localStorage.getItem(BOXES_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
 export function App() {
   const [graph, setGraph] = useState<VizGraph | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<PanelSelection | null>(null);
-  const [isDark, setIsDark] = useState(true);
-  const [boxes, setBoxes] = useState(initialBoxes);
+  const [view, setViewOption] = useViewOptions();
+  const isDark = view.theme === 'dark';
   const [leftOpen, setLeftOpen] = useState(true);
   const [centerRequest, setCenterRequest] = useState<CenterRequest | null>(null);
   const [expandedPipelines, setExpandedPipelines] = useState<Set<number>>(new Set());
@@ -55,14 +46,6 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
   }, [isDark]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(BOXES_KEY, boxes ? 'on' : 'off');
-    } catch {
-      // Storage unavailable (private window, blocked site data): not remembered.
-    }
-  }, [boxes]);
 
   // Fetch (or re-fetch) graph on initial load and on every reconnection
   useEffect(() => {
@@ -185,40 +168,7 @@ export function App() {
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setBoxes(b => !b)}
-            title={boxes ? 'Draw expanded groups flat' : 'Draw boxes around expanded groups'}
-            style={{
-              background: boxes ? 'var(--pipeline-bg)' : 'var(--bg-tag)',
-              border: `1px ${boxes ? 'dashed var(--pipeline-border)' : 'solid var(--border-tag)'}`,
-              borderRadius: 8,
-              color: boxes ? 'var(--text-sub)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: 15,
-              lineHeight: 1,
-              padding: '6px 10px',
-            }}
-          >
-            boxes
-          </button>
-          <button
-            onClick={() => setIsDark(d => !d)}
-            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            style={{
-              background: 'var(--bg-tag)',
-              border: '1px solid var(--border-tag)',
-              borderRadius: 8,
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: 18,
-              lineHeight: 1,
-              padding: '4px 10px',
-            }}
-          >
-            {isDark ? '☀' : '☾'}
-          </button>
-        </div>
+        <ViewMenu view={view} onChange={setViewOption} />
       </div>
 
       {/* Left sidebar */}
@@ -266,8 +216,7 @@ export function App() {
             expandedPipelines={expandedPipelines}
             pages={pages}
             onPageChange={changePage}
-            isDark={isDark}
-            boxes={boxes}
+            view={view}
             centerRequest={centerRequest}
             onPaneClick={handlePaneClick}
           />
