@@ -38,6 +38,8 @@ mod partitioned;
 mod polars;
 #[cfg(feature = "json")]
 mod json;
+#[cfg(feature = "json")]
+mod typed_json;
 #[cfg(feature = "std")]
 mod text;
 #[cfg(feature = "yaml")]
@@ -69,6 +71,8 @@ pub use partitioned::PartitionedDataset;
 pub use polars::{PolarsCsvDataset, PolarsExcelDataset, PolarsParquetDataset};
 #[cfg(feature = "json")]
 pub use json::JsonDataset;
+#[cfg(feature = "json")]
+pub use typed_json::TypedJsonDataset;
 #[cfg(feature = "std")]
 pub use text::TextDataset;
 #[cfg(feature = "yaml")]

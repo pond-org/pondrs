@@ -1,7 +1,9 @@
 //! Node filtering for partial pipeline execution.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::prelude::v1::*;
+
+use log::info;
 
 use serde::Serialize;
 
@@ -40,9 +42,12 @@ where
 {
     let graph = build_pipeline_graph(pipe, catalog, params);
 
-    // Resolve filter to the graph indices of the leaves to keep, then to
-    // their ptr-based ids for fast lookup during the tree walk.
-    let keep_ids: HashSet<usize> = resolve_keep_set(&graph, filter)?
+    // Resolve filter to the graph indices of the leaves to keep, add the
+    // producers of any in-memory inputs, then map to ptr-based ids for fast
+    // lookup during the tree walk.
+    let mut keep = resolve_keep_set(&graph, filter)?;
+    add_memory_producers(&graph, &mut keep);
+    let keep_ids: HashSet<usize> = keep
         .into_iter()
         .map(|i| graph.nodes[i].id)
         .collect();
@@ -88,6 +93,28 @@ fn resolve_keep_set(
     }
 }
 
+/// Add to `keep` every leaf that produces a non-persistent input of a kept
+/// leaf, transitively. Such a dataset holds nothing at the start of a run, so
+/// its producer has to run again. The walk stops at persistent datasets
+/// (files, params), which can be loaded instead. Each added leaf is logged.
+fn add_memory_producers(graph: &crate::graph::PipelineGraph<'_>, keep: &mut HashSet<usize>) {
+    let mut needs: HashMap<usize, Vec<usize>> = HashMap::new();
+    for edge in &graph.edges {
+        if !edge.dataset.meta.is_persistent() {
+            needs.entry(edge.to_node).or_default().push(edge.from_node);
+        }
+    }
+    let seeds: Vec<usize> = keep.iter().copied().collect();
+    let mut added: Vec<usize> = reachable(&seeds, &needs)
+        .into_iter()
+        .filter(|&i| keep.insert(i))
+        .collect();
+    added.sort_unstable();
+    for i in added {
+        info!("[filter] also running {}: it produces an in-memory input", graph.nodes[i].path);
+    }
+}
+
 /// Graph indices of the leaves whose path `name` matches.
 fn matching_leaves(
     graph: &crate::graph::PipelineGraph<'_>,
@@ -115,8 +142,8 @@ fn resolve_from_to(
     let leaves = &graph.node_indices;
 
     // Build adjacency lists from edges
-    let mut forward: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
-    let mut backward: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
+    let mut forward: HashMap<usize, Vec<usize>> = HashMap::new();
+    let mut backward: HashMap<usize, Vec<usize>> = HashMap::new();
     for edge in &graph.edges {
         forward.entry(edge.from_node).or_default().push(edge.to_node);
         backward.entry(edge.to_node).or_default().push(edge.from_node);
@@ -142,7 +169,7 @@ fn resolve_from_to(
 /// BFS from seed nodes along the given adjacency.
 fn reachable(
     seeds: &[usize],
-    adj: &std::collections::HashMap<usize, Vec<usize>>,
+    adj: &HashMap<usize, Vec<usize>>,
 ) -> HashSet<usize> {
     let mut visited = HashSet::new();
     let mut queue = std::collections::VecDeque::new();
@@ -262,21 +289,31 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datasets::{MemoryDataset, Param};
+    use crate::datasets::{MemoryDataset, Param, TextDataset};
     use crate::pipeline::{Node, Pipeline};
     use serde::Serialize;
 
+    /// Persistent datasets, so filtering keeps exactly what was selected.
+    /// Their files are never touched: filtering does not load anything.
     #[derive(Serialize)]
     struct Cat {
-        a: MemoryDataset<i32>,
-        b: MemoryDataset<i32>,
-        c: MemoryDataset<i32>,
-        d: MemoryDataset<i32>,
+        a: TextDataset,
+        b: TextDataset,
+        c: TextDataset,
+        d: TextDataset,
+    }
+
+    fn cat() -> Cat {
+        Cat { a: TextDataset::new("a"), b: TextDataset::new("b"), c: TextDataset::new("c"), d: TextDataset::new("d") }
     }
 
     #[derive(Serialize)]
     struct Params {
-        x: Param<i32>,
+        x: Param<String>,
+    }
+
+    fn params() -> Params {
+        Params { x: Param(String::new()) }
     }
 
     /// Helper: collect leaf node names from a Steps.
@@ -303,13 +340,8 @@ mod tests {
 
     #[test]
     fn filter_nodes_flat_pipeline() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
             Node { name: "n2", func: |v| (v,), input: (&cat.a,), output: (&cat.b,) },
@@ -324,13 +356,8 @@ mod tests {
 
     #[test]
     fn filter_nodes_preserves_pipeline_structure() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
             Pipeline {
@@ -358,13 +385,8 @@ mod tests {
 
     #[test]
     fn filter_from_to_subgraph() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         // x -> a (n1) -> b (n2) -> c (n3) -> d (n4)
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
@@ -384,13 +406,8 @@ mod tests {
 
     #[test]
     fn filter_from_only() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
             Node { name: "n2", func: |v| (v,), input: (&cat.a,), output: (&cat.b,) },
@@ -408,13 +425,8 @@ mod tests {
 
     #[test]
     fn filter_to_only() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
             Node { name: "n2", func: |v| (v,), input: (&cat.a,), output: (&cat.b,) },
@@ -432,13 +444,8 @@ mod tests {
 
     #[test]
     fn filter_unknown_node_returns_error() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
         );
@@ -476,8 +483,8 @@ mod tests {
 
     #[test]
     fn filter_by_local_name_selects_every_match() {
-        let cat = Cat { a: MemoryDataset::new(), b: MemoryDataset::new(), c: MemoryDataset::new(), d: MemoryDataset::new() };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = twin_groups(&cat, &params);
 
         let filter = NodeFilter::Nodes(["n2"].iter().map(|s| (*s).to_string()).collect());
@@ -487,8 +494,8 @@ mod tests {
 
     #[test]
     fn filter_by_path_selects_one() {
-        let cat = Cat { a: MemoryDataset::new(), b: MemoryDataset::new(), c: MemoryDataset::new(), d: MemoryDataset::new() };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = twin_groups(&cat, &params);
 
         let filter = NodeFilter::Nodes(["right/n2"].iter().map(|s| (*s).to_string()).collect());
@@ -503,8 +510,8 @@ mod tests {
 
     #[test]
     fn filter_from_path() {
-        let cat = Cat { a: MemoryDataset::new(), b: MemoryDataset::new(), c: MemoryDataset::new(), d: MemoryDataset::new() };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = twin_groups(&cat, &params);
 
         let filter = NodeFilter::FromTo {
@@ -517,13 +524,8 @@ mod tests {
 
     #[test]
     fn filter_skips_empty_pipeline() {
-        let cat = Cat {
-            a: MemoryDataset::new(),
-            b: MemoryDataset::new(),
-            c: MemoryDataset::new(),
-            d: MemoryDataset::new(),
-        };
-        let params = Params { x: Param(1) };
+        let cat = cat();
+        let params = params();
         let pipe = (
             Node { name: "n1", func: |v| (v,), input: (&params.x,), output: (&cat.a,) },
             Pipeline {
@@ -543,5 +545,93 @@ mod tests {
         let mut top_items = Vec::new();
         filtered.for_each_step(&mut |item| top_items.push((item.name(), item.is_leaf())));
         assert_eq!(top_items, [("n1", true)]);
+    }
+
+    /// The shape of a training pipeline: an in-memory `samples` built once,
+    /// then per epoch an in-memory `aug` view of it and a `train` step that
+    /// carries checkpointed weights from one epoch to the next.
+    #[derive(Serialize)]
+    struct Slot {
+        weights: TextDataset,
+        aug: MemoryDataset<String>,
+    }
+
+    #[derive(Serialize)]
+    struct TrainCat {
+        samples: MemoryDataset<String>,
+        init: Slot,
+        epochs: Vec<Slot>,
+    }
+
+    fn train_cat() -> TrainCat {
+        let slot = |k: usize| Slot { weights: TextDataset::new(format!("w{k}")), aug: MemoryDataset::new() };
+        TrainCat { samples: MemoryDataset::new(), init: slot(99), epochs: (0..3).map(slot).collect() }
+    }
+
+    fn train_pipe<'a>(cat: &'a TrainCat, params: &'a Params) -> impl Steps<PondError> + 'a {
+        (
+            Node { name: "samples", func: |v| (v,), input: (&params.x,), output: (&cat.samples,) },
+            crate::pipeline::RecurrentPipeline {
+                name: "epochs",
+                state: &cat.epochs,
+                init: &cat.init,
+                input: |prev, _cur| (&prev.weights, &cat.samples),
+                output: |cur| (&cur.weights,),
+                pipe: |prev, cur| (
+                    Node { name: "augment", func: |v| (v,), input: (&cat.samples,), output: (&cur.aug,) },
+                    Node {
+                        name: "train",
+                        func: |w: String, a: String| (w + &a,),
+                        input: (&prev.weights, &cur.aug),
+                        output: (&cur.weights,),
+                    },
+                ),
+            }
+            .build(),
+        )
+    }
+
+    fn leaf_paths<E>(steps: &DynSteps<'_, E>) -> Vec<String> {
+        fn walk<E>(item: &dyn Step<E>, prefix: &str, out: &mut Vec<String>) {
+            let p = if prefix.is_empty() { item.name().to_string() } else { format!("{prefix}/{}", item.name()) };
+            match item.kind() {
+                StepKind::Leaf(_) => out.push(p),
+                StepKind::Group(group) => group.for_each_child_step(&mut |c| walk(c, &p, out)),
+            }
+        }
+        let mut out = Vec::new();
+        steps.for_each_step(&mut |item| walk(item, "", &mut out));
+        out
+    }
+
+    #[test]
+    fn filter_adds_producers_of_memory_inputs() {
+        let cat = train_cat();
+        let params = params();
+        let pipe = train_pipe(&cat, &params);
+
+        // Resuming at epoch 1 reloads `w0` from disk, but `samples` and each
+        // epoch's `aug` live in memory, so their producers run again.
+        let filter = NodeFilter::FromTo {
+            from: ["epochs/1/train"].iter().map(|s| (*s).to_string()).collect(),
+            to: HashSet::new(),
+        };
+        let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
+        assert_eq!(
+            leaf_paths(&filtered),
+            ["samples", "epochs/1/augment", "epochs/1/train", "epochs/2/augment", "epochs/2/train"],
+        );
+    }
+
+    #[test]
+    fn filter_stops_at_persistent_inputs() {
+        let cat = train_cat();
+        let params = params();
+        let pipe = train_pipe(&cat, &params);
+
+        // `augment` reads only `samples`; `train`'s other input is on disk.
+        let filter = NodeFilter::Nodes(["epochs/2/augment"].iter().map(|s| (*s).to_string()).collect());
+        let filtered = filter_steps::<PondError>(&pipe, &cat, &params, &filter).unwrap();
+        assert_eq!(leaf_paths(&filtered), ["samples", "epochs/2/augment"]);
     }
 }

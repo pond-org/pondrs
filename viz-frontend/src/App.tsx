@@ -7,14 +7,16 @@ import { DatasetPanel, type PanelSelection } from './components/DatasetPanel';
 import { LeftPanel } from './components/LeftPanel';
 import { StatusBar } from './components/StatusBar';
 import { DEFAULT_PAGE, type PageState } from './util/paging';
+import { useViewOptions } from './util/view';
+import { ViewMenu } from './components/ViewMenu';
 
 const LEFT_W = 240;
-
 export function App() {
   const [graph, setGraph] = useState<VizGraph | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<PanelSelection | null>(null);
-  const [isDark, setIsDark] = useState(true);
+  const [view, setViewOption] = useViewOptions();
+  const isDark = view.theme === 'dark';
   const [leftOpen, setLeftOpen] = useState(true);
   const [centerRequest, setCenterRequest] = useState<CenterRequest | null>(null);
   const [expandedPipelines, setExpandedPipelines] = useState<Set<number>>(new Set());
@@ -166,24 +168,7 @@ export function App() {
 
         <div style={{ flex: 1 }} />
 
-        <div>
-          <button
-            onClick={() => setIsDark(d => !d)}
-            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            style={{
-              background: 'var(--bg-tag)',
-              border: '1px solid var(--border-tag)',
-              borderRadius: 8,
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: 18,
-              lineHeight: 1,
-              padding: '4px 10px',
-            }}
-          >
-            {isDark ? '☀' : '☾'}
-          </button>
-        </div>
+        <ViewMenu view={view} onChange={setViewOption} />
       </div>
 
       {/* Left sidebar */}
@@ -231,7 +216,7 @@ export function App() {
             expandedPipelines={expandedPipelines}
             pages={pages}
             onPageChange={changePage}
-            isDark={isDark}
+            view={view}
             centerRequest={centerRequest}
             onPaneClick={handlePaneClick}
           />

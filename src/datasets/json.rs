@@ -40,13 +40,7 @@ impl Dataset for JsonDataset {
     fn remover(&self) -> Option<super::Remover> { self.file_remover() }
 
     fn html(&self) -> Option<String> {
-        let content = std::fs::read_to_string(&self.path).ok()?;
-        let value: Value = serde_json::from_str(&content).ok()?;
-        let pretty = serde_json::to_string_pretty(&value).ok()?;
-        Some(format!(
-            "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">{}</pre>",
-            super::html_escape(&pretty)
-        ))
+        json_html(&self.path, HTML_PREVIEW_LIMIT)
     }
 }
 
@@ -56,6 +50,58 @@ impl FileDataset for JsonDataset {
     }
     fn set_path(&mut self, path: &str) {
         self.path = path.to_string();
+    }
+}
+
+/// Files larger than this many bytes get a size notice instead of a
+/// pretty-printed preview from `html()`, so viz doesn't stall reading them.
+pub(crate) const HTML_PREVIEW_LIMIT: u64 = 16 * 1024 * 1024;
+
+/// Arrays in an `html()` preview show at most this many items, followed by a
+/// `"… N more items"` marker.
+pub(crate) const HTML_PREVIEW_ITEMS: usize = 50;
+
+/// Pretty-printed `<pre>` preview of the JSON file at `path`, or a short size
+/// notice if the file is larger than `limit` bytes. Arrays at any depth are
+/// cut to [`HTML_PREVIEW_ITEMS`]. `None` if the file is missing or not valid
+/// JSON.
+pub(crate) fn json_html(path: &str, limit: u64) -> Option<String> {
+    const PRE: &str = "<pre style=\"font-family:monospace;font-size:13px;padding:8px;margin:0;overflow:auto\">";
+    let size = std::fs::metadata(path).ok()?.len();
+    if size > limit {
+        return Some(format!(
+            "{PRE}{}: {size} bytes, too large to preview (limit {limit} bytes)</pre>",
+            super::html_escape(path)
+        ));
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let mut value: Value = serde_json::from_slice(&bytes).ok()?;
+    drop(bytes);
+    truncate_arrays(&mut value, HTML_PREVIEW_ITEMS);
+    let pretty = serde_json::to_string_pretty(&value).ok()?;
+    Some(format!("{PRE}{}</pre>", super::html_escape(&pretty)))
+}
+
+/// Cuts every array in `value` to `max` items, appending a string marker that
+/// counts the dropped ones.
+fn truncate_arrays(value: &mut Value, max: usize) {
+    match value {
+        Value::Array(items) => {
+            let dropped = items.len().saturating_sub(max);
+            items.truncate(max);
+            for v in items.iter_mut() {
+                truncate_arrays(v, max);
+            }
+            if dropped > 0 {
+                items.push(Value::String(format!("… {dropped} more items")));
+            }
+        }
+        Value::Object(fields) => {
+            for v in fields.values_mut() {
+                truncate_arrays(v, max);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -92,5 +138,22 @@ mod tests {
         let html = meta.html().unwrap();
         assert!(html.contains("<pre"));
         assert!(html.contains("\"a\""));
+    }
+
+    #[test]
+    fn html_truncates_long_arrays_at_any_depth() {
+        let dir = tempdir().unwrap();
+        let ds = JsonDataset::new(dir.path().join("data.json").to_str().unwrap());
+        let top: Vec<_> = (0..120).map(|i| json!({"id": i})).collect();
+        let nested: Vec<_> = (1000..1060).collect();
+        ds.save(json!({"top": top, "inner": {"nested": nested}, "short": [1, 2]})).unwrap();
+        let html = Dataset::html(&ds).unwrap();
+        assert!(html.contains("\"id\": 49"));
+        assert!(!html.contains("\"id\": 50"));
+        assert!(html.contains("… 70 more items"));
+        assert!(html.contains("1049"));
+        assert!(!html.contains("1050"));
+        assert!(html.contains("… 10 more items"));
+        assert_eq!(html.matches("more items").count(), 2);
     }
 }

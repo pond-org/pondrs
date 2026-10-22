@@ -68,7 +68,7 @@ pub trait FileDataset: Dataset + Clone {
 
 `list_entries` scans the directory for files matching `ext` and returns their stems, sorted. You can override it for non-filesystem storage.
 
-Built-in types that implement `FileDataset`: `PolarsCsvDataset`, `PolarsParquetDataset`, `TextDataset`, `JsonDataset`, `ImageDataset`, `LazyDataset<D>` (for any `D: FileDataset`).
+Built-in types that implement `FileDataset`: `PolarsCsvDataset`, `PolarsParquetDataset`, `TextDataset`, `JsonDataset`, `TypedJsonDataset<T>`, `ImageDataset`, `LazyDataset<D>` (for any `D: FileDataset`).
 
 ## YAML configuration
 

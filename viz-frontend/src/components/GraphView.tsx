@@ -9,17 +9,20 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  type Edge,
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import type { VizGraph, NodeStatus, DatasetActivity } from '../api/types';
 import { useGraph } from '../hooks/useGraph';
+import type { ViewOptions } from '../util/view';
 import { LeafNode } from './nodes/LeafNode';
 import { DatasetNode } from './nodes/DatasetNode';
 import { PipelineNode } from './nodes/PipelineNode';
 import { BundleNode } from './nodes/BundleNode';
 import { StubNode } from './nodes/StubNode';
+import { GroupNode } from './nodes/GroupNode';
 import { GroupPager } from './GroupPager';
 import type { PageState } from '../util/paging';
 
@@ -29,6 +32,7 @@ const nodeTypes: NodeTypes = {
   pipeline: PipelineNode as never,
   bundle: BundleNode as never,
   stub: StubNode as never,
+  box: GroupNode as never,
 };
 
 export type CenterRequest = { id: string; tick: number };
@@ -43,27 +47,25 @@ interface Props {
   expandedPipelines: Set<number>;
   pages: Map<number, PageState>;
   onPageChange: (groupId: number, patch: Partial<PageState>) => void;
-  isDark: boolean;
+  view: ViewOptions;
   centerRequest: CenterRequest | null;
   onPaneClick: () => void;
 }
 
 // Rendered inside ReactFlow so it has access to useReactFlow().
 function CenterController({ centerRequest }: { centerRequest: CenterRequest | null }) {
-  const { setCenter, getNode } = useReactFlow();
+  const { setCenter, getInternalNode } = useReactFlow();
 
   useEffect(() => {
     if (!centerRequest) return;
-    const node = getNode(centerRequest.id);
+    const node = getInternalNode(centerRequest.id);
     if (!node) return;
     const w = node.measured?.width ?? node.width ?? 180;
     const h = node.measured?.height ?? node.height ?? 50;
-    setCenter(
-      node.position.x + w / 2,
-      node.position.y + h / 2,
-      { zoom: 1.2, duration: 600 },
-    );
-  }, [centerRequest, getNode, setCenter]);
+    // `position` is relative to the enclosing box, if any.
+    const { x, y } = node.internals.positionAbsolute;
+    setCenter(x + w / 2, y + h / 2, { zoom: 1.2, duration: 600 });
+  }, [centerRequest, getInternalNode, setCenter]);
 
   return null;
 }
@@ -71,8 +73,9 @@ function CenterController({ centerRequest }: { centerRequest: CenterRequest | nu
 export function GraphView({
   graph, nodeStatuses, datasetActivity,
   onDatasetSelect, onNodeSelect, onTogglePipeline, expandedPipelines,
-  pages, onPageChange, isDark, centerRequest, onPaneClick,
+  pages, onPageChange, view, centerRequest, onPaneClick,
 }: Props) {
+  const isDark = view.theme === 'dark';
   const stableOnDatasetSelect = useCallback(onDatasetSelect, [onDatasetSelect]);
   const stableOnNodeSelect = useCallback(onNodeSelect, [onNodeSelect]);
   const stableOnTogglePipeline = useCallback(onTogglePipeline, [onTogglePipeline]);
@@ -81,7 +84,7 @@ export function GraphView({
     graph, nodeStatuses, datasetActivity,
     stableOnDatasetSelect, stableOnNodeSelect,
     stableOnTogglePipeline, expandedPipelines,
-    pages, onPageChange, isDark,
+    pages, onPageChange, view,
   );
 
   const [, , onNodesChange] = useNodesState(layoutedNodes);
@@ -89,6 +92,12 @@ export function GraphView({
 
   const syncedNodes = useMemo(() => layoutedNodes, [layoutedNodes]);
   const syncedEdges = useMemo(() => layoutedEdges, [layoutedEdges]);
+
+  // An edge standing in for one hidden dataset selects that dataset.
+  const onEdgeClick = useCallback((_: unknown, edge: Edge) => {
+    const id = edge.data?.datasetId;
+    if (typeof id === 'number') stableOnDatasetSelect(id);
+  }, [stableOnDatasetSelect]);
 
   const minimapNodeColor = useCallback((node: { type?: string; data?: Record<string, unknown> }) => {
     if (node.type === 'dataset' || node.type === 'bundle') {
@@ -98,6 +107,7 @@ export function GraphView({
     }
     if (node.type === 'leaf') return isDark ? '#6a6a6a' : '#888888';
     if (node.type === 'pipeline' || node.type === 'stub') return isDark ? '#8b5cf6' : '#7c3aed';
+    if (node.type === 'box') return isDark ? 'rgba(139, 92, 246, 0.12)' : 'rgba(124, 58, 237, 0.08)';
     return 'transparent';
   }, [isDark]);
 
@@ -120,6 +130,7 @@ export function GraphView({
         minZoom={0.2}
         colorMode={isDark ? 'dark' : 'light'}
         onPaneClick={onPaneClick}
+        onEdgeClick={onEdgeClick}
       >
         <Background variant={BackgroundVariant.Dots} color="var(--grid-color)" gap={24} size={3} />
         <Controls />
