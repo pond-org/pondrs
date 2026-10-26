@@ -25,7 +25,7 @@ When multiple hooks are composed in a tuple, their `HookControl` values are merg
 | `before_pipeline_run` | Reserved — not currently acted on by runners. |
 | `before_dataset_loaded` | Reserved — not currently acted on. |
 
-The primary use case for `Skip` is caching: `CacheHook` returns `Skip` from `before_node_run` when a node's inputs haven't changed since the last run. See [Built-in Hooks](./builtin.md) for details.
+The primary use case for `Skip` is caching: `CacheHook` returns `Skip` from `before_node_run` when a node's inputs and catalog configuration haven't changed since the last run. It also uses `HookAbort` to stop a run before a node whose input a skipped node no longer has. See [Built-in Hooks](./builtin.md) for details.
 
 ## HookAbort
 
