@@ -21,7 +21,11 @@ everything that works on nodes works on each iteration individually:
 - **Resume mid-chain:** `run --from-nodes train/47` runs iterations 47 onward,
   reading iteration 46's saved output.
 - **Checkpoint-aware caching:** `CacheHook` keys each iteration separately, so an
-  unchanged prefix of the chain is skipped.
+  unchanged prefix of the chain is skipped. Combined with `RetentionHook`, a
+  crashed run resumes where it stopped: pruned iterations skip on their keys
+  and the first unfinished one reads the newest kept checkpoint. A change that
+  makes an iteration with a pruned input re-run stops the run before it, naming
+  the node; delete `.pondcache/train` or set `PONDRS_CACHE=off` to start over.
 - **Per-iteration progress:** node hooks (`LoggingHook`, `VizHook`, your own)
   fire once per iteration.
 

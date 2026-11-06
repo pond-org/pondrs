@@ -38,7 +38,8 @@ use super::{Hook, HookAbort};
 /// - `CacheHook` skips a node on its cache key without checking that the
 ///   outputs still exist. Resuming after a crash works, because the newest
 ///   checkpoints are the ones kept; a change that re-runs an epoch whose input
-///   was removed fails with that input's load error.
+///   was removed stops the run before that epoch with a `HookAbort` naming
+///   the node and the skipped producer.
 /// - Only saves of the current run are queued, so up to `keep_last`
 ///   checkpoints left by an earlier run are not removed by this one.
 ///
