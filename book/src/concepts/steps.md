@@ -1,6 +1,6 @@
 # Steps
 
-Steps are how nodes are composed into a sequence that the runner can execute. A pipeline function returns an `impl Steps<E>`, which is implemented for tuples of nodes (and pipelines). Tuples of up to 10 elements are supported.
+Steps are how nodes are composed into a sequence that the runner can execute. A pipeline function returns an `impl Steps<E>`, which is implemented for tuples of nodes (and pipelines). Tuples of up to 16 elements are supported.
 
 ## In the minimal example
 

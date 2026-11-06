@@ -133,7 +133,7 @@ fn run_check<C: IdCollector, T: TypeCollector, S: StepsMeta + ?Sized>(
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a pipeline",
     label = "not a pipeline",
-    note = "a pipeline is a tuple of up to 10 steps, a `Pipeline`, or a `DynSteps`",
+    note = "a pipeline is a tuple of up to 16 steps, a `Pipeline`, or a `DynSteps`",
     note = "the pipeline error type `{E}` must implement `From<PondError>`"
 )]
 pub trait Steps<E>: StepsMeta {
@@ -167,3 +167,9 @@ impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6);
 impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7);
 impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8);
 impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9);
+impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9, N10 10);
+impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9, N10 10, N11 11);
+impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9, N10 10, N11 11, N12 12);
+impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9, N10 10, N11 11, N12 12, N13 13);
+impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9, N10 10, N11 11, N12 12, N13 13, N14 14);
+impl_steps!(N0 0, N1 1, N2 2, N3 3, N4 4, N5 5, N6 6, N7 7, N8 8, N9 9, N10 10, N11 11, N12 12, N13 13, N14 14, N15 15);

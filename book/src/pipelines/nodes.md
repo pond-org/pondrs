@@ -28,7 +28,7 @@ pub trait NodeOutput<E>: NodeOutputMeta {
 }
 ```
 
-They are implemented for tuples of dataset references (up to 10 elements) via macros. During execution, `load_data` fires `BeforeLoad`/`AfterLoad` events for each dataset, and `save_data` fires `BeforeSave`/`AfterSave` events — these drive the [hook system](../hooks/README.md).
+They are implemented for tuples of dataset references (up to 16 elements) via macros. During execution, `load_data` fires `BeforeLoad`/`AfterLoad` events for each dataset, and `save_data` fires `BeforeSave`/`AfterSave` events — these drive the [hook system](../hooks/README.md).
 
 The split exists because the error bound is variadic: `(T0, T1)` needs `E: From<T0::Error> + From<T1::Error>`, which only an impl header can express, and that forces `E` onto the trait. `Args` cannot come along — `Node` resolves `Input::Args` to type-check the closure *before* `E` is known, which is what gives you closure-signature diagnostics at the `Node { .. }` literal. So `Node` bounds its `Input`/`Output` on the `Meta` traits, and the `Leaf<E>`/`Step<E>` impls add the `E`-generic ones.
 

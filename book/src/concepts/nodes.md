@@ -55,7 +55,7 @@ input: (),
 output: (&cat.result,),
 ```
 
-Tuples of up to 10 elements are supported for both inputs and outputs.
+Tuples of up to 16 elements are supported for both inputs and outputs.
 
 ## Return values
 

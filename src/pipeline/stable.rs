@@ -45,11 +45,17 @@ impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6);
 impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7);
 impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8);
 impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9);
+impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+impl_stable_tuple!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
 
 /// A callable that accepts arguments packed as a tuple.
 ///
 /// Replaces the nightly `Fn<Args>` bound and `Fn::call(&f, args)` syntax.
-/// Implemented for all `Fn(T0, T1, ...) -> R` up to 10 arguments.
+/// Implemented for all `Fn(T0, T1, ...) -> R` up to 16 arguments.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be called with the node's loaded inputs `{Args}`",
     label = "not callable with `{Args}`",
@@ -96,3 +102,9 @@ impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6);
 impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7);
 impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8);
 impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9);
+impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10);
+impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11);
+impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);
+impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13);
+impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14);
+impl_stable_fn!(T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15);
