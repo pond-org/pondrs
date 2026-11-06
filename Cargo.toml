@@ -25,7 +25,14 @@ image = ["std", "dep:image", "dep:base64"]
 all = ["std", "json", "polars", "yaml", "plotly", "viz", "image"]
 # Compile-fail UI tests (tests/ui). Off by default: the .stderr snapshots are
 # rustc-version specific and rust-toolchain.toml tracks floating stable.
+# Run them without polars (see tests/ui.rs): the snapshots depend on the feature
+# set, and trybuild would otherwise link polars into every passing case.
 ui-tests = []
+
+[[bin]]
+name = "pondrs"
+path = "src/main.rs"
+required-features = ["polars"]
 
 [dependencies]
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
